@@ -230,6 +230,9 @@ LOGO_PATH = "Logo_OptiMatch.png"
 # ---------------------------------------------------------
 # 1. AUTENTICACIÓN DE USUARIOS VÍA BASE DE DATOS
 # ---------------------------------------------------------
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+
 if not st.session_state.autenticado:
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
