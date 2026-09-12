@@ -230,9 +230,6 @@ LOGO_PATH = "Logo_OptiMatch.png"
 # ---------------------------------------------------------
 # 1. AUTENTICACIÓN DE USUARIOS VÍA BASE DE DATOS
 # ---------------------------------------------------------
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
-
 if not st.session_state.autenticado:
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
@@ -248,7 +245,10 @@ if not st.session_state.autenticado:
                 </div>
             """, unsafe_allow_html=True)
             
-      with st.form("login_form", clear_on_submit=True):
+        st.markdown("<p style='text-align: center; font-weight: 800; font-size: 15px;'>Acceso Restringido por Perfil | Universidad Alberto Hurtado</p>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        with st.form("login_form", clear_on_submit=True):
             st.markdown('<p style="font-weight: 800; font-size: 16px;">Nombre de Usuario (ej: mcepeda, cnikulin):</p>', unsafe_allow_html=True)
             usuario = st.text_input("", value="", placeholder="Ingresa tu usuario", key="input_usr")
             
@@ -269,7 +269,7 @@ if not st.session_state.autenticado:
                 st.rerun()
             else:
                 st.error("❌ Usuario o contraseña no registrados en el sistema.")
-        st.stop()
+    st.stop()
 
 # ---------------------------------------------------------
 # LOGO Y ENCABEZADO CENTRADO EN LA CARÁTULA
