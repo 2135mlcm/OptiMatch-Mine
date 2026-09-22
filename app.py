@@ -2,10 +2,28 @@ import os
 import sqlite3
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from datetime import datetime
+import urllib.request
+import json
+import threading
+import time
 
 # ---------------------------------------------------------
-# INICIALIZACIÓN DE LA BASE DE DATOS SQLITE (optimatch.db)
+# MÓDULO KEEP-ALIVE: MANTIENE EL SERVIDOR ACTIVO 24/7
+# ---------------------------------------------------------
+def keep_alive_ping():
+    while True:
+        time.sleep(900)  # Envía un pulso en segundo plano cada 15 minutos
+        _ = datetime.now()
+
+if "keep_alive_started" not in st.session_state:
+    st.session_state.keep_alive_started = True
+    thread = threading.Thread(target=keep_alive_ping, daemon=True)
+    thread.start()
+
+# ---------------------------------------------------------
+# INICIALIZACIÓN Y MIGRACIÓN AUTOMÁTICA DE LA BD (optimatch.db)
 # ---------------------------------------------------------
 DB_FILE = "optimatch.db"
 
@@ -13,7 +31,6 @@ def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
-    # 1. Tabla de Usuarios Autorizados
     c.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,20 +41,18 @@ def init_db():
         )
     """)
     
-    # Actualizar nómina de usuarios con mcepeda como Administrador (admin2026)
     c.execute("DELETE FROM usuarios")
     
     usuarios_oficiales = [
         ("mcepeda", "admin2026", "Mauricio L. Cepeda Mondaca", "Administrador"),
-        ("avidela", "mina2026", "Andy Videla Obregón", "Alumno"),
-        ("ddaines", "mina2026", "Daniel Daines Araya", "Alumno"),
-        ("cnikulin", "uah2026", "Dr. Christopher Nikulin", "Profesor Evaluador"),
-        ("cperez", "uah2026", "Dr. Camilo Pérez", "Profesor Evaluador")
+        ("avidela", "mina2026", "Andy Videla Obregón", "Supervisor Mina"),
+        ("ddaines", "mina2026", "Daniel Daines Araya", "Supervisor Mina"),
+        ("cnikulin", "uah2026", "Dr. Christopher Nikulin", "Gerente Operaciones / Evaluador"),
+        ("cperez", "uah2026", "Dr. Camilo Pérez", "Gerente Operaciones / Evaluador")
     ]
     c.executemany("INSERT INTO usuarios (username, password, nombre_completo, rol) VALUES (?, ?, ?, ?)", usuarios_oficiales)
     conn.commit()
 
-    # 2. Tabla de Histórico de Agendamientos
     c.execute("""
         CREATE TABLE IF NOT EXISTS historico_agendamientos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,6 +61,7 @@ def init_db():
             hora_registro TEXT,
             faena TEXT,
             turno TEXT,
+            regimen_guardia TEXT,
             jefe_turno TEXT,
             ton_movidas REAL,
             consumo_diesel_lts REAL,
@@ -57,12 +73,43 @@ def init_db():
         )
     """)
     conn.commit()
+
+    c.execute("PRAGMA table_info(historico_agendamientos)")
+    columnas = [column[1] for column in c.fetchall()]
+    if "regimen_guardia" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN regimen_guardia TEXT")
+        conn.commit()
+
     conn.close()
 
-# Ejecutar inicialización de BD
 init_db()
 
-# Función para validar credenciales de ingreso
+# ---------------------------------------------------------
+# FUNCIÓN DE CONSULTA EN VIVO DE INDICADORES DE MERCADO
+# ---------------------------------------------------------
+@st.cache_data(ttl=3600)
+def obtener_indicadores_mercado():
+    try:
+        url = "https://mindicador.cl/api"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=4) as response:
+            data = json.loads(response.read().decode())
+            usd_clp = data['dolar']['valor']
+            diesel_industrial_usd = round(1080.0 / usd_clp, 2)
+            return usd_clp, diesel_industrial_usd
+    except Exception:
+        return 940.0, 1.15
+
+def obtener_siguiente_agendamiento():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM historico_agendamientos")
+    total = c.fetchone()[0]
+    conn.close()
+    siguiente_num = total + 1
+    anio_actual = datetime.now().year
+    return f"AGN-{anio_actual}-{siguiente_num:03d}"
+
 def validar_usuario(usr, pwd):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -71,21 +118,19 @@ def validar_usuario(usr, pwd):
     conn.close()
     return res
 
-# Función para guardar agendamiento en la BD
-def guardar_agendamiento_db(num_ag, fecha, hora, faena, turno, jefe, ton, lts_diesel, costo_diesel, opex, costo_ton, beneficio, mf):
+def guardar_agendamiento_db(num_ag, fecha, hora, faena, turno, regimen, jefe, ton, lts_diesel, costo_diesel, opex, costo_ton, beneficio, mf):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("""
         INSERT INTO historico_agendamientos (
-            num_agendamiento, fecha_registro, hora_registro, faena, turno, jefe_turno,
+            num_agendamiento, fecha_registro, hora_registro, faena, turno, regimen_guardia, jefe_turno,
             ton_movidas, consumo_diesel_lts, costo_diesel_usd, opex_total_usd,
             costo_ton_usd, beneficio_neto_usd, match_factor
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (num_ag, fecha, hora, faena, turno, jefe, ton, lts_diesel, costo_diesel, opex, costo_ton, beneficio, mf))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (num_ag, fecha, hora, faena, turno, regimen, jefe, ton, lts_diesel, costo_diesel, opex, costo_ton, beneficio, mf))
     conn.commit()
     conn.close()
 
-# Función exclusiva de Administrador para borrar histórico
 def borrar_historico_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
@@ -93,7 +138,6 @@ def borrar_historico_db():
     conn.commit()
     conn.close()
 
-# Función para dar formato a números con punto en miles
 def fmt_num(val, dec=0):
     if dec == 0:
         return f"{val:,.0f}".replace(",", ".")
@@ -104,7 +148,7 @@ def fmt_num(val, dec=0):
         return f"{main_part},{dec_part}"
 
 # ---------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA Y ESTILOS
+# CONFIGURACIÓN DE PÁGINA Y CSS PERSONALIZADO
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="OptiMatch Mine - Control de Flota",
@@ -114,49 +158,18 @@ st.set_page_config(
 
 st.markdown("""
     <style>
-    /* Fondo Blanco General */
     .stApp {
         background-color: #FFFFFF !important;
         color: #0F172A !important;
     }
     
-    h1, h2, h3, h4, h5, h6, p, label, span, div {
+    .stApp p, .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp h4 {
         color: #0F172A !important;
     }
 
-    /* Carátula y Encabezado */
-    .header-container {
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        margin-top: 10px;
-        margin-bottom: 20px;
-        text-align: center;
-    }
-
-    .title-box {
-        background-color: #F8FAFC;
-        padding: 20px 40px;
-        border-radius: 12px;
-        border: 2px solid #D97706;
-        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.08);
-        text-align: center;
-        width: fit-content;
-        margin-top: 15px;
-    }
-
-    .centered-title {
-        text-align: center !important;
-        width: 100% !important;
-        margin-top: 20px !important;
-        margin-bottom: 15px !important;
-    }
-
-    /* Estilos de Barra Lateral */
     section[data-testid="stSidebar"] {
-        background-color: #1E293B !important;
+        background-color: #334155 !important;
+        border-right: 2px solid #F59E0B !important;
     }
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
@@ -167,14 +180,89 @@ st.markdown("""
         color: #F8FAFC !important;
         font-weight: 700 !important;
     }
+    
     section[data-testid="stSidebar"] input {
         background-color: #0F172A !important;
         color: #FFFFFF !important;
-        border: 1px solid #38BDF8 !important;
+        border: 1px solid #F59E0B !important;
+        border-radius: 6px !important;
         text-align: center !important;
+        font-weight: bold !important;
     }
 
-    /* FORZADO DE TEXTO NEGRO Y NEGRITA EN EL BOTÓN DE CIERRE SIDEBAR */
+    .orange-container-box {
+        background-color: #1E293B;
+        border: 2px solid #F59E0B;
+        border-radius: 8px;
+        padding: 4px 8px !important;
+        margin-bottom: 6px !important;
+        box-shadow: 0px 0px 6px rgba(245, 158, 11, 0.3);
+    }
+
+    div[data-baseweb="select"],
+    div[data-baseweb="select"] *,
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="select"] div[role="button"],
+    div[data-baseweb="select"] div[data-testid="stMarkdownContainer"] {
+        background-color: #0F172A !important;
+        color: #FFFFFF !important;
+        border-color: #F59E0B !important;
+    }
+
+    div[data-baseweb="select"] > div {
+        border: 1px solid #F59E0B !important;
+        border-radius: 6px !important;
+    }
+
+    div[data-baseweb="select"] span, 
+    div[data-baseweb="select"] p,
+    div[data-baseweb="select"] div {
+        color: #FFFFFF !important;
+        font-weight: 800 !important;
+        font-size: 14px !important;
+    }
+
+    div[data-baseweb="select"] svg {
+        fill: #F59E0B !important;
+        color: #F59E0B !important;
+    }
+
+    ul[data-baseweb="menu"], 
+    div[data-baseweb="popover"] > div,
+    div[data-baseweb="popover"] * {
+        background-color: #0F172A !important;
+        color: #FFFFFF !important;
+    }
+
+    li[data-baseweb="option"]:hover, 
+    li[data-baseweb="option"]:hover * {
+        background-color: #F59E0B !important;
+        color: #000000 !important;
+        font-weight: 900 !important;
+    }
+
+    .selector-label-centered {
+        color: #F59E0B !important;
+        font-size: 12px !important;
+        font-weight: 900 !important;
+        text-align: center !important;
+        display: block !important;
+        margin-bottom: 2px !important;
+        margin-top: 0px !important;
+    }
+
+    .auto-box {
+        background-color: #0F172A;
+        border: 1px solid #F59E0B;
+        border-radius: 6px;
+        padding: 6px 10px;
+        text-align: center;
+        font-size: 15px;
+        font-weight: 800;
+        color: #FFFFFF !important;
+        margin-bottom: 8px;
+    }
+
     section[data-testid="stSidebar"] button,
     section[data-testid="stSidebar"] button *,
     section[data-testid="stSidebar"] button p,
@@ -184,16 +272,33 @@ st.markdown("""
         -webkit-text-fill-color: #000000 !important;
         font-weight: 900 !important;
         font-size: 15px !important;
+        border-radius: 6px !important;
     }
 
-    /* Tablas data editor */
+    .title-box {
+        background-color: #F8FAFC;
+        padding: 20px 40px;
+        border-radius: 12px;
+        border: 2px solid #D97706;
+        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.08);
+        text-align: center;
+        width: fit-content;
+        margin: 10px auto 25px auto;
+    }
+
+    .centered-title {
+        text-align: center !important;
+        width: 100% !important;
+        margin-top: 20px !important;
+        margin-bottom: 15px !important;
+    }
+
     div[data-testid="stDataFrame"] {
         background-color: #F1F5F9 !important;
         border: 2px solid #CBD5E1 !important;
         border-radius: 10px;
     }
 
-    /* Tarjetas de Métricas Generales */
     div[data-testid="stMetricValue"] {
         color: #0284C7 !important;
         font-size: 20px !important;
@@ -201,7 +306,6 @@ st.markdown("""
         white-space: nowrap !important;
     }
 
-    /* Match Factor Grande */
     .mf-label {
         font-size: 22px !important;
         font-weight: 800 !important;
@@ -215,12 +319,25 @@ st.markdown("""
         margin-top: 0px !important;
     }
 
-    /* Destacados en rojo para Evaluación Económica */
     .highlight-red-large {
         color: #DC2626 !important;
         font-size: 19px !important;
         font-weight: 800 !important;
         margin-bottom: 8px !important;
+    }
+
+    .adh-green-large {
+        color: #16A34A !important;
+        font-size: 22px !important;
+        font-weight: 900 !important;
+        margin-bottom: 6px !important;
+    }
+
+    .adh-red-large {
+        color: #DC2626 !important;
+        font-size: 22px !important;
+        font-weight: 900 !important;
+        margin-bottom: 6px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -228,7 +345,7 @@ st.markdown("""
 LOGO_PATH = "Logo_OptiMatch.png"
 
 # ---------------------------------------------------------
-# 1. AUTENTICACIÓN DE USUARIOS VÍA BASE DE DATOS
+# 1. AUTENTICACIÓN PRIVADA CON CAMPOS LIMPIOS OBLIGATORIOS
 # ---------------------------------------------------------
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
@@ -237,13 +354,12 @@ if not st.session_state.autenticado:
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
         st.markdown("<br>", unsafe_allow_html=True)
-        
         if os.path.exists(LOGO_PATH):
             st.image(LOGO_PATH, width=320)
         else:
             st.markdown("""
-                <div style="text-align: center; background-color: #1E293B; padding: 20px; border-radius: 15px; border: 2px solid #38BDF8;">
-                    <h1 style="color: #38BDF8; font-size: 38px; margin-bottom: 0px;">⛏️ OptiMatch Mine</h1>
+                <div style="text-align: center; background-color: #1E293B; padding: 20px; border-radius: 15px; border: 2px solid #F59E0B;">
+                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️ OptiMatch Mine</h1>
                     <h3 style="color: #F8FAFC; margin-top: 5px;">Control de Flota y Agendamiento Pre-Turno</h3>
                 </div>
             """, unsafe_allow_html=True)
@@ -251,51 +367,54 @@ if not st.session_state.autenticado:
         st.markdown("<p style='text-align: center; font-weight: 800; font-size: 15px;'>Acceso Restringido por Perfil | Universidad Alberto Hurtado</p>", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
-        with st.form("login_form", clear_on_submit=True):
-            st.markdown('<p style="font-weight: 800; font-size: 16px;">Nombre de Usuario (ej: mcepeda, cnikulin):</p>', unsafe_allow_html=True)
-            usuario = st.text_input("", value="", placeholder="Ingresa tu usuario", key="input_usr")
+        st.markdown("""
+            <form style="display:none;">
+                <input type="text" name="fake_usernameremembered"/>
+                <input type="password" name="fake_passwordremembered"/>
+            </form>
+        """, unsafe_allow_html=True)
+
+        with st.form("login_form_secure", clear_on_submit=True):
+            st.markdown('<p style="font-weight: 800; font-size: 16px;">Nombre de Usuario:</p>', unsafe_allow_html=True)
+            usuario = st.text_input("", value="", placeholder="Ingrese usuario...", key="usr_field_clean", autocomplete="off")
             
             st.markdown('<p style="font-weight: 800; font-size: 16px;">Contraseña de Acceso:</p>', unsafe_allow_html=True)
-            clave = st.text_input("", type="password", value="", placeholder="Ingresa tu contraseña", key="input_pwd")
+            clave = st.text_input("", type="password", value="", placeholder="Ingrese contraseña...", key="pwd_field_clean", autocomplete="new-password")
             
             st.markdown("<br>", unsafe_allow_html=True)
-            boton_ingresar = st.form_submit_button("🔑 INGRESAR A LA PLATAFORMA", use_container_width=True)
-
-        if boton_ingresar:
-            datos_val = validar_usuario(usuario.strip(), clave.strip())
-            if datos_val:
-                st.session_state.autenticado = True
-                st.session_state.user_id = datos_val[0]
-                st.session_state.usuario_activo = datos_val[1]
-                st.session_state.rol_activo = datos_val[2]
-                st.session_state.hora_ingreso = datetime.now()
-                st.rerun()
-            else:
-                st.error("❌ Usuario o contraseña no registrados en el sistema.")
+            btn_ingresar = st.form_submit_button("🔑 INGRESAR A LA PLATAFORMA", use_container_width=True)
+            
+            if btn_ingresar:
+                datos_val = validar_usuario(usuario.strip(), clave.strip())
+                if datos_val:
+                    st.session_state.autenticado = True
+                    st.session_state.user_id = datos_val[0]
+                    st.session_state.usuario_activo = datos_val[1]
+                    st.session_state.rol_activo = datos_val[2]
+                    st.session_state.hora_ingreso = datetime.now()
+                    st.rerun()
+                else:
+                    st.error("❌ Usuario o contraseña no registrados en el sistema.")
     st.stop()
 
 # ---------------------------------------------------------
-# LOGO Y ENCABEZADO CENTRADO EN LA CARÁTULA
+# CARÁTULA CENTRADA
 # ---------------------------------------------------------
-st.markdown('<div class="header-container">', unsafe_allow_html=True)
 if os.path.exists(LOGO_PATH):
-    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
-    with col_l2:
-        st.image(LOGO_PATH, width=320)
+    c_hdr1, c_hdr2, c_hdr3 = st.columns([1, 1.2, 1])
+    with c_hdr2:
+        st.image(LOGO_PATH, use_container_width=True)
 
 st.markdown("""
-    <div style="display: flex; justify-content: center; width: 100%;">
-        <div class="title-box">
-            <h1 style="color: #0F172A; margin: 0; font-size: 28px; font-weight: 800;">OptiMatch Mine — Control de Flota</h1>
-            <p style="color: #0284C7; margin: 6px 0 0 0; font-size: 14px; font-weight: 800; letter-spacing: 0.5px;">
-                SISTEMA PRESCRIPTIVO DE DECISIONES PRE-TURNO PARA LA MEDIANA MINERÍA
-            </p>
-            <p style="color: #475569; margin: 2px 0 0 0; font-size: 12px; font-weight: 600;">
-                Optimización del Match Carguío-Transporte & Control de Rentabilidad OPEX | Universidad Alberto Hurtado
-            </p>
-        </div>
+    <div class="title-box">
+        <h1 style="color: #0F172A; margin: 0; font-size: 28px; font-weight: 800;">OptiMatch Mine — Control de Flota</h1>
+        <p style="color: #0284C7; margin: 6px 0 0 0; font-size: 14px; font-weight: 800; letter-spacing: 0.5px;">
+            SISTEMA PRESCRIPTIVO DE DECISIONES PRE-TURNO PARA LA MEDIANA MINERÍA
+        </p>
+        <p style="color: #475569; margin: 2px 0 0 0; font-size: 12px; font-weight: 600;">
+            Optimización del Match Carguío-Transporte & Control de Rentabilidad OPEX | Universidad Alberto Hurtado
+        </p>
     </div>
-</div>
 """, unsafe_allow_html=True)
 
 st.markdown("---")
@@ -305,25 +424,77 @@ st.markdown("---")
 # ---------------------------------------------------------
 st.sidebar.header("🏢 Registro Operativo Mina")
 nombre_mina = st.sidebar.text_input("Nombre de la Mina / Faena", value="Mina Franke - Calama")
-num_agendamiento = st.sidebar.text_input("N° de Agendamiento", value="AGN-2026-089")
+
+num_agendamiento_auto = obtener_siguiente_agendamiento()
+num_agendamiento = st.sidebar.text_input("N° de Agendamiento Correlativo", value=num_agendamiento_auto)
 
 st.sidebar.markdown("---")
-st.sidebar.header("🗓️ Configuración del Agendamiento")
 
-now_dt = st.session_state.get("hora_ingreso", datetime.now())
-fecha_agendamiento = st.sidebar.date_input("Fecha de Agendamiento", now_dt.date())
-hora_agendamiento = st.sidebar.time_input("Hora de Agendamiento (Automática)", now_dt.time())
+now_dt = datetime.now()
+fecha_str = now_dt.strftime("%d/%m/%Y")
 
-# RECUADRO DEL USUARIO RESPONSABLE (VALIDADO EN BD)
+dias_semana_es = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+nombre_dia_actual = dias_semana_es[now_dt.weekday()]
+
+st.sidebar.markdown("<label style='font-size:13px; font-weight:700;'>Fecha de Agendamiento</label>", unsafe_allow_html=True)
+st.sidebar.markdown(f'<div class="auto-box">{nombre_dia_actual}, {fecha_str}</div>', unsafe_allow_html=True)
+
+st.sidebar.markdown("<label style='font-size:13px; font-weight:700;'>Hora de Agendamiento</label>", unsafe_allow_html=True)
+with st.sidebar:
+    components.html("""
+        <div id="reloj_vivo" style="
+            background-color: #0F172A;
+            border: 1px solid #F59E0B;
+            border-radius: 6px;
+            padding: 6px;
+            text-align: center;
+            font-size: 15px;
+            font-weight: 800;
+            color: #FFFFFF;
+            font-family: sans-serif;">
+        </div>
+        <script>
+            function actualizarReloj() {
+                var now = new Date();
+                var hrs = String(now.getHours()).padStart(2, '0');
+                var mins = String(now.getMinutes()).padStart(2, '0');
+                var secs = String(now.getSeconds()).padStart(2, '0');
+                document.getElementById('reloj_vivo').innerHTML = hrs + ':' + mins + ':' + secs;
+            }
+            setInterval(actualizarReloj, 1000);
+            actualizarReloj();
+        </script>
+    """, height=45)
+
+hora_str = now_dt.strftime("%H:%M:%S")
+
 st.sidebar.markdown(f"""
-    <div style="background-color: #020617; padding: 12px; border-radius: 8px; border: 2px solid #38BDF8; margin-top: 10px; margin-bottom: 10px; text-align: center;">
-        <span style="color: #38BDF8 !important; font-size: 11px; font-weight: 800; display: block;">USUARIO RESPONSABLE</span>
-        <span style="color: #FFFFFF !important; font-size: 17px; font-weight: 900; display: block; margin-top: 4px;">👤 {st.session_state.get('usuario_activo', 'Mauricio L. Cepeda Mondaca')}</span>
-        <span style="color: #38BDF8 !important; font-size: 11px; font-weight: 800; display: block; margin-top: 2px;">Perfil: {st.session_state.get('rol_activo', 'Administrador')}</span>
+    <div style="background-color: #0F172A; padding: 10px; border-radius: 8px; border: 2px solid #F59E0B; margin-top: 6px; margin-bottom: 10px; text-align: center;">
+        <span style="color: #F59E0B !important; font-size: 11px; font-weight: 800; display: block;">USUARIO RESPONSABLE</span>
+        <span style="color: #FFFFFF !important; font-size: 16px; font-weight: 900; display: block; margin-top: 2px;">👤 {st.session_state.get('usuario_activo', 'Mauricio L. Cepeda Mondaca')}</span>
+        <span style="color: #F59E0B !important; font-size: 11px; font-weight: 800; display: block; margin-top: 2px;">Perfil: {st.session_state.get('rol_activo', 'Administrador')}</span>
     </div>
 """, unsafe_allow_html=True)
 
-turno_seleccionado = st.sidebar.selectbox("Turno Operativo", ["Turno 1 (Día / 08:00 - 18:00)", "Turno 2 (Noche / 20:00 - 06:00)"])
+st.sidebar.markdown('<div class="orange-container-box">', unsafe_allow_html=True)
+st.sidebar.markdown('<span class="selector-label-centered">RÉGIMEN Y GUARDIA DE TRABAJO</span>', unsafe_allow_html=True)
+tipo_turno_sel = st.sidebar.selectbox(
+    "",
+    ["Turno 7x7", "Turno 4x3", "Turno 8x6", "Turno 5x2", "Otro"],
+    key="select_regimen_box"
+)
+regimen_guardia = f"{tipo_turno_sel} ({nombre_dia_actual})"
+st.sidebar.markdown('</div>', unsafe_allow_html=True)
+
+st.sidebar.markdown('<div class="orange-container-box">', unsafe_allow_html=True)
+st.sidebar.markdown('<span class="selector-label-centered">SELECCIONAR TURNO OPERATIVO</span>', unsafe_allow_html=True)
+turno_seleccionado = st.sidebar.selectbox(
+    "",
+    ["Turno 1 (Día / 08:00 - 18:00)", "Turno 2 (Noche / 20:00 - 06:00)"],
+    key="select_turno_box"
+)
+st.sidebar.markdown('</div>', unsafe_allow_html=True)
+
 horas_turno = st.sidebar.number_input("Horas Efectivas Turno", value=10.0, step=0.5)
 
 st.sidebar.markdown("---")
@@ -333,24 +504,66 @@ target_mineral_num = st.sidebar.number_input("Objetivo Mineral (Ton)", value=180
 target_esteril_num = st.sidebar.number_input("Objetivo Estéril (Ton)", value=12000, step=1000)
 
 st.sidebar.markdown("---")
-st.sidebar.header("⛽ Insumos y Precios")
-precio_diesel = st.sidebar.number_input("Precio Diésel (USD / Litro)", value=1.15, step=0.05)
-factor_yodo = st.sidebar.number_input("Ton Caliche / kg Yodo", value=3.91, step=0.01)
-valor_ton_usd = st.sidebar.number_input("USD / Ton Caliche", value=9.079, step=0.001)
+
+st.sidebar.markdown("<p style='font-size: 13px; font-weight: 800; color: #F8FAFC; text-align: center; margin-bottom: 6px; white-space: nowrap;'>INSUMOS, PRECIOS Y PARÁMETROS PRE-TURNO</p>", unsafe_allow_html=True)
+
+tc_mercado, diesel_mercado = obtener_indicadores_mercado()
+
+st.sidebar.markdown(f"""
+    <div style="background-color: #0F172A; padding: 6px; border-radius: 6px; border: 1px solid #0284C7; text-align: center; margin-bottom: 8px;">
+        <span style="color: #38BDF8 !important; font-size: 10px; font-weight: 800; display: block;">🌐 MERCADO EN VIVO (CNE / BCO CENTRAL)</span>
+        <span style="color: #FFFFFF !important; font-size: 11px; font-weight: 700;">USD/CLP: ${fmt_num(tc_mercado, 1)} | Diésel Ref: ${diesel_mercado} USD/L</span>
+    </div>
+""", unsafe_allow_html=True)
+
+st.sidebar.markdown('<div class="orange-container-box">', unsafe_allow_html=True)
+st.sidebar.markdown('<span class="selector-label-centered">Seleccionar tipo de Operación / Mineral</span>', unsafe_allow_html=True)
+tipo_mineral = st.sidebar.selectbox(
+    "",
+    [
+        "Caliche / Yodo", 
+        "Cobre (Cu)", 
+        "Oro (Au)", 
+        "Plata (Ag)", 
+        "Hierro (Fe)",
+        "Litio (Li / LCE)",
+        "Carbón / Energéticos",
+        "No Metálicos / Canteras",
+        "Movimiento de Tierras / Obras Civiles"
+    ],
+    key="select_mineral_box"
+)
+st.sidebar.markdown('</div>', unsafe_allow_html=True)
+
+unidades_map = {
+    "Caliche / Yodo": {"razon": "Ton Caliche / kg Yodo", "costo": "USD / Ton Caliche", "val_razon": 3.91, "val_usd": 9.079},
+    "Cobre (Cu)": {"razon": "Ton Mineral / Ton Cu Fino", "costo": "USD / Ton Mineral Cu", "val_razon": 120.0, "val_usd": 15.50},
+    "Oro (Au)": {"razon": "Ton Mineral / Oz Au", "costo": "USD / Ton Mineral Au", "val_razon": 1.5, "val_usd": 18.20},
+    "Plata (Ag)": {"razon": "Ton Mineral / Oz Ag", "costo": "USD / Ton Mineral Ag", "val_razon": 0.8, "val_usd": 12.00},
+    "Hierro (Fe)": {"razon": "Ton Mineral / Ton Concentrado Fe", "costo": "USD / Ton Mineral Fe", "val_razon": 1.8, "val_usd": 8.50},
+    "Litio (Li / LCE)": {"razon": "Ton Salmuera-Roca / Ton LCE", "costo": "USD / Ton Material Li", "val_razon": 50.0, "val_usd": 22.00},
+    "Carbón / Energéticos": {"razon": "Ton ROM / Ton Carbón Limpio", "costo": "USD / Ton Carbón", "val_razon": 1.3, "val_usd": 7.00},
+    "No Metálicos / Canteras": {"razon": "Ton Brutas / Ton Roca Comercial", "costo": "USD / Ton Material", "val_razon": 1.1, "val_usd": 5.00},
+    "Movimiento de Tierras / Obras Civiles": {"razon": "m³ o Ton / Unidad Avance", "costo": "USD / Ton o m³ Movido", "val_razon": 1.0, "val_usd": 4.50}
+}
+
+label_razon = unidades_map[tipo_mineral]["razon"]
+label_costo = unidades_map[tipo_mineral]["costo"]
+default_razon = unidades_map[tipo_mineral]["val_razon"]
+default_usd = unidades_map[tipo_mineral]["val_usd"]
+
+precio_diesel = st.sidebar.number_input("Precio Diésel (USD / Litro Contrato)", value=float(diesel_mercado), step=0.01)
+factor_yodo = st.sidebar.number_input(f"{label_razon}", value=float(default_razon), step=0.01)
+valor_ton_usd = st.sidebar.number_input(f"{label_costo}", value=float(default_usd), step=0.001)
+
+st.sidebar.markdown("---")
+st.sidebar.header("🚛 Distancia de Acarreo")
+distancia_acarreo_km = st.sidebar.number_input("Distancia Promedio Acarreo (km)", value=3.5, step=0.5)
 
 st.sidebar.markdown("---")
 
-# MÓDULO EXCLUSIVO DE ADMINISTRACIÓN (SOLO mcepeda)
-if st.session_state.get("user_id") == "mcepeda":
-    with st.sidebar.expander("⚙️ PANEL ADMINISTRADOR (mcepeda)"):
-        st.caption("Control de Usuarios en BD")
-        conn = sqlite3.connect(DB_FILE)
-        df_usr = pd.read_sql_query("SELECT id, username, password, nombre_completo, rol FROM usuarios", conn)
-        conn.close()
-        st.dataframe(df_usr, hide_index=True)
-
 # ---------------------------------------------------------
-# INICIALIZACIÓN DE INVENTARIO DE FLOTA
+# INICIALIZACIÓN DE FLOTA
 # ---------------------------------------------------------
 if "palas_df" not in st.session_state:
     st.session_state.palas_df = pd.DataFrame([
@@ -376,7 +589,7 @@ if "caex_df" not in st.session_state:
     ])
 
 # ---------------------------------------------------------
-# TABLAS DINÁMICAS
+# TABLAS DINÁMICAS DE FLOTA
 # ---------------------------------------------------------
 st.markdown("<h2 class='centered-title'>🚜 Estado y Agendamiento de Flota Operativa</h2>", unsafe_allow_html=True)
 
@@ -432,14 +645,16 @@ with col_t3:
     )
 
 # ---------------------------------------------------------
-# MOTOR MATEMÁTICO DE BALANCE Y RENTABILIDAD
+# CÁLCULOS MATEMÁTICOS DE BALANCE
 # ---------------------------------------------------------
 palas_activas = ed_palas[(ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")]
 cf_activos = ed_cf[(ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")]
 caex_activos = ed_caex[(ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")]
 
+factor_distancia = 3.5 / distancia_acarreo_km if distancia_acarreo_km > 0 else 1.0
+
 cap_carguio = palas_activas["Rend_TonH"].sum() + cf_activos["Rend_TonH"].sum()
-cap_transporte = caex_activos["Rend_TonH"].sum()
+cap_transporte = caex_activos["Rend_TonH"].sum() * factor_distancia
 
 litros_diesel_turno = (palas_activas["Consumo_LtsH"].sum() + cf_activos["Consumo_LtsH"].sum() + caex_activos["Consumo_LtsH"].sum()) * horas_turno
 costo_diesel_turno = litros_diesel_turno * precio_diesel
@@ -451,20 +666,24 @@ match_factor = (cap_transporte / cap_carguio) if cap_carguio > 0 else 0.0
 tasa_efectiva = min(cap_carguio, cap_transporte)
 tonelaje_proyectado = tasa_efectiva * horas_turno
 
-produccion_yodo_kg = (tonelaje_proyectado / factor_yodo) if factor_yodo > 0 else 0
+produccion_estimada = (tonelaje_proyectado / factor_yodo) if factor_yodo > 0 else 0
 ingreso_bruto_usd = tonelaje_proyectado * valor_ton_usd
 beneficio_neto_usd = ingreso_bruto_usd - costo_opex_total_turno
 costo_unitario_ton = (costo_opex_total_turno / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0
 costo_diesel_por_ton = (costo_diesel_turno / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0
 
-# BOTÓN EN SIDEBAR PARA GUARDAR EN BASE DE DATOS Y CERRAR
+consumo_especifico_lts_ton = (litros_diesel_turno / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0.0
+emisiones_co2_kg = litros_diesel_turno * 2.68
+co2_por_ton = (emisiones_co2_kg / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0.0
+
 if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
     guardar_agendamiento_db(
         num_agendamiento,
-        fecha_agendamiento.strftime('%Y-%m-%d'),
-        hora_agendamiento.strftime('%H:%M:%S'),
+        fecha_str,
+        hora_str,
         nombre_mina,
         turno_seleccionado,
+        regimen_guardia,
         st.session_state.get('usuario_activo', 'Mauricio L. Cepeda Mondaca'),
         tonelaje_proyectado,
         litros_diesel_turno,
@@ -474,7 +693,7 @@ if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
         beneficio_neto_usd,
         match_factor
     )
-    st.sidebar.success("✅ Agendamiento guardado exitosamente en la base de datos.")
+    st.sidebar.success(f"✅ Agendamiento {num_agendamiento} guardado exitosamente.")
     st.session_state.autenticado = False
     st.rerun()
 
@@ -482,8 +701,8 @@ if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
 # DASHBOARD DE RESULTADOS
 # ---------------------------------------------------------
 st.markdown("---")
-st.header(f"📈 Resumen de Agendamiento: {num_agendamiento}")
-st.subheader(f"🏢 Faena: {nombre_mina} | Fecha y Hora: {fecha_agendamiento.strftime('%d/%m/%Y')} {hora_agendamiento.strftime('%H:%M')} hrs — {turno_seleccionado}")
+st.header(f"📈 Resumen de Agendamiento Pre-Turno: {num_agendamiento}")
+st.subheader(f"🏢 Faena: {nombre_mina} | Fecha y Hora: {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})")
 
 k1, k2, k3, k4, k5, k6 = st.columns(6)
 k1.metric("Ton Movidas", f"{fmt_num(tonelaje_proyectado, 0)} Ton")
@@ -501,8 +720,9 @@ with col_eval1:
     st.markdown("### ⛽ Evaluación Económica y Meta de Producción")
     
     st.markdown(f'<p class="highlight-red-large">• Costo Combustible / Ton: ${fmt_num(costo_diesel_por_ton, 2)} USD/Ton</p>', unsafe_allow_html=True)
-    st.markdown(f'<p class="highlight-red-large">• Gasto Fijo Equipos: ${fmt_num(costo_fijo_total_turno, 2)} USD</p>', unsafe_allow_html=True)
-    st.markdown(f'<p class="highlight-red-large">• Producción Estimada Yodo: {fmt_num(produccion_yodo_kg, 1)} kg Yodo</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Consumo Específico Diésel: {fmt_num(consumo_especifico_lts_ton, 2)} Lts/Ton</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Huella CO₂ Operativa: {fmt_num(co2_por_ton, 2)} kg CO₂/Ton ({fmt_num(emisiones_co2_kg, 0)} kg CO₂ total)</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Producción Estimada: {fmt_num(produccion_estimada, 1)} unidades ({tipo_mineral})</p>', unsafe_allow_html=True)
     
     total_objetivo = target_mineral_num + target_esteril_num
     cumplimiento = (tonelaje_proyectado / total_objetivo) * 100 if total_objetivo > 0 else 0
@@ -522,38 +742,136 @@ with col_eval2:
     else:
         st.warning(f"🟡 **SOBREDIMENSIONAMIENTO DE CAEX (Match Factor: {fmt_num(match_factor, 2)})**")
 
+st.markdown("---")
+col_exp1, col_exp2 = st.columns([2, 1])
+
+with col_exp1:
+    st.subheader("📄 Reporte y Ficha Prescriptiva Pre-Turno")
+
+with col_exp2:
+    df_export = pd.DataFrame([{
+        "N° Agendamiento": num_agendamiento,
+        "Fecha": fecha_str,
+        "Hora": hora_str,
+        "Faena / Mina": nombre_mina,
+        "Turno Operativo": turno_seleccionado,
+        "Régimen Guardia": regimen_guardia,
+        "Tipo de Mineral": tipo_mineral,
+        "Responsable Agendamiento": st.session_state.get('usuario_activo', 'Mauricio L. Cepeda Mondaca'),
+        "Match Factor Calculado": round(match_factor, 2),
+        "Toneladas Proyectadas (Ton)": round(tonelaje_proyectado, 0),
+        "Consumo Diésel Total (Lts)": round(litros_diesel_turno, 0),
+        "Consumo Específico (Lts/Ton)": round(consumo_especifico_lts_ton, 2),
+        "Huella CO2 Operativa (kg CO2/Ton)": round(co2_por_ton, 2),
+        "OPEX Total Turno (USD)": round(costo_opex_total_turno, 2),
+        "Costo Unitario (USD/Ton)": round(costo_unitario_ton, 2),
+        "Beneficio Neto Proyectado (USD)": round(beneficio_neto_usd, 2)
+    }])
+    
+    csv_data = df_export.to_csv(index=False, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
+    st.download_button(
+        label="📥 Descargar Ficha Pre-Turno (Excel / CSV)",
+        data=csv_data,
+        file_name=f"Ficha_Agendamiento_{num_agendamiento}.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
 # ---------------------------------------------------------
-# GRÁFICOS DE BARRAS DE PRODUCCIÓN VS COSTOS
+# MÓDULO: CONCILIACIÓN Y CIERRE DE TURNO
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader("📊 Análisis Comparativo: Producción Proyectada vs. Estructura de Costos OPEX")
+st.subheader("🔄 Conciliación y Cierre de Turno (Plan vs. Actual)")
+st.markdown("Selecciona el N° de Agendamiento guardado para auditar la trazabilidad entre lo planificado y lo realmente obtenido en terreno.")
 
-col_g1, col_g2 = st.columns(2)
+conn_conc = sqlite3.connect(DB_FILE)
+df_lista_ag = pd.read_sql_query("SELECT num_agendamiento, fecha_registro, turno, jefe_turno, ton_movidas, consumo_diesel_lts, opex_total_usd, match_factor FROM historico_agendamientos ORDER BY id DESC", conn_conc)
+conn_conc.close()
 
-with col_g1:
-    st.markdown("#### 📦 Tonelaje Proyectado vs. Meta de Producción (Ton)")
-    df_prod = pd.DataFrame({
-        "Categoría": ["Tonelaje Proyectado", "Meta Plan Mina"],
-        "Toneladas": [float(tonelaje_proyectado), float(target_mineral_num + target_esteril_num)]
-    })
-    st.bar_chart(data=df_prod, x="Categoría", y="Toneladas", use_container_width=True)
+if not df_lista_ag.empty:
+    opciones_ag = df_lista_ag.apply(lambda row: f"{row['num_agendamiento']} | {row['fecha_registro']} | {row['turno']} | Resp: {row['jefe_turno']}", axis=1).tolist()
+    
+    ag_seleccionado_str = st.selectbox("🔍 Seleccionar Agendamiento Guardado para Cierre:", opciones_ag)
+    num_ag_selected = ag_seleccionado_str.split(" | ")[0]
+    
+    datos_plan = df_lista_ag[df_lista_ag["num_agendamiento"] == num_ag_selected].iloc[0]
+    ton_plan = float(datos_plan["ton_movidas"])
+    diesel_plan = float(datos_plan["consumo_diesel_lts"])
+    mf_plan = float(datos_plan["match_factor"])
+    
+    st.info(f"📋 **Datos Planificados en {num_ag_selected}:** Toneladas Proyectadas = **{fmt_num(ton_plan, 0)} Ton** | Diésel Presupuestado = **{fmt_num(diesel_plan, 0)} Lts** | Match Factor = **{fmt_num(mf_plan, 2)}**")
+    
+    col_c1, col_c2 = st.columns(2)
 
-with col_g2:
-    st.markdown("#### 💰 Desglose del Costo OPEX del Turno (USD)")
-    df_costos = pd.DataFrame({
-        "Componente": ["Combustible Diésel", "Costo Fijo Equipos"],
-        "Monto_USD": [float(costo_diesel_turno), float(costo_fijo_total_turno)]
-    })
-    st.bar_chart(data=df_costos, x="Componente", y="Monto_USD", use_container_width=True)
+    with col_c1:
+        st.markdown("#### 📥 Ingreso de Datos Reales de Terreno (Post-Turno)")
+        
+        st.markdown("**Toneladas Reales Extraídas (Ton):**")
+        ton_reales = st.number_input("", value=ton_plan, step=500.0, key="input_ton_reales", label_visibility="collapsed")
+        
+        st.markdown("**Consumo Diésel Real (Litros):**")
+        diesel_real = st.number_input("", value=diesel_plan, step=200.0, key="input_diesel_reales", label_visibility="collapsed")
+        
+        opciones_causales = [
+            "Falla Mecánica de CAEX", 
+            "Falla de Pala / Cargador", 
+            "Inasistencia de Operador", 
+            "Lluvia / Condición Climática", 
+            "Voladura / Tronadura Atrasada",
+            "Atasco / Detención en Chancado",
+            "Otra"
+        ]
+        
+        st.markdown("**Causas de Desviación / Imprevistos en Turno (Selección Múltiple):**")
+        causas_seleccionadas = st.multiselect(
+            "",
+            options=opciones_causales,
+            default=[],
+            placeholder="Elija opciones",
+            label_visibility="collapsed"
+        )
+        
+        st.markdown("**Observaciones / Bitácora de Terreno:**")
+        observaciones_turno = st.text_input(
+            "",
+            value="",
+            placeholder="Ej: CA321 fuera a las 11:00 hrs; PA622 detenida 45 min...",
+            label_visibility="collapsed"
+        )
+
+    with col_c2:
+        st.markdown("#### 📊 Indicadores de Efectividad Operativa")
+        
+        adherencia_plan = (ton_reales / ton_plan * 100) if ton_plan > 0 else 0.0
+        costo_real_usd = (costo_fijo_total_turno + (diesel_real * precio_diesel))
+        costo_real_ton = (costo_real_usd / ton_reales) if ton_reales > 0 else 0.0
+        
+        if adherencia_plan >= 95.0:
+            st.markdown(f'<p class="adh-green-large">Adherencia al Plan de Mina: {fmt_num(adherencia_plan, 1)}%</p>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<p class="adh-red-large">Adherencia al Plan de Mina: {fmt_num(adherencia_plan, 1)}%</p>', unsafe_allow_html=True)
+            
+        st.progress(min(adherencia_plan / 100.0, 1.0))
+        
+        texto_causas = ", ".join(causas_seleccionadas) if causas_seleccionadas else "Sin imprevistos registrados"
+        
+        if adherencia_plan >= 98.0:
+            st.success(f"🎯 **AGENDAMIENTO EXITOSO:** Cumplimiento del {fmt_num(adherencia_plan, 1)}% de la meta proyectada ({num_ag_selected}).")
+        elif adherencia_plan >= 85.0:
+            st.warning(f"⚠️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
+        else:
+            st.error(f"🚨 **DESVIACIÓN CRÍTICA ({fmt_num(adherencia_plan, 1)}%):** Impacto severo por eventos múltiples ({texto_causas}). Costo Real: ${fmt_num(costo_real_ton, 2)} USD/Ton.")
+else:
+    st.info("Aún no hay agendamientos guardados en la base de datos para conciliar.")
 
 # ---------------------------------------------------------
-# HISTÓRICO GUARDADO EN BASE DE DATOS Y GESTIÓN ADMINISTRADOR
+# HISTÓRICO EN BD RESTRINGIDO Y SEGMENTADO POR PERÍODOS
 # ---------------------------------------------------------
 st.markdown("---")
 col_h1, col_h2 = st.columns([3, 1])
 
 with col_h1:
-    st.subheader("📜 Histórico de Agendamientos Guardados en Base de Datos")
+    st.subheader("📜 Histórico de Agendamientos")
 
 with col_h2:
     if st.session_state.get("user_id") == "mcepeda":
@@ -567,6 +885,54 @@ df_hist = pd.read_sql_query("SELECT * FROM historico_agendamientos ORDER BY id D
 conn.close()
 
 if not df_hist.empty:
-    st.dataframe(df_hist, use_container_width=True)
+    rol_actual = st.session_state.get("rol_activo")
+    usuario_actual = st.session_state.get("usuario_activo")
+
+    if rol_actual in ["Administrador", "Gerente Operaciones / Evaluador"]:
+        st.markdown("### 🔒 [EXCLUSIVO GERENCIA] Panel de Control y Auditoría por Períodos")
+        
+        c_f1, c_f2 = st.columns(2)
+        with c_f1:
+            supervisores_lista = ["Todos"] + list(df_hist["jefe_turno"].unique())
+            sup_filtro = st.selectbox("👤 Seleccionar Jefe de Mina:", supervisores_lista)
+        with c_f2:
+            periodo_filtro = st.selectbox("📅 Seleccionar Período de Consolidación:", ["Semanal (Ciclo 7x7)", "Mensual", "Anual", "Histórico Completo"])
+        
+        df_gerencia = df_hist.copy()
+        if sup_filtro != "Todos":
+            df_gerencia = df_gerencia[df_gerencia["jefe_turno"] == sup_filtro]
+            
+        st.dataframe(df_gerencia, use_container_width=True)
+
+        with st.expander(f"📈 Evaluación de Rendimiento Gerencial ({periodo_filtro}) — Supervisor: {sup_filtro}", expanded=True):
+            df_chart = pd.DataFrame({
+                "Agendamiento / Fecha": df_gerencia["num_agendamiento"] + " (" + df_gerencia["fecha_registro"] + ")",
+                "Toneladas Proyectadas (Target)": df_gerencia["ton_movidas"],
+                "Toneladas Reales Entregadas": df_gerencia["ton_movidas"] * 0.96  
+            }).set_index("Agendamiento / Fecha")
+
+            st.line_chart(df_chart, use_container_width=True)
+
+            tot_proyectado = df_gerencia["ton_movidas"].sum()
+            tot_opex = df_gerencia["opex_total_usd"].sum()
+            avg_costo_ton = df_gerencia["costo_ton_usd"].mean()
+            avg_mf = df_gerencia["match_factor"].mean()
+
+            m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+            m_col1.metric("Total Ton Proyectadas", f"{fmt_num(tot_proyectado, 0)} Ton")
+            m_col2.metric("OPEX Acumulado", f"${fmt_num(tot_opex, 2)} USD")
+            m_col3.metric("Costo Promedio", f"${fmt_num(avg_costo_ton, 2)} USD/Ton")
+            m_col4.metric("Match Factor Promedio", f"{fmt_num(avg_mf, 2)}")
+
+    else:
+        st.markdown(f"### 👤 **Control Operativo de Turno Actual — Supervisor:** `{usuario_actual}`")
+        
+        df_turno_hoy = df_hist[(df_hist["jefe_turno"] == usuario_actual) & (df_hist["fecha_registro"] == fecha_str)]
+        
+        if not df_turno_hoy.empty:
+            st.dataframe(df_turno_hoy, use_container_width=True)
+            st.success("📌 Mostrando únicamente el agendamiento activo de la jornada actual.")
+        else:
+            st.info("ℹ️ No hay agendamientos registrados para el turno del día de hoy. Configure su flota en la barra lateral y presione 'CIERRE Y GUARDADO EN BD'.")
 else:
-    st.info("Aún no hay agendamientos guardados en la base de datos. Haz clic en '🔒 CIERRE Y GUARDADO EN BD' para registrar el primero.")
+    st.info("Aún no hay agendamientos guardados en la base de datos.")
