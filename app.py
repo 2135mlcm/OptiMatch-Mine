@@ -963,8 +963,7 @@ with col_t2:
   ed_cf = st.data_editor(
       st.session_state.cf_df,
       column_config={
-          "Item": st.column_config.NumberColumn("N° Item", disable
-                                                d=True),
+          "Item": st.column_config.NumberColumn("N° Item", disabled=True),
           "Estado": st.column_config.SelectboxColumn(
               "Estado Mecánico", options=opciones_estado
           ),
