@@ -38,12 +38,13 @@ if "historico_agendamientos" not in st.session_state:
       "USD_Ton",
   ])
 
-# Base de datos de usuarios autorizados
+# Base de datos con los 5 usuarios autorizados y sus claves actualizadas
 USUARIOS_VALIDOS = {
-    "mcepeda": "admin123",
+    "ddaines": "mina2026",
     "avidela": "mina2026",
-    "ddaines": "titulog5",
-    "gerencia": "opex2026",
+    "cnikulin": "UAH2026",
+    "cperez": "UAH2026",
+    "mcepeda": "admin2026",
 }
 
 # ==============================================================================
@@ -53,7 +54,6 @@ if not st.session_state["autenticado"]:
   col_pad1, col_center, col_pad2 = st.columns([1, 2, 1])
 
   with col_center:
-    # CORRECCIÓN AQUÍ: use_container_width=True
     st.image(
         "https://raw.githubusercontent.com/2135mlcm/OptiMatch-Mine/main/Logo_OptiMatch.png",
         use_container_width=True,
@@ -68,22 +68,29 @@ if not st.session_state["autenticado"]:
     st.markdown("---")
 
     with st.form("form_login"):
-      usuario = st.text_input("👤 Usuario:")
-      password = st.text_input("🔑 Contraseña:", type="password")
+      usuario_input = st.text_input("👤 Usuario:")
+      password_input = st.text_input("🔑 Contraseña:", type="password")
       btn_login = st.form_submit_button("🚀 Ingresar a la Plataforma")
 
       if btn_login:
+        # Convertimos el nombre de usuario a minúsculas y limpiamos espacios
+        user_clean = usuario_input.strip().lower()
+        pass_clean = password_input.strip()
+
         if (
-            usuario in USUARIOS_VALIDOS
-            and USUARIOS_VALIDOS[usuario] == password
+            user_clean in USUARIOS_VALIDOS
+            and USUARIOS_VALIDOS[user_clean] == pass_clean
         ):
           st.session_state["autenticado"] = True
-          st.session_state["usuario_actual"] = usuario
+          st.session_state["usuario_actual"] = user_clean
           st.success("✅ Acceso autorizado. Cargando sistema...")
           time.sleep(1)
           st.rerun()
         else:
-          st.error("❌ Credenciales incorrectas. Intente nuevamente.")
+          st.error(
+              "❌ Credenciales incorrectas. Verifique el usuario y la"
+              " contraseña e intente nuevamente."
+          )
 
   st.stop()
 
