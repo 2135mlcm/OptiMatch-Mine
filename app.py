@@ -47,15 +47,16 @@ USUARIOS_VALIDOS = {
 }
 
 # ==============================================================================
-# PANTALLA DE CONTROL DE ACCESO (LOGIN / CARÁTULA ANTERIOR)
+# PANTALLA DE CONTROL DE ACCESO (LOGIN)
 # ==============================================================================
 if not st.session_state["autenticado"]:
   col_pad1, col_center, col_pad2 = st.columns([1, 2, 1])
 
   with col_center:
+    # CORRECCIÓN AQUÍ: use_container_width=True
     st.image(
         "https://raw.githubusercontent.com/2135mlcm/OptiMatch-Mine/main/Logo_OptiMatch.png",
-        use_column_width=True,
+        use_container_width=True,
     )
     st.title("🔒 OptiMatch Mine — Control de Acceso")
     st.markdown(
@@ -412,6 +413,6 @@ elif menu_opcion == "📚 Marco Metodológico (5 Steps)":
     1. **STEP 1 (Vester):** Causa raíz -> Asignación empírica y falta de simulador prescriptivo.
     2. **STEP 2 (OTSM-TRIZ):** Resolución de contradicción -> Precisión vs. Velocidad con Principios TRIZ N° 1 y N° 28.
     3. **STEP 3 (DSM):** Matriz de dependencias y cálculo de Tasa Efectiva $\min(\text{Carguío}, \text{Transporte})$.
-    4. **STEP 4 (Lean Mining):** Tolerancia de Match Factor ($1.00 \pm 0.08$) with semáforos operacionales.
+    4. **STEP 4 (Lean Mining):** Tolerancia de Match Factor ($1.00 \pm 0.08$) con semáforos operacionales.
     5. **STEP 5 (Scrum):** Iteración ágil del software prescriptivo en Python/Streamlit.
     """)
