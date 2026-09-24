@@ -16,8 +16,14 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 2. INICIALIZACIÓN DE SESIÓN (PERSISTENCIA DE DATOS)
+# 2. INICIALIZACIÓN DE SESIÓN Y CONTROL DE ACCESO (LOGIN)
 # ==============================================================================
+if "autenticado" not in st.session_state:
+  st.session_state["autenticado"] = False
+
+if "usuario_actual" not in st.session_state:
+  st.session_state["usuario_actual"] = ""
+
 if "historico_agendamientos" not in st.session_state:
   st.session_state["historico_agendamientos"] = pd.DataFrame(columns=[
       "ID_Turno",
@@ -32,12 +38,72 @@ if "historico_agendamientos" not in st.session_state:
       "USD_Ton",
   ])
 
-# ==============================================================================
-# 3. BARRA LATERAL (SIDEBAR)
-# ==============================================================================
-st.sidebar.title("OptiMatch Mine")
-st.sidebar.caption("Plataforma Prescriptiva Pre-Turno | UAH Grupo N° 5")
+# Base de datos de usuarios autorizados
+USUARIOS_VALIDOS = {
+    "mcepeda": "admin123",
+    "avidela": "mina2026",
+    "ddaines": "titulog5",
+    "gerencia": "opex2026",
+}
 
+# ==============================================================================
+# PANTALLA DE CONTROL DE ACCESO (LOGIN / CARÁTULA ANTERIOR)
+# ==============================================================================
+if not st.session_state["autenticado"]:
+  col_pad1, col_center, col_pad2 = st.columns([1, 2, 1])
+
+  with col_center:
+    st.image(
+        "https://raw.githubusercontent.com/2135mlcm/OptiMatch-Mine/main/Logo_OptiMatch.png",
+        use_column_width=True,
+    )
+    st.title("🔒 OptiMatch Mine — Control de Acceso")
+    st.markdown(
+        "**Sistema Prescriptivo de Decisiones Pre-Turno y Control de"
+        " Rentabilidad OPEX**"
+    )
+    st.caption("Proyecto Integrador de Título | Grupo N° 5 — UAH")
+
+    st.markdown("---")
+
+    with st.form("form_login"):
+      usuario = st.text_input("👤 Usuario:")
+      password = st.text_input("🔑 Contraseña:", type="password")
+      btn_login = st.form_submit_button("🚀 Ingresar a la Plataforma")
+
+      if btn_login:
+        if (
+            usuario in USUARIOS_VALIDOS
+            and USUARIOS_VALIDOS[usuario] == password
+        ):
+          st.session_state["autenticado"] = True
+          st.session_state["usuario_actual"] = usuario
+          st.success("✅ Acceso autorizado. Cargando sistema...")
+          time.sleep(1)
+          st.rerun()
+        else:
+          st.error("❌ Credenciales incorrectas. Intente nuevamente.")
+
+  st.stop()
+
+# ==============================================================================
+# 3. BARRA LATERAL (SIDEBAR) - USUARIO AUTENTICADO
+# ==============================================================================
+st.sidebar.image(
+    "https://raw.githubusercontent.com/2135mlcm/OptiMatch-Mine/main/Logo_OptiMatch.png",
+    width=200,
+)
+st.sidebar.title("OptiMatch Mine")
+st.sidebar.caption(
+    f"👤 Usuario: **{st.session_state['usuario_actual']}** | Grupo N° 5 UAH"
+)
+
+if st.sidebar.button("🚪 Cerrar Sesión"):
+  st.session_state["autenticado"] = False
+  st.session_state["usuario_actual"] = ""
+  st.rerun()
+
+st.sidebar.markdown("---")
 menu_opcion = st.sidebar.radio(
     "Seleccione Módulo de Operación:",
     [
@@ -346,6 +412,6 @@ elif menu_opcion == "📚 Marco Metodológico (5 Steps)":
     1. **STEP 1 (Vester):** Causa raíz -> Asignación empírica y falta de simulador prescriptivo.
     2. **STEP 2 (OTSM-TRIZ):** Resolución de contradicción -> Precisión vs. Velocidad con Principios TRIZ N° 1 y N° 28.
     3. **STEP 3 (DSM):** Matriz de dependencias y cálculo de Tasa Efectiva $\min(\text{Carguío}, \text{Transporte})$.
-    4. **STEP 4 (Lean Mining):** Tolerancia de Match Factor ($1.00 \pm 0.08$) con semáforos operacionales.
+    4. **STEP 4 (Lean Mining):** Tolerancia de Match Factor ($1.00 \pm 0.08$) with semáforos operacionales.
     5. **STEP 5 (Scrum):** Iteración ágil del software prescriptivo en Python/Streamlit.
     """)
