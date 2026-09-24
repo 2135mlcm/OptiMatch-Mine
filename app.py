@@ -963,7 +963,8 @@ with col_t2:
   ed_cf = st.data_editor(
       st.session_state.cf_df,
       column_config={
-          "Item": st.column_config.NumberColumn("N° Item", disabled=True),
+          "Item": st.column_config.NumberColumn("N° Item", disable
+                                                d=True),
           "Estado": st.column_config.SelectboxColumn(
               "Estado Mecánico", options=opciones_estado
           ),
@@ -1330,7 +1331,7 @@ fig_circuito.update_layout(
     showlegend=True,
 )
 
-st.plotly_chart(fig_circuito, use_container_width=True
+st.plotly_chart(fig_circuito, use_container_width=True)
 
 # ---------------------------------------------------------
 # REPORTE Y FICHA PRESCRIPTIVA PRE-TURNO
