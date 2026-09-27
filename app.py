@@ -9,26 +9,53 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # ==============================================================================
-# 1. CONFIGURACIÓN DE PÁGINA Y BASE DE DATOS (optimatch.db)
+# 1. CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS INDUSTRIALES
 # ==============================================================================
 st.set_page_config(
     page_title="OptiMatch-Mine | Prescripción Pre-Turno",
     page_icon="⛏️",
     layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# Estilos CSS personalizados para tarjetas de flota e interfaz industrial
+st.markdown(
+    """
+    <style>
+    .main { background-color: #f8f9fa; }
+    .metric-card {
+        background-color: #ffffff;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-left: 5px solid #0056b3;
+    }
+    .stButton>button {
+        width: 100%;
+        background-color: #0056b3;
+        color: white;
+        font-weight: bold;
+        border-radius: 5px;
+        height: 45px;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
 )
 
 
+# ==============================================================================
+# 2. BASE DE DATOS PERSISTENTE (optimatch.db)
+# ==============================================================================
 def init_db():
     conn = sqlite3.connect("optimatch.db")
     c = conn.cursor()
 
-    # 1. Crear tabla usuarios si no existe
     c.execute(
         """CREATE TABLE IF NOT EXISTS usuarios 
                  (username TEXT PRIMARY KEY, password TEXT, rol TEXT)"""
     )
 
-    # 2. Asegurar compatibilidad de la columna 'rol' en bases de datos existentes
     c.execute("PRAGMA table_info(usuarios)")
     columns = [column[1] for column in c.fetchall()]
     if "rol" not in columns:
@@ -36,14 +63,12 @@ def init_db():
             "ALTER TABLE usuarios ADD COLUMN rol TEXT DEFAULT 'Jefe de Turno'"
         )
 
-    # 3. Crear tabla de asignaciones de pre-turno
     c.execute(
         """CREATE TABLE IF NOT EXISTS asignaciones_log 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
                   frente TEXT, n_palas INT, n_camiones INT, match_factor REAL, opex_usd_ton REAL, estado TEXT)"""
     )
 
-    # 4. Crear tabla de reconciliación de fin de turno (SQM)
     c.execute(
         """CREATE TABLE IF NOT EXISTS fin_turno_log 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, inicio TEXT, fin TEXT,
@@ -51,7 +76,6 @@ def init_db():
                   costo_mina_unit REAL, presupuesto REAL, cumple TEXT)"""
     )
 
-    # 5. Insertar usuario por defecto con columnas especificadas
     c.execute(
         """INSERT OR IGNORE INTO usuarios (username, password, rol) 
                  VALUES (?, ?, ?)""",
@@ -69,116 +93,162 @@ def init_db():
 init_db()
 
 # ==============================================================================
-# 2. MOTOR ALGORÍTMICO (DSM / MATCH FACTOR)
+# 3. BARRA LATERAL RESTAURADA (PARÁMETROS COMPLETOS Y CONTROL DE FLOTA)
 # ==============================================================================
+with st.sidebar:
+    st.image("https://img.icons8.com/color/96/mine-cart.png", width=70)
+    st.title("OptiMatch-Mine")
+    st.caption("Sistema Prescriptivo de Pre-Turno v3.2")
+    st.markdown("---")
 
-
-def calcular_match_factor(
-    n_palas,
-    n_camiones,
-    t_pase,
-    n_pases,
-    t_transito,
-    t_maniobras,
-    cap_tolva,
-    costo_diesel_l_h,
-    costo_operativo_base,
-):
-    t_carguio = n_pases * t_pase  # min
-    t_ciclo_camion = t_carguio + t_transito + t_maniobras  # min
-
-    # Match Factor
-    mf = (n_camiones * t_carguio) / (n_palas * t_ciclo_camion)
-
-    # Tasa Efectiva (Ton/h)
-    cap_carguio_h = (n_palas * (60 / t_carguio)) * cap_tolva
-    cap_transporte_h = (n_camiones * (60 / t_ciclo_camion)) * cap_tolva
-    tasa_efectiva = min(cap_carguio_h, cap_transporte_h)
-
-    # Evaluación Lean Mining (Semaforización +/-8%)
-    if 0.92 <= mf <= 1.08:
-        estado_lean = "VERDE"
-        color_hex = "#28a745"
-    elif (0.85 <= mf < 0.92) or (1.08 < mf <= 1.15):
-        estado_lean = "AMARILLO"
-        color_hex = "#ffc107"
-    else:
-        estado_lean = "ROJO"
-        color_hex = "#dc3545"
-
-    # Estimación de OPEX (USD/Ton)
-    factor_ralenti = 1.0 + (mf - 1.08) * 0.4 if mf > 1.08 else 1.0
-    costo_total_h = (
-        n_camiones * costo_diesel_l_h * factor_ralenti
-    ) + costo_operativo_base
-    opex_usd_ton = costo_total_h / tasa_efectiva if tasa_efectiva > 0 else 0
-
-    return (
-        mf,
-        tasa_efectiva,
-        opex_usd_ton,
-        estado_lean,
-        color_hex,
-        t_carguio,
-        t_ciclo_camion,
+    st.subheader("👤 Perfil Operativo")
+    usuario_act = st.text_input("Usuario Logueado", "jefe_mina", disabled=True)
+    rol_act = st.selectbox(
+        "Rol", ["Jefe de Turno Mina", "Ingeniero de Planificación", "Admin"]
     )
 
+    st.markdown("---")
+    st.subheader("📍 Datos de la Operación")
+    frente_seleccionado = st.selectbox(
+        "Frente de Carguío / Circuito",
+        [
+            "Frente Norte - Chancador Primario",
+            "Frente Sur - Botadero Estéril",
+            "Frente Este - Stock Low Grade",
+        ],
+    )
+
+    st.markdown("---")
+    st.subheader("🚜 Disponibilidad de Equipos (DSM)")
+    n_palas = st.slider("Palas Hidráulicas Activas", 1, 4, 1)
+    n_cargadores = st.slider("Cargadores Frontales Auxiliares", 0, 3, 0)
+    n_camiones = st.slider("Camiones CAEX Asignados", 1, 20, 8)
+
+    st.markdown("---")
+    st.subheader("⏱️ Tiempos de Ciclo de Acarreo (min)")
+    t_pase = st.number_input(
+        "Tiempo por Pase de Carguío (min)",
+        value=0.55,
+        step=0.05,
+        format="%.2f",
+    )
+    n_pases = st.number_input("Número de Pases por Tolva", value=4, step=1)
+    t_transito = st.number_input(
+        "Tránsito Acarreo + Retorno (min)", value=14.2, step=0.5
+    )
+    t_maniobras = st.number_input(
+        "Maniobras, Acople y Volteo (min)", value=2.3, step=0.1
+    )
+    cap_tolva = st.number_input(
+        "Capacidad de Tolva Nominal (Ton)", value=44.6, step=1.0
+    )
+
+    st.markdown("---")
+    st.subheader("⛽ Costos de Insumos Directos")
+    precio_diesel = st.number_input(
+        "Precio Diésel (USD/Litro)", value=1.10, step=0.05
+    )
+    consumo_camion_lh = st.number_input(
+        "Consumo Camión CAEX (L/h)", value=45.0, step=1.0
+    )
 
 # ==============================================================================
-# 3. BARRA LATERAL (PARAMETRIZACIÓN DEL CIRCUITO)
+# 4. CÁLCULO DEL MOTOR ALGORÍTMICO (DSM / MATCH FACTOR)
+# ==============================================================================
+t_carguio = n_pases * t_pase
+t_ciclo_camion = t_carguio + t_transito + t_maniobras
+
+mf = (n_camiones * t_carguio) / (
+    (n_palas + n_cargadores * 0.8) * t_ciclo_camion
+)
+
+cap_carguio_h = (
+    (n_palas + n_cargadores * 0.8) * (60 / t_carguio)
+) * cap_tolva
+cap_transporte_h = (n_camiones * (60 / t_ciclo_camion)) * cap_tolva
+tasa_efectiva = min(cap_carguio_h, cap_transporte_h)
+
+# Semaforización Lean Mining (+/-8%)
+if 0.92 <= mf <= 1.08:
+    estado_lean = "VERDE"
+    color_hex = "#28a745"
+    mensaje_lean = "Asignación Balanceada - Operación Óptima sin Colas"
+elif (0.85 <= mf < 0.92) or (1.08 < mf <= 1.15):
+    estado_lean = "AMARILLO"
+    color_hex = "#ffc107"
+    mensaje_lean = "Descalce Leve - Alerta de Subutilización o Colas Acotadas"
+else:
+    estado_lean = "ROJO"
+    color_hex = "#dc3545"
+    mensaje_lean = "Descalce Severo - Cuello de Botella Crítico en Circuito"
+
+# OPEX Estimado
+factor_ralenti = 1.0 + (mf - 1.08) * 0.4 if mf > 1.08 else 1.0
+costo_diésel_h = n_camiones * consumo_camion_lh * precio_diesel * factor_ralenti
+costo_operativo_base = 800.0
+opex_usd_ton = (
+    (costo_diésel_h + costo_operativo_base) / tasa_efectiva
+    if tasa_efectiva > 0
+    else 0
+)
+
+# ==============================================================================
+# 5. ENCABEZADO Y TARJETAS DE ESTADO DE FLOTA RESTAURADAS
 # ==============================================================================
 st.title("⛏️ OptiMatch-Mine | Plataforma Prescriptiva de Pre-Turno")
 st.markdown(
-    "**Optimizador de Flota Carguío-Transporte para Mediana Minería** (Turno 10 Horas - Ley N° 21.561)"
+    f"**Circuito:** `{frente_seleccionado}` | **Jornada:** Turno 10 Horas (Ley N° 21.561)"
 )
 
-st.sidebar.header("⚙️ Parámetros del Circuito")
-frente = st.sidebar.text_input("Frente de Carguío", "Frente Norte - Chancado")
-n_palas = st.sidebar.number_input("Número de Palas (N_palas)", 1, 5, 1)
-n_camiones = st.sidebar.number_input("Número de Camiones (N_camiones)", 1, 20, 8)
+# Tarjetas visuales de equipos activos
+col_e1, col_e2, col_e3 = st.columns(3)
+with col_e1:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <h4>🏗️ Equipos de Carguío</h4>
+            <h3>{n_palas} Pala(s) | {n_cargadores} Cargador(es)</h3>
+            <p>Tiempo Carguío: <b>{t_carguio:.2f} min</b></p>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
 
-st.sidebar.subheader("Tiempos de Ciclo (Matriz DSM)")
-t_pase = st.sidebar.number_input("Tiempo por Pase (min)", 0.1, 2.0, 0.55)
-n_pases = st.sidebar.number_input("Número de Pases", 1, 10, 4)
-t_transito = st.sidebar.number_input("Tránsito Acarreo+Retorno (min)", 1.0, 60.0, 14.2)
-t_maniobras = st.sidebar.number_input("Maniobras y Volteo (min)", 0.5, 10.0, 2.3)
-cap_tolva = st.sidebar.number_input("Capacidad Tolva (Ton)", 10.0, 200.0, 44.6)
+with col_e2:
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <h4>🚛 Flota de Transporte</h4>
+            <h3>{n_camiones} Camiones CAEX</h3>
+            <p>Tiempo Ciclo Total: <b>{t_ciclo_camion:.2f} min</b></p>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
 
-# Cálculo de variables principales
-(
-    mf,
-    tasa,
-    opex,
-    estado,
-    color,
-    t_carguio,
-    t_ciclo_camion,
-) = calcular_match_factor(
-    n_palas,
-    n_camiones,
-    t_pase,
-    n_pases,
-    t_transito,
-    t_maniobras,
-    cap_tolva,
-    45.0,
-    800.0,
-)
+with col_e3:
+    st.markdown(
+        f"""
+        <div class="metric-card" style="border-left: 5px solid {color_hex};">
+            <h4>📊 Balance Match Factor</h4>
+            <h3 style="color:{color_hex};">{mf:.2f} ({estado_lean})</h3>
+            <p><b>{mensaje_lean}</b></p>
+        </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# Métricas Cuantitativas
+col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+col_m1.metric("Tasa Efectiva Proyectada", f"{tasa_efectiva:,.1f} Ton/h")
+col_m2.metric("Producción Turno (10 h)", f"{tasa_efectiva*10:,.0f} Ton")
+col_m3.metric("OPEX Estimado Directo", f"${opex_usd_ton:.2f} USD/Ton")
+col_m4.metric("Consumo Diésel Turno", f"{costo_diésel_h*10/precio_diesel:,.0f} L")
 
 # ==============================================================================
-# 4. MÉTRICAS PRINCIPALES Y SEMÁFORO
-# ==============================================================================
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Match Factor (MF)", f"{mf:.2f}")
-col2.metric("Tasa Efectiva", f"{tasa:.1f} Ton/h")
-col3.metric("OPEX Estimado", f"${opex:.2f} USD/Ton")
-col4.markdown(
-    f"<h3 style='color:{color}; text-align:center;'>Estado: {estado}</h3>",
-    unsafe_allow_html=True,
-)
-
-# ==============================================================================
-# 5. MÓDULO DE SIMULACIÓN CINEMÁTICA DE DOS VÍAS (CON TRIGGER DE INICIO)
+# 6. MÓDULO DE SIMULACIÓN CINEMÁTICA DE DOS VÍAS (CON TRIGGER)
 # ==============================================================================
 st.markdown("---")
 st.subheader("🗺️ Módulo de Simulación Cinemática de Dos Vías")
@@ -201,7 +271,7 @@ with col_trig2:
     if st.button("🔄 Reiniciar Postura de Flota"):
         st.session_state["turno_iniciado"] = False
 
-# --- ESCENARIO A: PRE-INICIO (Camiones alineados en fila en el Frente de Carguío) ---
+# ESCENARIO A: PRE-INICIO (Camiones alineados en fila en el Frente de Carguío)
 if not st.session_state["turno_iniciado"]:
     st.info(
         "📍 **ESTADO PRE-TURNO:** Flota parqueada en fila de espera en el Frente de Carguío. Presione el botón verde para iniciar la jornada."
@@ -281,7 +351,7 @@ if not st.session_state["turno_iniciado"]:
 
     st.plotly_chart(fig_init, use_container_width=True)
 
-# --- ESCENARIO B: TURNO EN MARCHA (Animación de Dos Vías) ---
+# ESCENARIO B: TURNO EN MARCHA (Animación de Dos Vías)
 else:
     grafico_placeholder = st.empty()
 
@@ -304,14 +374,14 @@ else:
                 y = 0.15
                 toneladas = cap_tolva
                 txt = f"C{i+1}: {toneladas:.1f} Ton"
-                color_c = "#28a745"  # Verde (Cargado)
+                color_c = "#28a745"
             else:
                 x = 3.2 - ((t_relativo - t_ida_s) / t_retorno_s) * 3.2
                 x = max(0, x)
                 y = -0.15
                 toneladas = 0.0
                 txt = f"C{i+1}: {toneladas:.0f} Ton"
-                color_c = "#dc3545"  # Rojo (Vacío)
+                color_c = "#dc3545"
 
             pos_x.append(x)
             pos_y.append(y)
@@ -394,14 +464,16 @@ if st.button("💾 Guardar y Validar Asignación de Pre-Turno"):
     c = conn.cursor()
     c.execute(
         "INSERT INTO asignaciones_log (frente, n_palas, n_camiones, match_factor, opex_usd_ton, estado) VALUES (?,?,?,?,?,?)",
-        (frente, n_palas, n_camiones, mf, opex, estado),
+        (frente_seleccionado, n_palas, n_camiones, mf, opex_usd_ton, estado_lean),
     )
     conn.commit()
     conn.close()
-    st.success("Asignación de pre-turno registrada en base de datos optimatch.db")
+    st.success(
+        "Asignación de pre-turno registrada exitosamente en base de datos optimatch.db"
+    )
 
 # ==============================================================================
-# 6. MÓDULO DE RECONCILIACIÓN Y FIN DE TURNO (ESTÁNDAR SQM NUEVA VICTORIA)
+# 7. MÓDULO DE RECONCILIACIÓN Y FIN DE TURNO (ESTÁNDAR SQM NUEVA VICTORIA)
 # ==============================================================================
 st.markdown("---")
 st.header("📋 Reconciliación de Fin de Turno (Reporte Operacional Mina)")
