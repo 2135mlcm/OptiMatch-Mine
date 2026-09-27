@@ -1166,184 +1166,171 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL: CIRCUITO FRENTE -> RUTA -> DESTINO
+# MÓDULO DE SEGUIMIENTO ESPACIAL: CIRCUITO FRENTE -> RUTA -> DESTINO (PLOTLY ROBUSTO)
 # ---------------------------------------------------------
 st.markdown("---")
 st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo")
 st.caption(
-    "Visualización interactiva desde el Frente de Carguío hasta la Zona de"
-    " Entrega (Chancador / Botadero). Haz clic en cualquier equipo para ver su"
-    " ficha técnica."
+    "Visualización interactiva del circuito de minado (Frente ➔ Ruta ➔"
+    " Chancador/Botadero). Haz clic sobre los equipos para ver su ficha"
+    " técnica."
 )
 
-URL_GIF_CAEX = "https://raw.githubusercontent.com/2135mlcm/OptiMatch-Mine/main/Logo_OptiMatch.png"
-URL_GIF_PALA = "https://raw.githubusercontent.com/2135mlcm/OptiMatch-Mine/main/Logo_OptiMatch.png"
+import plotly.graph_objects as go
 
-# Coordenadas de Referencia del Circuito Minero (Fosa ➔ Chancador)
-LAT_FRENTE, LON_FRENTE = -22.3000, -68.9000  # Frente de Carguío (Inicio)
-LAT_DESTINO, LON_DESTINO = (
-    -22.3080,
-    -68.8880,
-)  # Zona de Entrega / Chancador (Fin)
+# 1. Crear lienzo de gráfico del circuito
+fig_circuito = go.Figure()
 
-puntos_equipos = []
-lineas_rutas = []
+# Dibujar la ruta principal (Frente a Chancador)
+fig_circuito.add_trace(
+    go.Scatter(
+        x=[0, 3.5],
+        y=[0, 0],
+        mode="lines",
+        line=dict(color="#F59E0B", width=8),
+        name="Ruta Principal Acarreo (3.5 km)",
+        hoverinfo="none",
+    )
+)
 
-# 1. Puntos de Carguío (Palas y Cargadores Frontales)
-num_carguio = len(palas_activas) + len(cf_activos)
-idx_cg = 0
+# 2. Posicionar Palas y Cargadores en el Frente (Origen x=0)
+x_frente = []
+y_frente = []
+txt_frente = []
+hover_frente = []
 
+idx_c = 0
 for _, r in ed_palas.iterrows():
-  lat_p = LAT_FRENTE + (idx_cg * 0.0003)
-  lon_p = LON_FRENTE - (idx_cg * 0.0003)
-  puntos_equipos.append({
-      "Equipo": f"Pala {r['ID']}",
-      "Modelo": r["Modelo"],
-      "Estado": r["Estado"],
-      "Operador": r["Operador"],
-      "Ubicacion": "Frente de Carguío (Pila)",
-      "lat": lat_p,
-      "lon": lon_p,
-      "icon_url": URL_GIF_PALA,
-      "Consumo_Lts": f"{r['Consumo_LtsH'] * horas_turno:.0f} Lts",
-      "Detalle": f"Rendimiento: {r['Rend_TonH']} Ton/h | Costo: ${r['Costo_USDH']}/h",
-  })
-  idx_cg += 1
+  if r["Agendar"] and r["Estado"] == "🟢 Disponible":
+    offset_y = 0.2 + (idx_c * 0.25)
+    x_frente.append(0)
+    y_frente.append(offset_y)
+    txt_frente.append(f"Pala {r['ID']}")
+    hover_frente.append(
+        f"<b>Pala {r['ID']}</b><br>Modelo: {r['Modelo']}<br>Estado:"
+        f" {r['Estado']}<br>Operador: {r['Operador']}<br>Rendimiento:"
+        f" {r['Rend_TonH']} Ton/h"
+    )
+    idx_c += 1
 
 for _, r in ed_cf.iterrows():
-  lat_p = LAT_FRENTE + (idx_cg * 0.0003)
-  lon_p = LON_FRENTE - (idx_cg * 0.0003)
-  puntos_equipos.append({
-      "Equipo": f"Cargador {r['ID']}",
-      "Modelo": r["Modelo"],
-      "Estado": r["Estado"],
-      "Operador": r["Operador"],
-      "Ubicacion": "Frente de Carguío (Acopio)",
-      "lat": lat_p,
-      "lon": lon_p,
-      "icon_url": URL_GIF_PALA,
-      "Consumo_Lts": f"{r['Consumo_LtsH'] * horas_turno:.0f} Lts",
-      "Detalle": f"Rendimiento: {r['Rend_TonH']} Ton/h | Costo: ${r['Costo_USDH']}/h",
-  })
-  idx_cg += 1
+  if r["Agendar"] and r["Estado"] == "🟢 Disponible":
+    offset_y = -0.2 - (idx_c * 0.25)
+    x_frente.append(0)
+    y_frente.append(offset_y)
+    txt_frente.append(f"Cargador {r['ID']}")
+    hover_frente.append(
+        f"<b>Cargador {r['ID']}</b><br>Modelo: {r['Modelo']}<br>Estado:"
+        f" {r['Estado']}<br>Operador: {r['Operador']}<br>Rendimiento:"
+        f" {r['Rend_TonH']} Ton/h"
+    )
+    idx_c += 1
 
-# 2. Rutas Individuales y Camiones CAEX
-idx_caex = 0
-total_caex = len(ed_caex)
+# Dibujar unidades de carguío en el Frente (Triángulos Naranjos/Azules)
+fig_circuito.add_trace(
+    go.Scatter(
+        x=x_frente,
+        y=y_frente,
+        mode="markers+text",
+        marker=dict(size=20, symbol="square", color="#0284C7"),
+        text=txt_frente,
+        textposition="top center",
+        name="Unidades de Carguío",
+        hoverinfo="text",
+        hovertext=hover_frente,
+    )
+)
 
+# 3. Posicionar Camiones CAEX en la Ruta de Acarreo (x entre 0.5 y 3.0 km)
+x_caex = []
+y_caex = []
+txt_caex = []
+hover_caex = []
+colores_caex = []
+
+idx_cx = 0
+total_caex_activos = len(ed_caex)
 for _, r in ed_caex.iterrows():
-  # Desplazamiento lateral para dar una línea de carrera independiente a cada CAEX
-  offset = (idx_caex - (total_caex / 2)) * 0.0004
+  if r["Agendar"]:
+    # Espaciado proporcional sobre la distancia de 3.5 km
+    pos_x = 0.5 + (idx_cx * (2.5 / max(1, total_caex_activos)))
+    pos_y = (idx_cx % 2 == 0) and 0.15 or -0.15  # Alternar carril
 
-  lat_inicio_c = LAT_FRENTE + offset
-  lon_inicio_c = LON_FRENTE - offset
+    color = (
+        "#10B981"
+        if r["Estado"] == "🟢 Disponible"
+        else (
+            "#F59E0B" if r["Estado"] == "🟡 Mantenimiento" else "#DC2626"
+        )
+    )
 
-  lat_fin_c = LAT_DESTINO + offset
-  lon_fin_c = LON_DESTINO - offset
+    x_caex.append(pos_x)
+    y_caex.append(pos_y)
+    txt_caex.append(f"CAEX {r['ID']}")
+    colores_caex.append(color)
+    hover_caex.append(
+        f"<b>CAEX {r['ID']}</b><br>Modelo: {r['Modelo']}<br>Estado:"
+        f" {r['Estado']}<br>Operador: {r['Operador']}<br>Consumo Est.:"
+        f" {r['Consumo_LtsH']*horas_turno:.0f} Lts"
+    )
+    idx_cx += 1
 
-  # Trazar línea de acarreo para este camión
-  lineas_rutas.append({
-      "Equipo": f"CAEX {r['ID']}",
-      "path": [[lon_inicio_c, lat_inicio_c], [lon_fin_c, lat_fin_c]],
-      "color": [245, 158, 11, 200]
-      if r["Estado"] == "🟢 Disponible"
-      else [220, 38, 38, 200],
-  })
-
-  # Ubicación del camión según avance proporcional
-  progreso = 0.2 + (0.15 * (idx_caex + 1))
-  if progreso > 0.85:
-    progreso = 0.85
-
-  lat_camion = lat_inicio_c + (lat_fin_c - lat_inicio_c) * progreso
-  lon_camion = lon_inicio_c + (lon_fin_c - lon_inicio_c) * progreso
-
-  puntos_equipos.append({
-      "Equipo": f"CAEX {r['ID']}",
-      "Modelo": r["Modelo"],
-      "Estado": r["Estado"],
-      "Operador": r["Operador"],
-      "Ubicacion": f"En Ruta de Acarreo (Distancia: {distancia_acarreo_km} km)",
-      "lat": lat_camion,
-      "lon": lon_camion,
-      "icon_url": URL_GIF_CAEX,
-      "Consumo_Lts": f"{r['Consumo_LtsH'] * horas_turno:.0f} Lts",
-      "Detalle": f"Rendimiento: {r['Rend_TonH']} Ton/h | Costo: ${r['Costo_USDH']}/h",
-  })
-  idx_caex += 1
-
-# 3. Punto Final: Zona de Entrega (Chancador Primario / Botadero)
-puntos_equipos.append({
-    "Equipo": "Zona de Entrega (Chancador / Botadero)",
-    "Modelo": "Pórtico RFID UHF & Balanza",
-    "Estado": "🟢 Operativo",
-    "Operador": "Control Chancado",
-    "Ubicacion": "Destino Final del Circuito",
-    "lat": LAT_DESTINO,
-    "lon": LON_DESTINO,
-    "icon_url": URL_GIF_PALA,
-    "Consumo_Lts": "0 Lts",
-    "Detalle": "Recepción continua de mineral y descarga de CAEX",
-})
-
-df_puntos = pd.DataFrame(puntos_equipos)
-df_rutas = pd.DataFrame(lineas_rutas)
-
-# Capa 1: Líneas independientes por camión CAEX
-capa_rutas = pdk.Layer(
-    "PathLayer",
-    df_rutas,
-    get_path="path",
-    get_color="color",
-    width_scale=3,
-    width_min_pixels=3,
+# Dibujar Camiones CAEX
+fig_circuito.add_trace(
+    go.Scatter(
+        x=x_caex,
+        y=y_caex,
+        mode="markers+text",
+        marker=dict(size=18, symbol="circle", color=colores_caex),
+        text=txt_caex,
+        textposition="bottom center",
+        name="Camiones CAEX",
+        hoverinfo="text",
+        hovertext=hover_caex,
+    )
 )
 
-# Capa 2: Iconos interactivos de Maquinaria Minera
-df_puntos["icon_data"] = [
-    {"url": r["icon_url"], "width": 128, "height": 128, "anchorY": 128}
-    for _, r in df_puntos.iterrows()
-]
-
-capa_iconos = pdk.Layer(
-    "IconLayer",
-    df_puntos,
-    get_icon="icon_data",
-    get_size=4,
-    size_scale=10,
-    get_position=["lon", "lat"],
-    pickable=True,
+# 4. Posicionar Zona de Entrega / Chancador Primario (Destino x=3.5)
+fig_circuito.add_trace(
+    go.Scatter(
+        x=[3.5],
+        y=[0],
+        mode="markers+text",
+        marker=dict(size=26, symbol="hexagram", color="#DC2626"),
+        text=["CHANCADOR / BOTADERO"],
+        textposition="top center",
+        name="Zona de Entrega",
+        hoverinfo="text",
+        hovertext=[
+            "<b>Chancador Primario & Botadero</b><br>Pórtico Lectura RFID"
+            " UHF<br>Punto de Descarga Final"
+        ],
+    )
 )
 
-vista_circuito = pdk.ViewState(
-    latitude=-22.3040, longitude=-68.8940, zoom=14.2, pitch=45
+# Formatear diseño visual del circuito
+fig_circuito.update_layout(
+    xaxis=dict(
+        title="Distancia de Acarreo (Kilómetros)",
+        range=[-0.5, 4.0],
+        zeroline=False,
+        showgrid=True,
+    ),
+    yaxis=dict(
+        title="",
+        range=[-1.0, 1.0],
+        showticklabels=False,
+        zeroline=False,
+        showgrid=False,
+    ),
+    height=380,
+    margin=dict(l=20, r=20, t=30, b=30),
+    paper_bgcolor="#F8FAFC",
+    plot_bgcolor="#FFFFFF",
+    showlegend=True,
 )
 
-tooltip_mapa = {
-    "html": """
-        <div style="background-color: #0F172A; color: white; padding: 12px; border-radius: 8px; border: 2px solid #F59E0B; font-family: sans-serif;">
-            <h3 style="margin:0; color:#F59E0B; font-size: 16px;">🚜 {Equipo}</h3>
-            <b>Modelo / Tipo:</b> {Modelo}<br>
-            <b>Ubicación:</b> {Ubicacion}<br>
-            <b>Estado Operativo:</b> {Estado}<br>
-            <b>Operador:</b> {Operador}<br>
-            <hr style="border-color: #334155; margin: 6px 0;">
-            <b>⛽ Diésel Est. Turno:</b> {Consumo_Lts}<br>
-            <p style="font-size:11px; color:#38BDF8; margin-top:5px; margin-bottom:0;"><b>Parámetros:</b> {Detalle}</p>
-        </div>
-    """,
-    "style": {"color": "white"},
-}
-
-mapa_circuito_pydeck = pdk.Deck(
-    layers=[capa_rutas, capa_iconos],
-    initial_view_state=vista_circuito,
-    tooltip=tooltip_mapa,
-    map_style="mapbox://styles/mapbox/dark-v10",
-)
-
-st.pydeck_chart(mapa_circuito_pydeck)
-
+st.plotly_chart(fig_circuito, use_container_width=True)
 # ---------------------------------------------------------
 # REPORTE Y FICHA PRESCRIPTIVA PRE-TURNO
 # ---------------------------------------------------------
