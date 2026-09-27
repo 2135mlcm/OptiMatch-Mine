@@ -408,9 +408,214 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+st.markdown("---")
+st.subheader("🗺️ Módulo de Simulación Cinemática de Dos Vías")
+st.markdown(
+    "Visualización prescriptiva de flujo de flota (Postura inicial en cola -> Acarreo cargado -> Retorno vacío)."
+)
 
+# Estado global para controlar si el turno fue iniciado por el Jefe de Turno
+if "turno_iniciado" not in st.session_state:
+    st.session_state["turno_iniciado"] = False
+
+# Botón Disparador del Turno (Trigger)
+col_trig1, col_trig2 = st.columns([2, 1])
+with col_trig1:
+    if st.button("🚀 CONFIRMAR PRIMER BALDE E INICIAR TURNO (TRIGGER)"):
+        st.session_state["turno_iniciado"] = True
+        st.success("✅ Turno Iniciado. Flota en movimiento cinemático.")
+
+with col_trig2:
+    if st.button("🔄 Reiniciar Postura de Flota"):
+        st.session_state["turno_iniciado"] = False
+
+# ESCENARIO 1: PRE-INICIO (Camiones en fila de espera en el Frente de Carguío)
+if not st.session_state["turno_iniciado"]:
+    st.info(
+        "📍 **ESTADO PRE-TURNO:** Flota en postura de parqueo/espera en el Frente de Carguío. Presione el botón verde para iniciar el flujo."
+    )
+
+    pos_x_inicial = [0.0 - (i * 0.08) for i in range(n_camiones)]
+    pos_y_inicial = [0.15] * n_camiones
+    etiquetas_iniciales = [
+        f"C{i+1}: 0 Ton (En Espera)" for i in range(n_camiones)
+    ]
+
+    fig_init = go.Figure()
+    fig_init.add_trace(
+        go.Scatter(
+            x=[0, 3.2],
+            y=[0.15, 0.15],
+            mode="lines",
+            line=dict(color="darkgray", width=4, dash="dash"),
+            name="Vía Ida (Cargado)",
+        )
+    )
+    fig_init.add_trace(
+        go.Scatter(
+            x=[0, 3.2],
+            y=[-0.15, -0.15],
+            mode="lines",
+            line=dict(color="gray", width=4, dash="solid"),
+            name="Vía Retorno (Vacío)",
+        )
+    )
+
+    fig_init.add_trace(
+        go.Scatter(
+            x=pos_x_inicial,
+            y=pos_y_inicial,
+            mode="markers+text",
+            marker=dict(size=18, color="#ffc107", symbol="square"),
+            text=etiquetas_iniciales,
+            textposition="top center",
+            name="Flota en Fila",
+        )
+    )
+
+    fig_init.add_trace(
+        go.Scatter(
+            x=[0],
+            y=[0],
+            mode="markers+text",
+            marker=dict(size=24, color="blue", symbol="diamond"),
+            text=["Pala / Frente Carguío"],
+            textposition="bottom left",
+            name="Pala",
+        )
+    )
+    fig_init.add_trace(
+        go.Scatter(
+            x=[3.2],
+            y=[0],
+            mode="markers+text",
+            marker=dict(size=24, color="green", symbol="square"),
+            text=["Chancador / Botadero"],
+            textposition="bottom right",
+            name="Destino",
+        )
+    )
+
+    fig_init.update_layout(
+        title="<b>Postura Inicial de Flota en Pre-Turno</b> (Esperando Confirmación de Primer Balde)",
+        xaxis=dict(
+            title="Distancia en Ruta de Acarreo (km)",
+            range=[-1.0, 3.5],
+            gridcolor="lightgray",
+        ),
+        yaxis=dict(range=[-0.5, 0.5], showticklabels=False),
+        height=380,
+    )
+
+    st.plotly_chart(fig_init, use_container_width=True)
+
+# ESCENARIO 2: TURNO EN MARCHA (Simulación Dinámica de Dos Vías)
+else:
+    grafico_placeholder = st.empty()
+
+    t_ida_s = (t_transito / 2) * 60
+    t_retorno_s = (t_transito / 2) * 60
+    t_ciclo_total_s = t_ciclo_camion * 60
+
+    desfase_camiones = np.linspace(
+        0, t_ciclo_total_s, n_camiones, endpoint=False
+    )
+
+    for t_sim in range(0, 100, 2):
+        pos_x, pos_y, etiquetas, colores = [], [], [], []
+
+        for i in range(n_camiones):
+            t_relativo = (t_sim * 10 + desfase_camiones[i]) % t_ciclo_total_s
+
+            if t_relativo < t_ida_s:
+                x = (t_relativo / t_ida_s) * 3.2
+                y = 0.15
+                toneladas = cap_tolva
+                txt = f"C{i+1}: {toneladas:.1f} Ton"
+                color_c = "#28a745"
+            else:
+                x = 3.2 - ((t_relativo - t_ida_s) / t_retorno_s) * 3.2
+                x = max(0, x)
+                y = -0.15
+                toneladas = 0.0
+                txt = f"C{i+1}: {toneladas:.0f} Ton"
+                color_c = "#dc3545"
+
+            pos_x.append(x)
+            pos_y.append(y)
+            etiquetas.append(txt)
+            colores.append(color_c)
+
+        fig_dyn = go.Figure()
+
+        fig_dyn.add_trace(
+            go.Scatter(
+                x=[0, 3.2],
+                y=[0.15, 0.15],
+                mode="lines",
+                line=dict(color="darkgray", width=4, dash="dash"),
+                name="Vía Ida (Cargado)",
+            )
+        )
+        fig_dyn.add_trace(
+            go.Scatter(
+                x=[0, 3.2],
+                y=[-0.15, -0.15],
+                mode="lines",
+                line=dict(color="gray", width=4, dash="solid"),
+                name="Vía Retorno (Vacío)",
+            )
+        )
+
+        fig_dyn.add_trace(
+            go.Scatter(
+                x=pos_x,
+                y=pos_y,
+                mode="markers+text",
+                marker=dict(size=18, color=colores, symbol="square"),
+                text=etiquetas,
+                textposition="top center",
+                name="Flota CAEX",
+            )
+        )
+
+        fig_dyn.add_trace(
+            go.Scatter(
+                x=[0],
+                y=[0],
+                mode="markers+text",
+                marker=dict(size=22, color="blue", symbol="diamond"),
+                text=["Pala / Frente Carguío"],
+                textposition="bottom left",
+                name="Pala",
+            )
+        )
+        fig_dyn.add_trace(
+            go.Scatter(
+                x=[3.2],
+                y=[0],
+                mode="markers+text",
+                marker=dict(size=22, color="green", symbol="square"),
+                text=["Chancador / Botadero"],
+                textposition="bottom right",
+                name="Destino",
+            )
+        )
+
+        fig_dyn.update_layout(
+            title=f"<b>Simulación Dinámica de Dos Vías en Tiempo Real</b> (Tiempo Transcurrido: {t_sim*10} s)",
+            xaxis=dict(
+                title="Distancia en Ruta de Acarreo (km)",
+                range=[-0.5, 3.5],
+                gridcolor="lightgray",
+            ),
+            yaxis=dict(range=[-0.5, 0.5], showticklabels=False),
+            height=380,
+        )
+
+        grafico_placeholder.plotly_chart(fig_dyn, use_container_width=True)
+        time.sleep(0.1)
 LOGO_PATH = "Logo_OptiMatch.png"
-
 # ---------------------------------------------------------
 # 1. AUTENTICACIÓN PRIVADA CON CAMPOS LIMPIOS OBLIGATORIOS
 # ---------------------------------------------------------
@@ -421,6 +626,7 @@ if not st.session_state.autenticado:
   col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
   with col_l2:
     st.markdown("<br>", unsafe_allow_html=True)
+    
     if os.path.exists(LOGO_PATH):
       st.image(LOGO_PATH, width=320)
     else:
