@@ -21,29 +21,47 @@ st.set_page_config(
 def init_db():
     conn = sqlite3.connect("optimatch.db")
     c = conn.cursor()
+
+    # 1. Crear tabla usuarios si no existe
     c.execute(
         """CREATE TABLE IF NOT EXISTS usuarios 
                  (username TEXT PRIMARY KEY, password TEXT, rol TEXT)"""
     )
+
+    # 2. Asegurar compatibilidad de la columna 'rol' en bases de datos existentes
+    c.execute("PRAGMA table_info(usuarios)")
+    columns = [column[1] for column in c.fetchall()]
+    if "rol" not in columns:
+        c.execute(
+            "ALTER TABLE usuarios ADD COLUMN rol TEXT DEFAULT 'Jefe de Turno'"
+        )
+
+    # 3. Crear tabla de asignaciones de pre-turno
     c.execute(
         """CREATE TABLE IF NOT EXISTS asignaciones_log 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
                   frente TEXT, n_palas INT, n_camiones INT, match_factor REAL, opex_usd_ton REAL, estado TEXT)"""
     )
+
+    # 4. Crear tabla de reconciliación de fin de turno (SQM)
     c.execute(
         """CREATE TABLE IF NOT EXISTS fin_turno_log 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, inicio TEXT, fin TEXT,
                   ton_mineral REAL, ton_esteril REAL, gasto_carguio REAL, gasto_transporte REAL,
                   costo_mina_unit REAL, presupuesto REAL, cumple TEXT)"""
     )
+
+    # 5. Insertar usuario por defecto con columnas especificadas
     c.execute(
-        "INSERT OR IGNORE INTO usuarios VALUES (?, ?, ?)",
+        """INSERT OR IGNORE INTO usuarios (username, password, rol) 
+                 VALUES (?, ?, ?)""",
         (
             "jefe_mina",
             hashlib.sha256("admin123".encode()).hexdigest(),
             "Jefe de Turno",
         ),
     )
+
     conn.commit()
     conn.close()
 
@@ -168,7 +186,6 @@ st.markdown(
     "Visualización prescriptiva de flujo de flota (Postura inicial en cola -> Acarreo cargado -> Retorno vacío)."
 )
 
-# Estado global del turno en Streamlit
 if "turno_iniciado" not in st.session_state:
     st.session_state["turno_iniciado"] = False
 
