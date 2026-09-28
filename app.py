@@ -1170,22 +1170,23 @@ with col_eval2:
         )
 
 import base64
+import os
 from PIL import Image
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS (CON IMÁGENES BASE64 Y BOTÓN ROJO)
+# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS (AJUSTES BANDERAS Y BOTÓN CIRCULAR ROJO)
 # ---------------------------------------------------------
 st.markdown("---")
 st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo de Dos Vías")
 
 
-# Función auxiliar para convertir imagen local a Base64
-def cargar_img_base64(ruta_imagen):
-    if os.path.exists(ruta_imagen):
-        with open(ruta_imagen, "rb") as image_file:
-            encoded = base64.b64encode(image_file.read()).decode()
-            ext = ruta_imagen.split(".")[-1].lower()
-            mime = "jpeg" if ext in ["jpg", "jpeg"] else ext
+# Función auxiliar para convertir imágenes locales a Base64 para Streamlit Cloud
+def obtener_base64_img(ruta_archivo):
+    if os.path.exists(ruta_archivo):
+        with open(ruta_archivo, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
+            ext = ruta_archivo.split(".")[-1].lower()
+            mime = "png" if ext == "png" else "jpeg"
             return f"data:image/{mime};base64,{encoded}"
     return None
 
@@ -1194,7 +1195,7 @@ if "acarreo_iniciado" not in st.session_state:
     st.session_state.acarreo_iniciado = False
 
 # ---------------------------------------------------------
-# DISPARADOR DE INICIO DE ACARREO (BOTÓN ROJO DESTACADO + TEXTO)
+# DISPARADOR INDUSTRIAL: BOTÓN TIPO CÍRCULO ROJO + TEXTO EN NEGRITA
 # ---------------------------------------------------------
 st.markdown(
     """
@@ -1204,24 +1205,33 @@ st.markdown(
         color: #FFFFFF !important;
         border: 2px solid #991B1B !important;
         font-weight: 900 !important;
-        font-size: 16px !important;
-        border-radius: 8px !important;
-        height: 48px !important;
+        font-size: 18px !important;
+        border-radius: 50px !important; /* Estilo Botón Circular Redondeado */
+        height: 52px !important;
+        box-shadow: 0px 4px 10px rgba(220, 38, 38, 0.4) !important;
     }
     div.stButton > button[kind="primary"]:hover {
         background-color: #B91C1C !important;
         color: #FFFFFF !important;
+    }
+    .distancia-destacada {
+        background-color: #F8FAFC;
+        border: 2px solid #0284C7;
+        border-radius: 8px;
+        padding: 8px 16px;
+        text-align: center;
+        margin-bottom: 12px;
     }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
-col_trig1, col_trig2, col_trig3 = st.columns([1.5, 3, 1.5])
+col_trig1, col_trig2, col_trig3 = st.columns([1.8, 3.2, 1.5])
 
 with col_trig1:
     btn_trig = st.button(
-        "🔴 Inicio de Acarreo", type="primary", use_container_width=True
+        "🔴  Inicio de Acarreo", type="primary", use_container_width=True
     )
     if btn_trig:
         st.session_state.acarreo_iniciado = True
@@ -1230,9 +1240,9 @@ with col_trig1:
 with col_trig2:
     st.markdown(
         """
-        <div style="background-color: #FEF2F2; border: 1px solid #FCA5A5; padding: 10px; border-radius: 8px; margin-top: 2px;">
-            <span style="color: #991B1B; font-weight: 800; font-size: 13px;">
-                📻 <b>Aviso Radio VHF:</b> Presione el botón rojo al recibir la confirmación del operador de la Pala sobre la carga del primer camión.
+        <div style="background-color: #FEF2F2; border: 1px solid #FCA5A5; padding: 10px; border-radius: 8px;">
+            <span style="color: #991B1B; font-weight: 900; font-size: 14px; display: block;">
+                📻 <b>Aviso Radio VHF:</b> Presione el botón rojo al recibir la confirmación del operador de la Pala sobre el primer balde cargado.
             </span>
         </div>
     """,
@@ -1244,8 +1254,25 @@ with col_trig3:
         st.session_state.acarreo_iniciado = False
 
 # ---------------------------------------------------------
-# RENDERIZADO DEL MAPA ESPACIAL CON PLOTLY
+# DISTANCIA DE ACARREO DESTACADA EN NEGRITA
 # ---------------------------------------------------------
+st.markdown(
+    f"""
+    <div class="distancia-destacada">
+        <span style="color: #0F172A; font-size: 17px; font-weight: 900;">
+            🛣️ DISTANCIA OFICIAL DE ACARREO: <span style="color: #0284C7; font-size: 19px;">{distancia_acarreo_km:.1f} km (Tramo Ida)</span> / <span style="color: #DC2626; font-size: 19px;">{distancia_acarreo_km:.1f} km (Tramo Retorno)</span>
+        </span>
+    </div>
+""",
+    unsafe_allow_html=True,
+)
+
+# Carga de fuentes Base64
+img_pala = obtener_base64_img("image_859ef9.png")
+img_cf = obtener_base64_img("image_859f19.png")
+img_caex_vacio = obtener_base64_img("image_85a67d.png")
+img_caex_cargado = obtener_base64_img("image_86137b.png")
+
 fig_circuito = go.Figure()
 
 # Vía de Ida Cargado (Superior y = +0.15)
@@ -1255,7 +1282,7 @@ fig_circuito.add_trace(
         y=[0.15, 0.15],
         mode="lines",
         line=dict(color="#10B981", width=5, dash="dash"),
-        name="Vía Ida (Cargado)",
+        name=f"Vía Ida Cargado ({distancia_acarreo_km:.1f} km)",
         hoverinfo="none",
     )
 )
@@ -1267,46 +1294,41 @@ fig_circuito.add_trace(
         y=[-0.15, -0.15],
         mode="lines",
         line=dict(color="#DC2626", width=5, dash="solid"),
-        name="Vía Retorno (Vacío)",
+        name=f"Vía Retorno Vacío ({distancia_acarreo_km:.1f} km)",
         hoverinfo="none",
     )
 )
 
-# Cargar fuentes Base64
-img_pala_b64 = cargar_img_base64("Gif Pala.jpg")
-img_cf_b64 = cargar_img_base64("Gif Cargador Frontal.jpg")
-img_caex_vacio_b64 = cargar_img_base64("image_85a67d.png")
-img_caex_cargado_b64 = cargar_img_base64("image_86137b.png")
-
-# 1. Posicionar Unidades de Carguío en el Frente (x = 0)
+# 1. PALAS Y CARGADORES (Texto al costado derecho)
 idx_c = 0
 for _, r in ed_palas.iterrows():
     if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-        pos_y = 0.40 + (idx_c * 0.28)
+        pos_y = 0.45 + (idx_c * 0.30)
 
-        if img_pala_b64:
+        if img_pala:
             fig_circuito.add_layout_image(
                 dict(
-                    source=img_pala_b64,
+                    source=img_pala,
                     xref="x",
                     yref="y",
-                    x=-0.05,
+                    x=-0.15,
                     y=pos_y,
-                    sizex=0.35,
-                    sizey=0.35,
+                    sizex=0.32,
+                    sizey=0.32,
                     xanchor="center",
                     yanchor="middle",
                 )
             )
 
+        # Texto al costado derecho del equipo
         fig_circuito.add_trace(
             go.Scatter(
-                x=[0],
-                y=[pos_y - 0.18],
+                x=[0.12],
+                y=[pos_y],
                 mode="text",
-                text=[f"Pala {r['ID']}"],
-                textposition="bottom center",
-                textfont=dict(size=10, color="#0F172A", family="Arial Black"),
+                text=[f"<b>Pala {r['ID']}</b>"],
+                textposition="middle right",
+                textfont=dict(size=10, color="#0F172A"),
                 showlegend=False,
                 hoverinfo="text",
                 hovertext=[
@@ -1319,31 +1341,32 @@ for _, r in ed_palas.iterrows():
 
 for _, r in ed_cf.iterrows():
     if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-        pos_y = -0.40 - (idx_c * 0.28)
+        pos_y = -0.45 - (idx_c * 0.30)
 
-        if img_cf_b64:
+        if img_cf:
             fig_circuito.add_layout_image(
                 dict(
-                    source=img_cf_b64,
+                    source=img_cf,
                     xref="x",
                     yref="y",
-                    x=-0.05,
+                    x=-0.15,
                     y=pos_y,
-                    sizex=0.35,
-                    sizey=0.35,
+                    sizex=0.32,
+                    sizey=0.32,
                     xanchor="center",
                     yanchor="middle",
                 )
             )
 
+        # Texto al costado derecho del equipo
         fig_circuito.add_trace(
             go.Scatter(
-                x=[0],
-                y=[pos_y - 0.18],
+                x=[0.12],
+                y=[pos_y],
                 mode="text",
-                text=[f"CF {r['ID']}"],
-                textposition="bottom center",
-                textfont=dict(size=10, color="#0F172A", family="Arial Black"),
+                text=[f"<b>CF {r['ID']}</b>"],
+                textposition="middle right",
+                textfont=dict(size=10, color="#0F172A"),
                 showlegend=False,
                 hoverinfo="text",
                 hovertext=[
@@ -1354,26 +1377,26 @@ for _, r in ed_cf.iterrows():
         )
         idx_c += 1
 
-# 2. Flota de Camiones CAEX
+# 2. CAMIONES CAEX (Imagen arriba, texto inmediatamente abajo)
 caex_agendados = ed_caex[ed_caex["Agendar"] == True]
 total_caex_count = len(caex_agendados)
 
 if not st.session_state.acarreo_iniciado:
-    # --- POSICIÓN EN FILA DE ESPERA (x <= 0) ---
+    # FILA DE ESPERA (x <= 0)
     for i, (_, r) in enumerate(caex_agendados.iterrows()):
-        pos_x = 0.0 - (i * 0.28)
+        pos_x = 0.0 - (i * 0.30)
         pos_y = 0.15
 
-        if img_caex_vacio_b64:
+        if img_caex_vacio:
             fig_circuito.add_layout_image(
                 dict(
-                    source=img_caex_vacio_b64,
+                    source=img_caex_vacio,
                     xref="x",
                     yref="y",
                     x=pos_x,
-                    y=pos_y,
-                    sizex=0.32,
-                    sizey=0.32,
+                    y=pos_y + 0.10,
+                    sizex=0.28,
+                    sizey=0.28,
                     xanchor="center",
                     yanchor="middle",
                 )
@@ -1382,41 +1405,38 @@ if not st.session_state.acarreo_iniciado:
         fig_circuito.add_trace(
             go.Scatter(
                 x=[pos_x],
-                y=[pos_y - 0.16],
+                y=[pos_y - 0.12],
                 mode="text",
-                text=[f"C{r['ID']}"],
+                text=[f"<b>C{r['ID']}</b>"],
                 textposition="bottom center",
-                textfont=dict(size=9, color="#0F172A", family="Arial Black"),
+                textfont=dict(size=9, color="#0F172A"),
                 showlegend=False,
                 hoverinfo="text",
-                hovertext=[
-                    f"<b>CAEX {r['ID']}</b> (En Fila)<br>Estado: Esperando"
-                    " Primer Balde"
-                ],
+                hovertext=[f"<b>CAEX {r['ID']}</b><br>Estado: En Fila de Espera"],
             )
         )
 
     st.info(
-        "📍 **FLOTA PARQUEADA EN FILA:** Presione el botón '🔴 Inicio de"
+        "📍 **FLOTA PARQUEADA EN FILA:** Presione el botón '🔴  Inicio de"
         " Acarreo' para activar el flujo de transporte."
     )
 
 else:
-    # --- MOVIMIENTO EN DOS VÍAS ---
+    # MOVIMIENTO EN DOS VÍAS
     for i, (_, r) in enumerate(caex_agendados.iterrows()):
         es_ida = i % 2 == 0
 
         if es_ida:
             pos_x = 0.4 + (i * (2.6 / max(1, total_caex_count)))
             pos_y = 0.15
-            src_b64 = img_caex_cargado_b64
-            label_txt = f"C{r['ID']} (44.6T)"
+            src_b64 = img_caex_cargado
+            label_txt = f"<b>C{r['ID']} (44.6T)</b>"
             estado_txt = "Acarreo Cargado -> Destino"
         else:
             pos_x = 3.1 - (i * (2.6 / max(1, total_caex_count)))
             pos_y = -0.15
-            src_b64 = img_caex_vacio_b64
-            label_txt = f"C{r['ID']} (0T)"
+            src_b64 = img_caex_vacio
+            label_txt = f"<b>C{r['ID']} (0T)</b>"
             estado_txt = "Retorno Vacío -> Pala"
 
         if src_b64:
@@ -1426,9 +1446,9 @@ else:
                     xref="x",
                     yref="y",
                     x=pos_x,
-                    y=pos_y,
-                    sizex=0.34,
-                    sizey=0.34,
+                    y=pos_y + 0.10,
+                    sizex=0.30,
+                    sizey=0.30,
                     xanchor="center",
                     yanchor="middle",
                 )
@@ -1437,11 +1457,11 @@ else:
         fig_circuito.add_trace(
             go.Scatter(
                 x=[pos_x],
-                y=[pos_y - 0.16],
+                y=[pos_y - 0.12],
                 mode="text",
                 text=[label_txt],
                 textposition="bottom center",
-                textfont=dict(size=9, color="#0F172A", family="Arial Black"),
+                textfont=dict(size=9, color="#0F172A"),
                 showlegend=False,
                 hoverinfo="text",
                 hovertext=[
@@ -1451,7 +1471,7 @@ else:
             )
         )
 
-# 3. Hito de Destino y Texto Superior
+# 3. DESTINO (CHANCADOR / BOTADERO / PILA)
 fig_circuito.add_trace(
     go.Scatter(
         x=[3.5],
