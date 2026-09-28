@@ -1171,23 +1171,27 @@ with col_eval2:
 
 import base64
 import os
-from PIL import Image
+import plotly.graph_objects as go
+import streamlit as st
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS (AJUSTES BANDERAS Y BOTÓN CIRCULAR ROJO)
+# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS (CON IMÁGENES EMBEBIDAS BASE64 Y DISTANCIA DESTACADA)
 # ---------------------------------------------------------
 st.markdown("---")
 st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo de Dos Vías")
 
 
-# Función auxiliar para convertir imágenes locales a Base64 para Streamlit Cloud
+# Función auxiliar con fallback de emergencia para garantizar siempre imagen
 def obtener_base64_img(ruta_archivo):
     if os.path.exists(ruta_archivo):
-        with open(ruta_archivo, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode()
-            ext = ruta_archivo.split(".")[-1].lower()
-            mime = "png" if ext == "png" else "jpeg"
-            return f"data:image/{mime};base64,{encoded}"
+        try:
+            with open(ruta_archivo, "rb") as f:
+                encoded = base64.b64encode(f.read()).decode()
+                ext = ruta_archivo.split(".")[-1].lower()
+                mime = "png" if ext == "png" else "jpeg"
+                return f"data:image/{mime};base64,{encoded}"
+        except Exception:
+            pass
     return None
 
 
@@ -1195,7 +1199,28 @@ if "acarreo_iniciado" not in st.session_state:
     st.session_state.acarreo_iniciado = False
 
 # ---------------------------------------------------------
-# DISPARADOR INDUSTRIAL: BOTÓN TIPO CÍRCULO ROJO + TEXTO EN NEGRITA
+# 1. BANDEROLA DE DISTANCIA DE ACARREO Y KILÓMETROS EN NEGRITA GIGANTE
+# ---------------------------------------------------------
+dist_km_val = (
+    distancia_acarreo_km if "distancia_acarreo_km" in locals() else 3.5
+)
+
+st.markdown(
+    f"""
+    <div style="background-color: #0F172A; border: 3px solid #F59E0B; border-radius: 10px; padding: 12px 20px; text-align: center; margin-bottom: 15px; box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);">
+        <span style="color: #FFFFFF !important; font-size: 20px !important; font-weight: 900 !important; letter-spacing: 0.5px;">
+            🛣️ DISTANCIA OFICIAL DE ACARREO: 
+            <span style="color: #38BDF8 !important; font-size: 24px !important; font-weight: 900 !important; text-decoration: underline;">{dist_km_val:.1f} KM (TRAMO IDA)</span> 
+            <span style="color: #FFFFFF !important; font-size: 20px !important; font-weight: 900 !important;">/</span> 
+            <span style="color: #EF4444 !important; font-size: 24px !important; font-weight: 900 !important; text-decoration: underline;">{dist_km_val:.1f} KM (TRAMO RETORNO)</span>
+        </span>
+    </div>
+""",
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------
+# 2. DISPARADOR REDONDO CIRCULAR ROJO + AVISO RADIO VHF
 # ---------------------------------------------------------
 st.markdown(
     """
@@ -1203,24 +1228,16 @@ st.markdown(
     div.stButton > button[kind="primary"] {
         background-color: #DC2626 !important;
         color: #FFFFFF !important;
-        border: 2px solid #991B1B !important;
+        border: 3px solid #7F1D1D !important;
         font-weight: 900 !important;
-        font-size: 18px !important;
-        border-radius: 50px !important; /* Estilo Botón Circular Redondeado */
-        height: 52px !important;
-        box-shadow: 0px 4px 10px rgba(220, 38, 38, 0.4) !important;
+        font-size: 17px !important;
+        border-radius: 30px !important;
+        height: 54px !important;
+        box-shadow: 0px 4px 12px rgba(220, 38, 38, 0.5) !important;
     }
     div.stButton > button[kind="primary"]:hover {
-        background-color: #B91C1C !important;
+        background-color: #991B1B !important;
         color: #FFFFFF !important;
-    }
-    .distancia-destacada {
-        background-color: #F8FAFC;
-        border: 2px solid #0284C7;
-        border-radius: 8px;
-        padding: 8px 16px;
-        text-align: center;
-        margin-bottom: 12px;
     }
     </style>
 """,
@@ -1231,18 +1248,18 @@ col_trig1, col_trig2, col_trig3 = st.columns([1.8, 3.2, 1.5])
 
 with col_trig1:
     btn_trig = st.button(
-        "🔴  Inicio de Acarreo", type="primary", use_container_width=True
+        "🔴   INICIO DE ACARREO", type="primary", use_container_width=True
     )
     if btn_trig:
         st.session_state.acarreo_iniciado = True
-        st.success("✅ Acarreo iniciado por confirmación VHF.")
+        st.success("✅ Acarreo iniciado por confirmación VHF de la Pala.")
 
 with col_trig2:
     st.markdown(
         """
-        <div style="background-color: #FEF2F2; border: 1px solid #FCA5A5; padding: 10px; border-radius: 8px;">
-            <span style="color: #991B1B; font-weight: 900; font-size: 14px; display: block;">
-                📻 <b>Aviso Radio VHF:</b> Presione el botón rojo al recibir la confirmación del operador de la Pala sobre el primer balde cargado.
+        <div style="background-color: #FEF2F2; border: 2px solid #EF4444; padding: 10px; border-radius: 8px;">
+            <span style="color: #7F1D1D !important; font-weight: 900 !important; font-size: 14px !important; display: block;">
+                📻 <b>AVISO RADIO VHF:</b> Presione el botón rojo para autorizar el zarpe de la flota tras el primer balde cargado.
             </span>
         </div>
     """,
@@ -1254,22 +1271,14 @@ with col_trig3:
         st.session_state.acarreo_iniciado = False
 
 # ---------------------------------------------------------
-# DISTANCIA DE ACARREO DESTACADA EN NEGRITA
+# 3. CARGA ROBUSTA DE IMÁGENES BASE64
 # ---------------------------------------------------------
-st.markdown(
-    f"""
-    <div class="distancia-destacada">
-        <span style="color: #0F172A; font-size: 17px; font-weight: 900;">
-            🛣️ DISTANCIA OFICIAL DE ACARREO: <span style="color: #0284C7; font-size: 19px;">{distancia_acarreo_km:.1f} km (Tramo Ida)</span> / <span style="color: #DC2626; font-size: 19px;">{distancia_acarreo_km:.1f} km (Tramo Retorno)</span>
-        </span>
-    </div>
-""",
-    unsafe_allow_html=True,
+img_pala = obtener_base64_img("image_859ef9.png") or obtener_base64_img(
+    "Gif Pala.jpg"
 )
-
-# Carga de fuentes Base64
-img_pala = obtener_base64_img("image_859ef9.png")
-img_cf = obtener_base64_img("image_859f19.png")
+img_cf = obtener_base64_img("image_859f19.png") or obtener_base64_img(
+    "Gif Cargador Frontal.jpg"
+)
 img_caex_vacio = obtener_base64_img("image_85a67d.png")
 img_caex_cargado = obtener_base64_img("image_86137b.png")
 
@@ -1281,8 +1290,8 @@ fig_circuito.add_trace(
         x=[0, 3.5],
         y=[0.15, 0.15],
         mode="lines",
-        line=dict(color="#10B981", width=5, dash="dash"),
-        name=f"Vía Ida Cargado ({distancia_acarreo_km:.1f} km)",
+        line=dict(color="#10B981", width=6, dash="dash"),
+        name=f"Vía Ida Cargado ({dist_km_val:.1f} km)",
         hoverinfo="none",
     )
 )
@@ -1293,17 +1302,19 @@ fig_circuito.add_trace(
         x=[0, 3.5],
         y=[-0.15, -0.15],
         mode="lines",
-        line=dict(color="#DC2626", width=5, dash="solid"),
-        name=f"Vía Retorno Vacío ({distancia_acarreo_km:.1f} km)",
+        line=dict(color="#DC2626", width=6, dash="solid"),
+        name=f"Vía Retorno Vacío ({dist_km_val:.1f} km)",
         hoverinfo="none",
     )
 )
 
-# 1. PALAS Y CARGADORES (Texto al costado derecho)
+# ---------------------------------------------------------
+# 4. PALAS Y CARGADORES (CON IMAGEN BASE64 Y TEXTO A LA DERECHA)
+# ---------------------------------------------------------
 idx_c = 0
 for _, r in ed_palas.iterrows():
     if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-        pos_y = 0.45 + (idx_c * 0.30)
+        pos_y = 0.45 + (idx_c * 0.32)
 
         if img_pala:
             fig_circuito.add_layout_image(
@@ -1313,22 +1324,25 @@ for _, r in ed_palas.iterrows():
                     yref="y",
                     x=-0.15,
                     y=pos_y,
-                    sizex=0.32,
-                    sizey=0.32,
+                    sizex=0.35,
+                    sizey=0.35,
                     xanchor="center",
                     yanchor="middle",
+                    layer="above",
                 )
             )
 
-        # Texto al costado derecho del equipo
+        # Texto en negrita al costado derecho del equipo
         fig_circuito.add_trace(
             go.Scatter(
-                x=[0.12],
+                x=[0.15],
                 y=[pos_y],
                 mode="text",
                 text=[f"<b>Pala {r['ID']}</b>"],
                 textposition="middle right",
-                textfont=dict(size=10, color="#0F172A"),
+                textfont=dict(
+                    size=12, color="#0F172A", family="Arial", weight="bold"
+                ),
                 showlegend=False,
                 hoverinfo="text",
                 hovertext=[
@@ -1341,7 +1355,7 @@ for _, r in ed_palas.iterrows():
 
 for _, r in ed_cf.iterrows():
     if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-        pos_y = -0.45 - (idx_c * 0.30)
+        pos_y = -0.45 - (idx_c * 0.32)
 
         if img_cf:
             fig_circuito.add_layout_image(
@@ -1351,22 +1365,25 @@ for _, r in ed_cf.iterrows():
                     yref="y",
                     x=-0.15,
                     y=pos_y,
-                    sizex=0.32,
-                    sizey=0.32,
+                    sizex=0.35,
+                    sizey=0.35,
                     xanchor="center",
                     yanchor="middle",
+                    layer="above",
                 )
             )
 
-        # Texto al costado derecho del equipo
+        # Texto en negrita al costado derecho del equipo
         fig_circuito.add_trace(
             go.Scatter(
-                x=[0.12],
+                x=[0.15],
                 y=[pos_y],
                 mode="text",
                 text=[f"<b>CF {r['ID']}</b>"],
                 textposition="middle right",
-                textfont=dict(size=10, color="#0F172A"),
+                textfont=dict(
+                    size=12, color="#0F172A", family="Arial", weight="bold"
+                ),
                 showlegend=False,
                 hoverinfo="text",
                 hovertext=[
@@ -1377,14 +1394,16 @@ for _, r in ed_cf.iterrows():
         )
         idx_c += 1
 
-# 2. CAMIONES CAEX (Imagen arriba, texto inmediatamente abajo)
+# ---------------------------------------------------------
+# 5. FLOTA DE CAMIONES CAEX (CON IMAGEN BASE64 Y TEXTO DEBAJO)
+# ---------------------------------------------------------
 caex_agendados = ed_caex[ed_caex["Agendar"] == True]
 total_caex_count = len(caex_agendados)
 
 if not st.session_state.acarreo_iniciado:
-    # FILA DE ESPERA (x <= 0)
+    # --- FILA DE ESPERA (x <= 0) ---
     for i, (_, r) in enumerate(caex_agendados.iterrows()):
-        pos_x = 0.0 - (i * 0.30)
+        pos_x = 0.0 - (i * 0.32)
         pos_y = 0.15
 
         if img_caex_vacio:
@@ -1395,21 +1414,24 @@ if not st.session_state.acarreo_iniciado:
                     yref="y",
                     x=pos_x,
                     y=pos_y + 0.10,
-                    sizex=0.28,
-                    sizey=0.28,
+                    sizex=0.32,
+                    sizey=0.32,
                     xanchor="center",
                     yanchor="middle",
+                    layer="above",
                 )
             )
 
         fig_circuito.add_trace(
             go.Scatter(
                 x=[pos_x],
-                y=[pos_y - 0.12],
+                y=[pos_y - 0.14],
                 mode="text",
                 text=[f"<b>C{r['ID']}</b>"],
                 textposition="bottom center",
-                textfont=dict(size=9, color="#0F172A"),
+                textfont=dict(
+                    size=11, color="#0F172A", family="Arial", weight="bold"
+                ),
                 showlegend=False,
                 hoverinfo="text",
                 hovertext=[f"<b>CAEX {r['ID']}</b><br>Estado: En Fila de Espera"],
@@ -1417,12 +1439,12 @@ if not st.session_state.acarreo_iniciado:
         )
 
     st.info(
-        "📍 **FLOTA PARQUEADA EN FILA:** Presione el botón '🔴  Inicio de"
-        " Acarreo' para activar el flujo de transporte."
+        "📍 **FLOTA PARQUEADA EN FILA DE ESPERA:** Presione el botón '🔴 INICIO"
+        " DE ACARREO' para desplegar la flota en ruta."
     )
 
 else:
-    # MOVIMIENTO EN DOS VÍAS
+    # --- MOVIMIENTO EN DOS VÍAS ---
     for i, (_, r) in enumerate(caex_agendados.iterrows()):
         es_ida = i % 2 == 0
 
@@ -1447,21 +1469,24 @@ else:
                     yref="y",
                     x=pos_x,
                     y=pos_y + 0.10,
-                    sizex=0.30,
-                    sizey=0.30,
+                    sizex=0.34,
+                    sizey=0.34,
                     xanchor="center",
                     yanchor="middle",
+                    layer="above",
                 )
             )
 
         fig_circuito.add_trace(
             go.Scatter(
                 x=[pos_x],
-                y=[pos_y - 0.12],
+                y=[pos_y - 0.14],
                 mode="text",
                 text=[label_txt],
                 textposition="bottom center",
-                textfont=dict(size=9, color="#0F172A"),
+                textfont=dict(
+                    size=10, color="#0F172A", family="Arial", weight="bold"
+                ),
                 showlegend=False,
                 hoverinfo="text",
                 hovertext=[
@@ -1471,13 +1496,15 @@ else:
             )
         )
 
-# 3. DESTINO (CHANCADOR / BOTADERO / PILA)
+# ---------------------------------------------------------
+# 6. DESTINO DESTACADO (CHANCADOR / BOTADERO / PILA)
+# ---------------------------------------------------------
 fig_circuito.add_trace(
     go.Scatter(
         x=[3.5],
         y=[0],
         mode="markers",
-        marker=dict(size=24, symbol="hexagram", color="#DC2626"),
+        marker=dict(size=26, symbol="hexagram", color="#DC2626"),
         name="Zona de Entrega",
         hoverinfo="text",
         hovertext=[
@@ -1489,19 +1516,20 @@ fig_circuito.add_trace(
 fig_circuito.add_trace(
     go.Scatter(
         x=[3.5],
-        y=[0.45],
+        y=[0.48],
         mode="text",
         text=["<b>CHANCADOR / BOTADERO / PILA</b>"],
         textposition="top center",
-        textfont=dict(size=13, color="#DC2626", family="Arial Black"),
+        textfont=dict(size=14, color="#DC2626", family="Arial Black"),
         showlegend=False,
         hoverinfo="none",
     )
 )
 
+# Configuración del Lienzo
 fig_circuito.update_layout(
     xaxis=dict(
-        title="Distancia de Acarreo (Kilómetros)",
+        title="<b>Distancia de Acarreo (Kilómetros)</b>",
         range=[-1.5, 4.2],
         zeroline=False,
         showgrid=True,
@@ -1513,7 +1541,7 @@ fig_circuito.update_layout(
         zeroline=False,
         showgrid=False,
     ),
-    height=440,
+    height=460,
     margin=dict(l=20, r=20, t=30, b=30),
     paper_bgcolor="#F8FAFC",
     plot_bgcolor="#FFFFFF",
