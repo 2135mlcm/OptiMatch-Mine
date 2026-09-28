@@ -1308,7 +1308,34 @@ fig_circuito.add_trace(
         hoverinfo="none",
     )
 )
+# =========================================================================
+# 📍 AQUÍ AGREGAS LA IMAGEN ANIMADA INDEPENDIENTE DEL FRENTE DE CARGUÍO
+# =========================================================================
+img_pala_cargando_gif_b64 = obtener_base64_img(
+    "pala_cargando_CAEX_transparente.gif"
+)
 
+if img_pala_cargando_gif_b64:
+  fig_circuito.add_layout_image(
+      dict(
+          source=img_pala_cargando_gif_b64,
+          xref="x",
+          yref="y",
+          x=-0.28,  # Ubicación a la izquierda de la fila de esperas
+          y=0.38,  # Nivel superior del frente de carguío
+          sizex=0.45,
+          sizey=0.45,
+          xanchor="center",
+          yanchor="middle",
+          layer="above",
+      )
+  )
+# =========================================================================
+
+# RENDERIZADO DE PALAS
+idx_pala = 0
+for _, r in ed_palas.iterrows():
+  ...
 # RENDERIZADO DE PALAS
 idx_pala = 0
 for _, r in ed_palas.iterrows():
