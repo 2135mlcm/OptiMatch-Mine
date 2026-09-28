@@ -109,7 +109,7 @@ init_db()
 
 
 # ---------------------------------------------------------
-# FUNCIONES AUXILIARES Y BASE64 ROBUSTO
+# FUNCIONES AUXILIARES Y BASE64 EXCLUSIVO DE TUS IMÁGENES
 # ---------------------------------------------------------
 @st.cache_data(ttl=3600)
 def obtener_indicadores_mercado():
@@ -234,7 +234,7 @@ def obtener_base64_img(nombre_archivo):
 
 
 # ---------------------------------------------------------
-# CONFIGURACIÓN PÁGINA Y ESTILOS CSS
+# CONFIGURACIÓN PÁGINA Y CSS
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="OptiMatch Mine - Control de Flota", page_icon="⛏️", layout="wide"
@@ -265,23 +265,11 @@ st.markdown(
     }
     .centered-title { text-align: center !important; width: 100% !important; margin-top: 20px !important; margin-bottom: 15px !important; }
     div[data-testid="stDataFrame"] { background-color: #F1F5F9 !important; border: 2px solid #CBD5E1 !important; border-radius: 10px; }
-
-    /* 1. BOTÓN ROJO MÁS GRANDE Y SIN MARCO CONTENEDOR */
     div.stButton > button[kind="primary"] {
-        background-color: #DC2626 !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        font-weight: 900 !important;
-        font-size: 18px !important;
-        border-radius: 35px !important;
-        height: 58px !important;
-        box-shadow: 0px 6px 14px rgba(220, 38, 38, 0.4) !important;
-        transition: all 0.2s ease-in-out;
+        background-color: #DC2626 !important; color: #FFFFFF !important; border: none !important;
+        font-weight: 900 !important; font-size: 16px !important; border-radius: 30px !important; height: 48px !important;
     }
-    div.stButton > button[kind="primary"]:hover {
-        background-color: #B91C1C !important;
-        transform: scale(1.02);
-    }
+    div.stButton > button[kind="primary"]:hover { background-color: #B91C1C !important; }
     </style>
 """,
     unsafe_allow_html=True,
@@ -340,7 +328,7 @@ if not st.session_state.autenticado:
   st.stop()
 
 # ---------------------------------------------------------
-# ENCABEZADO
+# ENCABEZADO Y CARÁTULA
 # ---------------------------------------------------------
 if os.path.exists(LOGO_PATH):
   c_hdr1, c_hdr2, c_hdr3 = st.columns([1, 1.2, 1])
@@ -611,12 +599,10 @@ costo_unitario_ton = (
 )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS
+# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS CON TOOLTIP CLIC
 # ---------------------------------------------------------
 st.markdown("---")
-
-# 2. SECCIÓN LIMPIA SIN RECUADROS NI LIENZO DECORATIVO SOBRANTE
-st.subheader("Monitoreo Espacial del Circuito de Acarreo de Dos Vías")
+st.subheader("MAPA ESPACIAL DE CIRCUITO DE ACARREO")
 
 if "acarreo_iniciado" not in st.session_state:
   st.session_state.acarreo_iniciado = False
@@ -625,12 +611,11 @@ dist_km_val = (
     distancia_acarreo_km if "distancia_acarreo_km" in locals() else 3.5
 )
 
-# Banderola limpia de distancia
 st.markdown(
     f"""
     <div style="background-color: #0F172A; border: 3px solid #F59E0B; border-radius: 10px; padding: 12px 20px; text-align: center; margin-bottom: 15px;">
         <span style="color: #FFFFFF !important; font-size: 20px !important; font-weight: 900 !important;">
-            🛣️ DISTANCIA OFICIAL DE ACARREO: 
+            DISTANCIA OFICIAL DE ACARREO: 
             <span style="color: #38BDF8 !important; font-size: 24px !important; font-weight: 900 !important;">{dist_km_val:.1f} KM (IDA)</span> / 
             <span style="color: #EF4444 !important; font-size: 24px !important; font-weight: 900 !important;">{dist_km_val:.1f} KM (RETORNO)</span>
         </span>
@@ -639,8 +624,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 1. BOTÓN ROJO MÁS GRANDE Y SIN MARCO CONTENEDOR
-col_trig1, col_trig2, col_trig3 = st.columns([2.2, 3.2, 1.5])
+col_trig1, col_trig2, col_trig3 = st.columns([1.8, 3.2, 1.5])
 with col_trig1:
   if st.button(
       "🔴   INICIO DE ACARREO", type="primary", use_container_width=True
@@ -650,10 +634,9 @@ with col_trig1:
 
 with col_trig2:
   st.markdown(
-      "<div style='padding: 12px 0px;'><span style='color: #0F172A;"
-      " font-weight: 900; font-size: 15px;'>📻 <b>AVISO RADIO VHF:</b> Presione"
-      " el botón rojo para autorizar el zarpe tras el primer balde"
-      " cargado.</span></div>",
+      "<div style='padding: 10px 0px;'><span style='color: #0F172A;"
+      " font-weight: 900;'>📻 <b>AVISO RADIO VHF:</b> Presione el botón rojo"
+      " para autorizar el zarpe tras el primer balde cargado.</span></div>",
       unsafe_allow_html=True,
   )
 
@@ -661,7 +644,7 @@ with col_trig3:
   if st.button("🔄 Reiniciar Postura", use_container_width=True):
     st.session_state.acarreo_iniciado = False
 
-# 3. CARGA DIRECTA E INFALIBLE DE IMÁGENES EN BASE64
+# CARGA DE IMÁGENES EXACTAS SIN FALLBACKS DE ICONOS WEB
 img_pala_b64 = obtener_base64_img("image_859ef9.png") or obtener_base64_img(
     "Gif Pala.jpg"
 )
@@ -697,7 +680,7 @@ fig_circuito.add_trace(
     )
 )
 
-# RENDERIZADO DE PALAS
+# 1. RENDERIZADO DE PALAS Y CARGADORES CON DETALLES AL HACER CLIC
 idx_pala = 0
 for _, r in ed_palas.iterrows():
   if r["Agendar"] and r["Estado"] == "🟢 Disponible":
@@ -719,6 +702,7 @@ for _, r in ed_palas.iterrows():
           )
       )
 
+    # Capa interactiva de clic sobre la imagen
     hover_details = (
         f"<b>EQUIPO DE CARGUÍO: Pala {r['ID']}</b><br>"
         f"• Modelo: {r['Modelo']}<br>"
@@ -744,7 +728,6 @@ for _, r in ed_palas.iterrows():
     )
     idx_pala += 1
 
-# 4. RENDERIZADO CORREGIDO PARA MOSTRAR TODOS LOS CARGADORES FRONTALES (CF)
 idx_cf = 0
 for _, r in ed_cf.iterrows():
   if r["Agendar"] and r["Estado"] == "🟢 Disponible":
@@ -789,9 +772,9 @@ for _, r in ed_cf.iterrows():
             hovertext=[hover_details, hover_details],
         )
     )
-    idx_cf += 1  # Incremento independiente garantiza mostrar CF437, CF440, etc.
+    idx_cf += 1
 
-# RENDERIZADO DE CAMIONES CAEX CON SUS FICHAS TÉCNICAS AL HACER CLIC
+# 2. RENDERIZADO DE CAMIONES CAEX Y FICHA TÉCNICA
 caex_agendados = ed_caex[ed_caex["Agendar"] == True]
 total_caex_count = len(caex_agendados)
 
@@ -907,7 +890,7 @@ else:
         )
     )
 
-# DESTINO DE DESCARGA
+# 3. DESTINO DE DESCARGA
 fig_circuito.add_trace(
     go.Scatter(
         x=[3.5],
@@ -956,4 +939,4 @@ fig_circuito.update_layout(
     showlegend=True,
 )
 
-st.plotly_chart(fig_circuito, use_container_width=True)
+st.plotly_chart(fig_circuito, use_container_width=True
