@@ -228,7 +228,7 @@ def obtener_base64_img(nombre_archivo):
         with open(r, "rb") as f:
           encoded = base64.b64encode(f.read()).decode()
           ext = r.split(".")[-1].lower()
-          mime = "png" if ext == "png" else "jpeg"
+          mime = "png" if ext in ["png", "gif"] else "jpeg"
           return f"data:image/{mime};base64,{encoded}"
       except Exception:
         pass
@@ -427,7 +427,7 @@ st.markdown(
         margin-bottom: 6px !important;
     }
 
-    /* 1. BOTÓN ROJO COMPACTO - TEXTO BLANCO NEGRITA SIN MARCOS SOBRANTES */
+    /* BOTÓN ROJO COMPACTO */
     div.stButton > button[kind="primary"] {
         background-color: #DC2626 !important;
         color: #FFFFFF !important;
@@ -1230,7 +1230,7 @@ dist_km_val = (
     distancia_acarreo_km if "distancia_acarreo_km" in locals() else 3.5
 )
 
-# 1. FRANJA OSCURA ULTRA COMPACTA Y ESTRECHA
+# FRANJA OSCURA ESTRECHA
 st.markdown(
     f"""
     <div style="background-color: #0F172A; border: 1px solid #F59E0B; border-radius: 4px; padding: 2px 8px; text-align: center; margin-bottom: 6px;">
@@ -1271,13 +1271,21 @@ with col_trig3:
     st.session_state.acarreo_iniciado = False
     st.session_state.paso_animacion = 0.0
 
-# CARGA CON SUS NUEVOS NOMBRES EXACTOS
-img_caex_cargado_b64 = obtener_base64_img(
-    "Camion_CAEX_Cargado.png"
-) or obtener_base64_img("Camión CAEX Cargado.png")
-img_caex_vacio_b64 = obtener_base64_img(
-    "Camion_CAEX_Vacio.png"
-) or obtener_base64_img("Camión CAEX Vacío.png")
+# CARGA DE IMÁGENES BASE64 ROBUSTA Y FLEXIBLE
+img_caex_cargado_b64 = (
+    obtener_base64_img("Camion_CAEX_Cargado.png")
+    or obtener_base64_img("camion_caex_cargado.png")
+    or obtener_base64_img("Camión CAEX Cargado.png")
+    or obtener_base64_img("Camion CAEX Cargado.png")
+)
+
+img_caex_vacio_b64 = (
+    obtener_base64_img("Camion_CAEX_Vacio.png")
+    or obtener_base64_img("camion_caex_vacio.png")
+    or obtener_base64_img("Camión CAEX Vacío.png")
+    or obtener_base64_img("Camion CAEX Vacio.png")
+)
+
 img_pala_cargando_gif_b64 = obtener_base64_img(
     "pala_cargando_CAEX_transparente.gif"
 )
@@ -1401,7 +1409,7 @@ for _, r in ed_cf.iterrows():
     )
     idx_cf += 1
 
-# MOVIMIENTO DE CAMIONES CAEX POR LA RUTA
+# MOVIMIENTO DE CAMIONES CAEX
 caex_agendados = ed_caex[ed_caex["Agendar"] == True]
 total_caex_count = len(caex_agendados)
 
@@ -1451,13 +1459,13 @@ else:
     pos_ciclo = (offset + desfase) % ciclo_total
 
     if pos_ciclo <= 3.5:
-      # TRAMO IDA: Línea verde punteada -> Camion_CAEX_Cargado.png
+      # TRAMO IDA: Línea verde punteada -> CAEX Cargado
       pos_x = pos_ciclo
       pos_y = 0.15
       src_b64 = img_caex_cargado_b64
       label_txt = f"<b>C{r['ID']} (44.6T)</b>"
     else:
-      # TRAMO RETORNO: Línea roja continua -> Camion_CAEX_Vacio.png
+      # TRAMO RETORNO: Línea roja continua -> CAEX Vacío
       pos_x = 3.5 - (pos_ciclo - 3.5)
       pos_y = -0.15
       src_b64 = img_caex_vacio_b64
@@ -1541,6 +1549,12 @@ fig_circuito.update_layout(
 )
 
 st.plotly_chart(fig_circuito, use_container_width=True)
+
+# BUCLE DE ACTUALIZACIÓN EN VIVO (REFRESCO CONTINUO)
+if st.session_state.acarreo_iniciado:
+  time.sleep(0.8)
+  st.session_state.paso_animacion += 0.20
+  st.rerun()
 
 # ---------------------------------------------------------
 # MÓDULO: CONCILIACIÓN Y CIERRE DE TURNO
