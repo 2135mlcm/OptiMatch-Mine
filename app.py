@@ -1215,28 +1215,24 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS (SIN FRANJA OSCURA)
+# MÓDULO DE SEGUIMIENTO ESPACIAL GPS EN TIEMPO REAL (HTML5 / JS)
 # ---------------------------------------------------------
-st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo de Dos Vías")
+st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo de Dos Vías (GPS)")
 
 if "acarreo_iniciado" not in st.session_state:
   st.session_state.acarreo_iniciado = False
-
-if "paso_animacion" not in st.session_state:
-  st.session_state.paso_animacion = 0.0
 
 dist_km_val = (
     distancia_acarreo_km if "distancia_acarreo_km" in locals() else 3.5
 )
 
-# BOTONERA DE CONTROL INDUSTRIAL (SIN FRANJA OSCURA)
+# BOTONERA DE CONTROL INDUSTRIAL
 col_trig1, col_trig2, col_trig3 = st.columns([1.8, 3.5, 1.5])
 
 with col_trig1:
   btn_trig = st.button("🔴 INICIO DE ACARREO", type="primary")
   if btn_trig:
     st.session_state.acarreo_iniciado = True
-    st.session_state.paso_animacion = 0.0
     st.success("✅ Acarreo iniciado por confirmación VHF.")
 
 with col_trig2:
@@ -1254,25 +1250,17 @@ with col_trig2:
 with col_trig3:
   if st.button("🔄 Reiniciar Postura", use_container_width=True):
     st.session_state.acarreo_iniciado = False
-    st.session_state.paso_animacion = 0.0
 
-# CARGA DE IMÁGENES BASE64
+# OBTENER IMÁGENES EN BASE64
 img_caex_cargado_b64 = (
     obtener_base64_img("Camion_CAEX_Cargado.png")
     or obtener_base64_img("Camión CAEX Cargado.png")
     or obtener_base64_img("camion_caex_cargado.png")
-    or obtener_base64_img("Camion CAEX Cargado.png")
 )
-
 img_caex_vacio_b64 = (
     obtener_base64_img("Camion_CAEX_Vacio.png")
     or obtener_base64_img("Camión CAEX Vacío.png")
     or obtener_base64_img("camion_caex_vacio.png")
-    or obtener_base64_img("Camion CAEX Vacio.png")
-)
-
-img_pala_cargando_gif_b64 = obtener_base64_img(
-    "pala_cargando_CAEX_transparente.gif"
 )
 img_pala_b64 = obtener_base64_img("Gif Pala.jpg") or obtener_base64_img(
     "image_859ef9.png"
@@ -1281,317 +1269,275 @@ img_cf_b64 = obtener_base64_img(
     "Gif Cargador Frontal.jpg"
 ) or obtener_base64_img("image_859f19.png")
 
-fig_circuito = go.Figure()
+# OBTENER LISTA DE CAMIONES ACTIVOS
+caex_agendados = ed_caex[
+    (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
+]
+lista_caex_js = [
+    {"id": str(r["ID"]), "modelo": str(r["Modelo"]), "operador": str(r["Operador"])}
+    for _, r in caex_agendados.iterrows()
+]
 
-# Vía de Ida Cargado (Línea Verde Punteada)
-fig_circuito.add_trace(
-    go.Scatter(
-        x=[0, 3.5],
-        y=[0.15, 0.15],
-        mode="lines",
-        line=dict(color="#10B981", width=5, dash="dash"),
-        name=f"Vía Ida Cargado ({dist_km_val:.1f} km)",
-        hoverinfo="none",
-    )
-)
+# PALAS Y CARGADORES ACTIVOS
+palas_activas_js = [
+    {"id": str(r["ID"]), "modelo": str(r["Modelo"])}
+    for _, r in ed_palas[
+        (ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")
+    ].iterrows()
+]
+cf_activos_js = [
+    {"id": str(r["ID"]), "modelo": str(r["Modelo"])}
+    for _, r in ed_cf[
+        (ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")
+    ].iterrows()
+]
 
-# Vía de Retorno Vacío (Línea Roja Continua)
-fig_circuito.add_trace(
-    go.Scatter(
-        x=[0, 3.5],
-        y=[-0.15, -0.15],
-        mode="lines",
-        line=dict(color="#DC2626", width=5, dash="solid"),
-        name=f"Vía Retorno Vacío ({dist_km_val:.1f} km)",
-        hoverinfo="none",
-    )
-)
+# CONVERTIR A JSON PARA INYECTAR EN JAVASCRIPT
+caex_json_str = json.dumps(lista_caex_js)
+palas_json_str = json.dumps(palas_activas_js)
+cf_json_str = json.dumps(cf_activos_js)
+acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# ANIMACIÓN INDEPENDIENTE EN EL FRENTE DE CARGUÍO
-if img_pala_cargando_gif_b64:
-  fig_circuito.add_layout_image(
-      dict(
-          source=img_pala_cargando_gif_b64,
-          xref="x",
-          yref="y",
-          x=-0.28,
-          y=0.38,
-          sizex=0.45,
-          sizey=0.45,
-          xanchor="center",
-          yanchor="middle",
-          layer="above",
-      )
-  )
+# LIENZO HTML5 Y MOTOR JS DE TELEMETRÍA GPS CONTINUA
+html_gps_canvas = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            margin: 0;
+            padding: 0;
+            background-color: #F8FAFC;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }}
+        #mapContainer {{
+            width: 100%;
+            height: 380px;
+            position: relative;
+            background-color: #FFFFFF;
+            border: 2px solid #CBD5E1;
+            border-radius: 10px;
+            box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
+        }}
+        canvas {{
+            width: 100%;
+            height: 100%;
+            display: block;
+        }}
+        .tooltip {{
+            position: absolute;
+            display: none;
+            background: rgba(15, 23, 42, 0.92);
+            color: #FFFFFF;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            pointer-events: none;
+            border: 1px solid #F59E0B;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
+            z-index: 100;
+        }}
+    </style>
+</head>
+<body>
+    <div id="mapContainer">
+        <canvas id="gpsCanvas"></canvas>
+        <div id="tooltip" class="tooltip"></div>
+    </div>
 
-# RENDERIZADO DE PALAS CON HOVER
-idx_pala = 0
-for _, r in ed_palas.iterrows():
-  if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-    pos_y = 0.38 + (idx_pala * 0.26)
-    if img_pala_b64:
-      fig_circuito.add_layout_image(
-          dict(
-              source=img_pala_b64,
-              xref="x",
-              yref="y",
-              x=-0.18,
-              y=pos_y,
-              sizex=0.32,
-              sizey=0.32,
-              xanchor="center",
-              yanchor="middle",
-              layer="above",
-          )
-      )
+    <script>
+        const canvas = document.getElementById('gpsCanvas');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
 
-    hover_pala = (
-        f"<b>EQUIPO DE CARGUÍO: Pala {r['ID']}</b><br>"
-        f"• Modelo: {r['Modelo']}<br>"
-        f"• Operador Asignado: {r['Operador']}<br>"
-        f"• Rendimiento: {r['Rend_TonH']} Ton/h<br>"
-        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
-        f"• Costo Fijo: ${r['Costo_USDH']} USD/h"
-    )
+        function resizeCanvas() {{
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }}
+        resizeCanvas();
 
-    fig_circuito.add_trace(
-        go.Scatter(
-            x=[-0.18],
-            y=[pos_y],
-            mode="markers+text",
-            marker=dict(size=25, opacity=0.01),
-            text=[f"<b>Pala {r['ID']}</b>"],
-            textposition="middle right",
-            textfont=dict(size=11, color="#0F172A", family="Arial Black"),
-            showlegend=False,
-            hoverinfo="text",
-            hovertext=[hover_pala],
-        )
-    )
-    idx_pala += 1
+        // DATOS DE FLOTA
+        const caexList = {caex_json_str};
+        const palasList = {palas_json_str};
+        const cfList = {cf_json_str};
+        const isTrackingActive = {acarreo_activo_bool};
+        const distKm = {dist_km_val};
 
-# RENDERIZADO DE CARGADORES FRONTALES CON HOVER
-idx_cf = 0
-for _, r in ed_cf.iterrows():
-  if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-    pos_y = -0.36 - (idx_cf * 0.26)
-    if img_cf_b64:
-      fig_circuito.add_layout_image(
-          dict(
-              source=img_cf_b64,
-              xref="x",
-              yref="y",
-              x=-0.18,
-              y=pos_y,
-              sizex=0.32,
-              sizey=0.32,
-              xanchor="center",
-              yanchor="middle",
-              layer="above",
-          )
-      )
+        // CARGA DE IMÁGENES
+        const imgCaexCargado = new Image();
+        imgCaexCargado.src = "{img_caex_cargado_b64 or ''}";
+        
+        const imgCaexVacio = new Image();
+        imgCaexVacio.src = "{img_caex_vacio_b64 or ''}";
 
-    hover_cf = (
-        f"<b>EQUIPO DE CARGUÍO: Cargador {r['ID']}</b><br>"
-        f"• Modelo: {r['Modelo']}<br>"
-        f"• Operador Asignado: {r['Operador']}<br>"
-        f"• Rendimiento: {r['Rend_TonH']} Ton/h<br>"
-        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
-        f"• Costo Fijo: ${r['Costo_USDH']} USD/h"
-    )
+        const imgPala = new Image();
+        imgPala.src = "{img_pala_b64 or ''}";
 
-    fig_circuito.add_trace(
-        go.Scatter(
-            x=[-0.18],
-            y=[pos_y],
-            mode="markers+text",
-            marker=dict(size=25, opacity=0.01),
-            text=[f"<b>CF {r['ID']}</b>"],
-            textposition="middle right",
-            textfont=dict(size=11, color="#0F172A", family="Arial Black"),
-            showlegend=False,
-            hoverinfo="text",
-            hovertext=[hover_cf],
-        )
-    )
-    idx_cf += 1
+        const imgCF = new Image();
+        imgCF.src = "{img_cf_b64 or ''}";
 
-# MOVIMIENTO FLUIDO Y CONTINUO DE CAMIONES CAEX (IDA Y VUELTA)
-caex_agendados = ed_caex[ed_caex["Agendar"] == True]
-total_caex_count = len(caex_agendados)
+        // ESTADO DE TELEMETRÍA DE VEHÍCULOS
+        let vehicles = caexList.map((c, i) => ({{
+            id: c.id,
+            modelo: c.modelo,
+            operador: c.operador,
+            progress: isTrackingActive ? (i / Math.max(1, caexList.length)) * 7.0 : 0.0,
+            x: 0,
+            y: 0,
+            isLoaded: false
+        }}));
 
-if not st.session_state.acarreo_iniciado:
-  # PARQUEADOS EN FILA DE ESPERA
-  for i, (_, r) in enumerate(caex_agendados.iterrows()):
-    pos_x = 0.0 - (i * 0.32)
-    pos_y = 0.15
+        // VELOCIDAD CONSTANTE DE RASTREO GPS LENTO Y SEGURO (0.008 por frame)
+        const gpsSpeed = 0.008;
 
-    if img_caex_vacio_b64:
-      fig_circuito.add_layout_image(
-          dict(
-              source=img_caex_vacio_b64,
-              xref="x",
-              yref="y",
-              x=pos_x,
-              y=pos_y,
-              sizex=0.28,
-              sizey=0.28,
-              xanchor="center",
-              yanchor="middle",
-              layer="above",
-          )
-      )
+        function animate() {{
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    hover_caex = (
-        f"<b>CAMIÓN MINERO CAEX {r['ID']}</b><br>"
-        f"• Estado: En Fila de Espera (Pala)<br>"
-        f"• Modelo: {r['Modelo']}<br>"
-        f"• Operador: {r['Operador']}<br>"
-        f"• Carga Actual: 0.0 Ton (Vacío)<br>"
-        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
-        f"• Costo OPEX: ${r['Costo_USDH']} USD/h"
-    )
+            const paddingL = 140;
+            const paddingR = 120;
+            const trackWidth = canvas.width - paddingL - paddingR;
+            const yIda = canvas.height * 0.38;
+            const yRetorno = canvas.height * 0.62;
+            const xInicio = paddingL;
+            const xFin = paddingL + trackWidth;
 
-    fig_circuito.add_trace(
-        go.Scatter(
-            x=[pos_x],
-            y=[pos_y - 0.12],
-            mode="text",
-            text=[f"<b>C{r['ID']}</b>"],
-            textfont=dict(size=10, color="#0F172A", family="Arial Black"),
-            showlegend=False,
-            hoverinfo="text",
-            hovertext=[hover_caex],
-        )
-    )
+            // 1. DIBUJAR VÍAS DE ACARREO
+            // Vía Ida (Verde Punteada)
+            ctx.beginPath();
+            ctx.setLineDash([8, 6]);
+            ctx.strokeStyle = "#10B981";
+            ctx.lineWidth = 4;
+            ctx.moveTo(xInicio, yIda);
+            ctx.lineTo(xFin, yIda);
+            ctx.stroke();
 
-  st.info(
-      "📍 **FLOTA PARQUEADA EN FILA DE ESPERA:** Presione '🔴 INICIO DE ACARREO'"
-      " para zarpar."
-  )
+            // Vía Retorno (Roja Continua)
+            ctx.beginPath();
+            ctx.setLineDash([]);
+            ctx.strokeStyle = "#DC2626";
+            ctx.lineWidth = 4;
+            ctx.moveTo(xInicio, yRetorno);
+            ctx.lineTo(xFin, yRetorno);
+            ctx.stroke();
 
-else:
-  # CÁLCULO DE MOVIMIENTO CONTINUO Y FLUIDO EN IDA Y VUELTA
-  offset = st.session_state.paso_animacion
-  ciclo_total = 7.0  # 3.5 km de ida + 3.5 km de retorno
+            // ETIQUETAS DE RUTAS
+            ctx.font = "bold 11px Arial";
+            ctx.fillStyle = "#10B981";
+            ctx.fillText("VÍA IDA CARGADO (" + distKm.toFixed(1) + " km)", xInicio, yIda - 12);
+            ctx.fillStyle = "#DC2626";
+            ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km)", xInicio, yRetorno + 22);
 
-  for i, (_, r) in enumerate(caex_agendados.iterrows()):
-    desfase = (i / max(1, total_caex_count)) * ciclo_total
-    pos_ciclo = (offset + desfase) % ciclo_total
+            // 2. PALAS Y CARGADORES (FRENTE DE CARGUÍO)
+            palasList.forEach((p, idx) => {{
+                let py = yIda - 25 - (idx * 35);
+                if (imgPala.complete && imgPala.src) {{
+                    ctx.drawImage(imgPala, xInicio - 90, py - 15, 35, 35);
+                }}
+                ctx.fillStyle = "#0F172A";
+                ctx.font = "bold 11px Arial";
+                ctx.fillText("Pala " + p.id, xInicio - 50, py + 5);
+            }});
 
-    if pos_ciclo <= 3.5:
-      # TRAMO IDA CARGADO (SOBRE LA LÍNEA VERDE)
-      pos_x = pos_ciclo
-      pos_y = 0.15
-      src_b64 = img_caex_cargado_b64
-      carga_txt = "44.6 Ton (Cargado)"
-      label_txt = f"<b>C{r['ID']} (44.6T)</b>"
-      tramo_txt = "Vía Ida Cargado -> Chancador"
-    else:
-      # TRAMO RETORNO VACÍO (SOBRE LA LÍNEA ROJA)
-      pos_x = 3.5 - (pos_ciclo - 3.5)
-      pos_y = -0.15
-      src_b64 = img_caex_vacio_b64
-      carga_txt = "0.0 Ton (Vacío)"
-      label_txt = f"<b>C{r['ID']} (0T)</b>"
-      tramo_txt = "Vía Retorno Vacío -> Pala"
+            cfList.forEach((cf, idx) => {{
+                let py = yRetorno + 15 + (idx * 35);
+                if (imgCF.complete && imgCF.src) {{
+                    ctx.drawImage(imgCF, xInicio - 90, py - 15, 35, 35);
+                }}
+                ctx.fillStyle = "#0F172A";
+                ctx.font = "bold 11px Arial";
+                ctx.fillText("CF " + cf.id, xInicio - 50, py + 5);
+            }});
 
-    if src_b64:
-      fig_circuito.add_layout_image(
-          dict(
-              source=src_b64,
-              xref="x",
-              yref="y",
-              x=pos_x,
-              y=pos_y,
-              sizex=0.28,
-              sizey=0.28,
-              xanchor="center",
-              yanchor="middle",
-              layer="above",
-          )
-      )
+            // 3. ZONA DE DESCARGA (CHANCADOR / BOTADERO)
+            ctx.fillStyle = "#DC2626";
+            ctx.beginPath();
+            ctx.arc(xFin + 25, (yIda + yRetorno) / 2, 12, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.font = "bold 11px Arial";
+            ctx.fillText("CHANCADOR / PILA", xFin + 5, ((yIda + yRetorno) / 2) - 20);
 
-    hover_caex = (
-        f"<b>CAMIÓN MINERO CAEX {r['ID']}</b><br>"
-        f"• Tramo: {tramo_txt}<br>"
-        f"• Posición: {pos_x:.2f} km<br>"
-        f"• Modelo: {r['Modelo']}<br>"
-        f"• Operador Asignado: {r['Operador']}<br>"
-        f"• Carga: {carga_txt}<br>"
-        f"• Rendimiento: {r['Rend_TonH']} Ton/h<br>"
-        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
-        f"• Costo Fijo: ${r['Costo_USDH']} USD/h"
-    )
+            // 4. ACTUALIZACIÓN Y DIBUJO DE CAMIONES CAEX (MOVIMIENTO CONTINUO)
+            vehicles.forEach((v, idx) => {{
+                if (isTrackingActive) {{
+                    v.progress = (v.progress + gpsSpeed) % 7.0;
+                }}
 
-    fig_circuito.add_trace(
-        go.Scatter(
-            x=[pos_x],
-            y=[pos_y - 0.12 if pos_y > 0 else pos_y + 0.12],
-            mode="text",
-            text=[label_txt],
-            textfont=dict(size=10, color="#0F172A", family="Arial Black"),
-            showlegend=False,
-            hoverinfo="text",
-            hovertext=[hover_caex],
-        )
-    )
+                if (!isTrackingActive) {{
+                    // PARQUEADO EN FILA DE ESPERA
+                    v.x = xInicio - 25 - (idx * 32);
+                    v.y = yIda;
+                    v.isLoaded = false;
+                }} else if (v.progress <= 3.5) {{
+                    // TRAMO IDA CARGADO
+                    let ratio = v.progress / 3.5;
+                    v.x = xInicio + (ratio * trackWidth);
+                    v.y = yIda;
+                    v.isLoaded = true;
+                }} else {{
+                    // TRAMO RETORNO VACÍO
+                    let ratio = (v.progress - 3.5) / 3.5;
+                    v.x = xFin - (ratio * trackWidth);
+                    v.y = yRetorno;
+                    v.isLoaded = false;
+                }}
 
-# DESTINO DE DESCARGA PARALELO
-fig_circuito.add_trace(
-    go.Scatter(
-        x=[3.5],
-        y=[0],
-        mode="markers",
-        marker=dict(size=22, symbol="hexagram", color="#DC2626"),
-        name="Zona de Entrega",
-        hoverinfo="text",
-        hovertext=["<b>Chancador / Botadero / Pila</b>"],
-    )
-)
+                // DIBUJAR CAMIÓN
+                let imgToDraw = v.isLoaded ? imgCaexCargado : imgCaexVacio;
+                let size = 36;
 
-fig_circuito.add_trace(
-    go.Scatter(
-        x=[3.5],
-        y=[0.40],
-        mode="text",
-        text=["<b>CHANCADOR / BOTADERO / PILA</b>"],
-        textposition="top center",
-        textfont=dict(size=11, color="#DC2626", family="Arial Black"),
-        showlegend=False,
-        hoverinfo="none",
-    )
-)
+                if (imgToDraw.complete && imgToDraw.src) {{
+                    ctx.drawImage(imgToDraw, v.x - (size/2), v.y - (size/2), size, size);
+                }} else {{
+                    ctx.fillStyle = v.isLoaded ? "#10B981" : "#EF4444";
+                    ctx.fillRect(v.x - 12, v.y - 12, 24, 24);
+                }}
 
-# CONFIGURACIÓN DEL LIENZO
-fig_circuito.update_layout(
-    xaxis=dict(
-        title="<b>Distancia de Acarreo (Kilómetros)</b>",
-        range=[-1.4, 4.3],
-        zeroline=False,
-        showgrid=True,
-    ),
-    yaxis=dict(
-        title="",
-        range=[-0.95, 0.95],
-        showticklabels=False,
-        zeroline=False,
-        showgrid=False,
-    ),
-    height=400,
-    margin=dict(l=10, r=20, t=10, b=20),
-    paper_bgcolor="#F8FAFC",
-    plot_bgcolor="#FFFFFF",
-    showlegend=True,
-)
+                // ETIQUETA DEL VEHÍCULO
+                ctx.fillStyle = "#0F172A";
+                ctx.font = "bold 10px Arial";
+                ctx.textAlign = "center";
+                let label = "C" + v.id + (v.isLoaded ? " (44.6T)" : " (0T)");
+                ctx.fillText(label, v.x, v.y + (v.y === yIda ? -20 : 25));
+            }});
 
-st.plotly_chart(fig_circuito, use_container_width=True)
+            requestAnimationFrame(animate);
+        }}
 
-# CONTROL DE MOVIMIENTO FLUIDO SIN SALTOS
-if st.session_state.acarreo_iniciado:
-  time.sleep(0.1)  # Refresco rápido para alta fluidez
-  st.session_state.paso_animacion += 0.05  # Avance progresivo suave
-  st.rerun()
+        requestAnimationFrame(animate);
+
+        // DRAG & HOVER DETECCION GPS
+        canvas.addEventListener('mousemove', function(e) {{
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            let hovered = false;
+            vehicles.forEach(v => {{
+                let dist = Math.hypot(mouseX - v.x, mouseY - v.y);
+                if (dist < 20) {{
+                    hovered = true;
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = (v.x + 15) + 'px';
+                    tooltip.style.top = (v.y - 30) + 'px';
+                    tooltip.innerHTML = '<b>CAMIÓN CAEX C' + v.id + '</b><br>' +
+                                        '• Modelo: ' + v.modelo + '<br>' +
+                                        '• Operador: ' + v.operador + '<br>' +
+                                        '• Estado: ' + (v.isLoaded ? 'Cargado (44.6T)' : 'Vacío (0T)') + '<br>' +
+                                        '• Monitoreo: GPS Activo';
+                }}
+            }});
+
+            if (!hovered) {{
+                tooltip.style.display = 'none';
+            }}
+        }});
+    </script>
+</body>
+</html>
+"""
+
+components.html(html_gps_canvas, height=400)
 
 # ---------------------------------------------------------
 # REPORTE Y FICHA PRESCRIPTIVA PRE-TURNO
