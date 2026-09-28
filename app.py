@@ -1216,7 +1216,7 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS
+# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS (SIN FRANJA)
 # ---------------------------------------------------------
 st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo de Dos Vías")
 
@@ -1230,21 +1230,7 @@ dist_km_val = (
     distancia_acarreo_km if "distancia_acarreo_km" in locals() else 3.5
 )
 
-# FRANJA OSCURA ESTRECHA
-st.markdown(
-    f"""
-    <div style="background-color: #0F172A; border: 1px solid #F59E0B; border-radius: 4px; padding: 2px 8px; text-align: center; margin-bottom: 6px;">
-        <span style="color: #FFFFFF !important; font-size: 12px !important; font-weight: 800 !important;">
-            DISTANCIA OFICIAL DE ACARREO: 
-            <span style="color: #38BDF8 !important; font-size: 12px !important; font-weight: 900 !important;">{dist_km_val:.1f} KM (IDA)</span> / 
-            <span style="color: #EF4444 !important; font-size: 12px !important; font-weight: 900 !important;">{dist_km_val:.1f} KM (RETORNO)</span>
-        </span>
-    </div>
-""",
-    unsafe_allow_html=True,
-)
-
-# BOTONERA DE CONTROL INDUSTRIAL
+# BOTONERA DE CONTROL INDUSTRIAL (SIN FRANJA OSCURA DEBAJO DEL TÍTULO)
 col_trig1, col_trig2, col_trig3 = st.columns([1.8, 3.5, 1.5])
 
 with col_trig1:
@@ -1257,8 +1243,8 @@ with col_trig1:
 with col_trig2:
   st.markdown(
       """
-        <div style="padding: 2px 0px;">
-            <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 12px !important; display: block;">
+        <div style="padding: 6px 0px;">
+            <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
                 📻 <b>AVISO RADIO VHF:</b> Presione el botón rojo de inicio para autorizar el zarpe de la flota.
             </span>
         </div>
@@ -1271,18 +1257,18 @@ with col_trig3:
     st.session_state.acarreo_iniciado = False
     st.session_state.paso_animacion = 0.0
 
-# CARGA DE IMÁGENES BASE64 ROBUSTA Y FLEXIBLE
+# CARGA DE IMÁGENES BASE64 CON BÚSQUEDA ROBUSTA
 img_caex_cargado_b64 = (
     obtener_base64_img("Camion_CAEX_Cargado.png")
-    or obtener_base64_img("camion_caex_cargado.png")
     or obtener_base64_img("Camión CAEX Cargado.png")
+    or obtener_base64_img("camion_caex_cargado.png")
     or obtener_base64_img("Camion CAEX Cargado.png")
 )
 
 img_caex_vacio_b64 = (
     obtener_base64_img("Camion_CAEX_Vacio.png")
-    or obtener_base64_img("camion_caex_vacio.png")
     or obtener_base64_img("Camión CAEX Vacío.png")
+    or obtener_base64_img("camion_caex_vacio.png")
     or obtener_base64_img("Camion CAEX Vacio.png")
 )
 
@@ -1409,14 +1395,16 @@ for _, r in ed_cf.iterrows():
     )
     idx_cf += 1
 
-# MOVIMIENTO DE CAMIONES CAEX
+# MOVIMIENTO Y DESPLAZAMIENTO GARANTIZADO DE CAMIONES CAEX
 caex_agendados = ed_caex[ed_caex["Agendar"] == True]
 total_caex_count = len(caex_agendados)
 
 if not st.session_state.acarreo_iniciado:
+  # FILA DE ESPERA (PARQUEADOS)
   for i, (_, r) in enumerate(caex_agendados.iterrows()):
-    pos_x = 0.0 - (i * 0.30)
+    pos_x = 0.0 - (i * 0.32)
     pos_y = 0.15
+
     if img_caex_vacio_b64:
       fig_circuito.add_layout_image(
           dict(
@@ -1424,48 +1412,49 @@ if not st.session_state.acarreo_iniciado:
               xref="x",
               yref="y",
               x=pos_x,
-              y=pos_y + 0.08,
-              sizex=0.30,
-              sizey=0.30,
+              y=pos_y,
+              sizex=0.28,
+              sizey=0.28,
               xanchor="center",
               yanchor="middle",
               layer="above",
           )
       )
+
     fig_circuito.add_trace(
         go.Scatter(
-            x=[pos_x, pos_x],
-            y=[pos_y + 0.08, pos_y - 0.12],
-            mode="markers+text",
-            marker=dict(size=[28, 1], opacity=[0.01, 0]),
-            text=["", f"<b>C{r['ID']}</b>"],
-            textposition="bottom center",
+            x=[pos_x],
+            y=[pos_y - 0.12],
+            mode="text",
+            text=[f"<b>C{r['ID']}</b>"],
             textfont=dict(size=10, color="#0F172A", family="Arial Black"),
             showlegend=False,
             hoverinfo="none",
         )
     )
+
   st.info(
       "📍 **FLOTA PARQUEADA EN FILA DE ESPERA:** Presione '🔴 INICIO DE ACARREO'"
       " para zarpar."
   )
 
 else:
+  # CIRCUITO DINÁMICO DE CARGA Y RETORNO
   offset = st.session_state.paso_animacion
-  ciclo_total = 7.0  # 3.5 km ida + 3.5 km retorno
+  ciclo_total = 7.0
 
   for i, (_, r) in enumerate(caex_agendados.iterrows()):
     desfase = (i / max(1, total_caex_count)) * ciclo_total
     pos_ciclo = (offset + desfase) % ciclo_total
 
     if pos_ciclo <= 3.5:
-      # TRAMO IDA: Línea verde punteada -> CAEX Cargado
+      # TRAMO IDA CARGADO (LÍNEA VERDE)
       pos_x = pos_ciclo
       pos_y = 0.15
       src_b64 = img_caex_cargado_b64
       label_txt = f"<b>C{r['ID']} (44.6T)</b>"
     else:
-      # TRAMO RETORNO: Línea roja continua -> CAEX Vacío
+      # TRAMO RETORNO VACÍO (LÍNEA ROJA)
       pos_x = 3.5 - (pos_ciclo - 3.5)
       pos_y = -0.15
       src_b64 = img_caex_vacio_b64
@@ -1478,9 +1467,9 @@ else:
               xref="x",
               yref="y",
               x=pos_x,
-              y=pos_y + 0.08,
-              sizex=0.32,
-              sizey=0.32,
+              y=pos_y,
+              sizex=0.28,
+              sizey=0.28,
               xanchor="center",
               yanchor="middle",
               layer="above",
@@ -1489,12 +1478,10 @@ else:
 
     fig_circuito.add_trace(
         go.Scatter(
-            x=[pos_x, pos_x],
-            y=[pos_y + 0.08, pos_y - 0.12],
-            mode="markers+text",
-            marker=dict(size=[28, 1], opacity=[0.01, 0]),
-            text=["", label_txt],
-            textposition="bottom center",
+            x=[pos_x],
+            y=[pos_y - 0.12 if pos_y > 0 else pos_y + 0.12],
+            mode="text",
+            text=[label_txt],
             textfont=dict(size=10, color="#0F172A", family="Arial Black"),
             showlegend=False,
             hoverinfo="none",
@@ -1526,7 +1513,7 @@ fig_circuito.add_trace(
     )
 )
 
-# CONFIGURACIÓN Y MÁRGENES
+# CONFIGURACIÓN DEL LIENZO Y MÁRGENES
 fig_circuito.update_layout(
     xaxis=dict(
         title="<b>Distancia de Acarreo (Kilómetros)</b>",
@@ -1550,10 +1537,10 @@ fig_circuito.update_layout(
 
 st.plotly_chart(fig_circuito, use_container_width=True)
 
-# BUCLE DE ACTUALIZACIÓN EN VIVO (REFRESCO CONTINUO)
+# BUCLE DE REFRESCO CONTINUO PARA ANIMACIÓN
 if st.session_state.acarreo_iniciado:
-  time.sleep(0.8)
-  st.session_state.paso_animacion += 0.20
+  time.sleep(0.7)
+  st.session_state.paso_animacion += 0.25
   st.rerun()
 
 # ---------------------------------------------------------
