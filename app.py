@@ -1298,7 +1298,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 Y MOTOR JS CON FÍSICA Y VELOCIDADES DE OPTIMATCH MINE
+# LIENZO HTML5 CON VELOCIDADES REALES OPTIMATCH Y DIBUJO VECTORIAL DE RESPALDO PARA LOS CAEX
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1378,22 +1378,20 @@ html_gps_canvas = f"""
         const imgCF = new Image();
         imgCF.src = "{img_cf_b64 or ''}";
 
-        // MODELADO DEL CICLO: IDA (18 km/h), RETORNO (30 km/h) Y PAUSAS OPERATIVAS
-        // Tiempos relativos: Ida (11.67 min) / Retorno (7.0 min) / Carga (3.0 min) / Descarga (1.33 min) -> Ciclo Total ~23 min
+        // MODELADO DE TIEMPOS DE CICLO PAUSADOS Y REALISTAS EN EL LIENZO
         const totalCycleUnits = 23.0;
-        const timeLoading = 3.0;                            // En Frente de Carguío (Pala)
-        const timeHaul = 11.67;                             // Tramo Ida a 18 km/h
-        const timeDumping = 1.33;                           // En Chancador / Botadero
-        const timeReturn = 7.0;                             // Tramo Retorno a 30 km/h
+        const timeLoading = 3.0;        // 3 min en Pala
+        const timeHaul = 11.67;         // 11.67 min Acarreo Ida (18 km/h)
+        const timeDumping = 1.33;       // 1.33 min en Botadero
+        const timeReturn = 7.0;         // 7 min Retorno Vacío (30 km/h)
 
-        // VELOCIDAD BASE DE AVANCE DEL RELOJ DE SIMULACIÓN
-        const simSpeed = 0.015;
+        // PASO DE RELOJ PAUSADO PARA VER EL RECORRIDO COMPLETO
+        const simSpeed = 0.003;
 
         let vehicles = caexList.map((c, i) => ({{
             id: c.id,
             modelo: c.modelo,
             operador: c.operador,
-            // Desfase homogéneo de la flota en el ciclo
             cycleTime: isTrackingActive ? (i / Math.max(1, caexList.length)) * totalCycleUnits : 0.0,
             x: 0,
             y: 0,
@@ -1401,6 +1399,47 @@ html_gps_canvas = f"""
             statusText: "En Espera",
             speedKmh: 0
         }}));
+
+        // FUNCIÓN DE DIBUJO DE CAMIÓN CAEX VECTORIAL SI LA IMAGEN NO HA CARGADO
+        function drawCaexTruck(x, y, isLoaded, id, speedKmh) {{
+            ctx.save();
+            ctx.translate(x, y);
+
+            // Tolva / Cuerpo del Camión
+            ctx.fillStyle = isLoaded ? "#D97706" : "#E2E8F0";
+            ctx.strokeStyle = "#0F172A";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(-20, -12, 30, 20, 3);
+            ctx.fill();
+            ctx.stroke();
+
+            // Mineral en Tolva (Si va Cargado)
+            if (isLoaded) {{
+                ctx.fillStyle = "#78350F";
+                ctx.beginPath();
+                ctx.arc(-5, -6, 8, Math.PI, 0);
+                ctx.fill();
+            }}
+
+            // Cabina
+            ctx.fillStyle = "#F59E0B";
+            ctx.beginPath();
+            ctx.roundRect(10, -8, 10, 14, 2);
+            ctx.fill();
+            ctx.stroke();
+
+            // Ruedas Neumáticas CAEX
+            ctx.fillStyle = "#1E293B";
+            ctx.beginPath();
+            ctx.arc(-12, 10, 5, 0, 2 * Math.PI);
+            ctx.arc(8, 10, 5, 0, 2 * Math.PI);
+            ctx.arc(-12, -10, 5, 0, 2 * Math.PI);
+            ctx.arc(8, -10, 5, 0, 2 * Math.PI);
+            ctx.fill();
+
+            ctx.restore();
+        }}
 
         function animate() {{
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1414,7 +1453,6 @@ html_gps_canvas = f"""
             const xFin = paddingL + trackWidth;
 
             // 1. DIBUJAR VÍAS DE ACARREO CON VELOCIDADES OFICIALES
-            // Vía Ida (Verde Punteada)
             ctx.beginPath();
             ctx.setLineDash([8, 6]);
             ctx.strokeStyle = "#10B981";
@@ -1423,7 +1461,6 @@ html_gps_canvas = f"""
             ctx.lineTo(xFin, yIda);
             ctx.stroke();
 
-            // Vía Retorno (Roja Continua)
             ctx.beginPath();
             ctx.setLineDash([]);
             ctx.strokeStyle = "#DC2626";
@@ -1432,7 +1469,6 @@ html_gps_canvas = f"""
             ctx.lineTo(xFin, yRetorno);
             ctx.stroke();
 
-            // ETIQUETAS Y RANGOS OPERATIVOS
             ctx.font = "bold 11px Arial";
             ctx.fillStyle = "#10B981";
             ctx.textAlign = "left";
@@ -1443,8 +1479,11 @@ html_gps_canvas = f"""
             // 2. EQUIPOS EN FRENTE DE CARGUÍO
             palasList.forEach((p, idx) => {{
                 let py = yIda - 20 - (idx * 36);
-                if (imgPala.complete && imgPala.src) {{
+                if (imgPala.complete && imgPala.naturalWidth > 0) {{
                     ctx.drawImage(imgPala, xInicio - 50, py - 14, 28, 28);
+                }} else {{
+                    ctx.fillStyle = "#F59E0B";
+                    ctx.fillRect(xInicio - 50, py - 10, 20, 20);
                 }}
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 11px Arial";
@@ -1454,8 +1493,11 @@ html_gps_canvas = f"""
 
             cfList.forEach((cf, idx) => {{
                 let py = yRetorno + 10 + (idx * 36);
-                if (imgCF.complete && imgCF.src) {{
+                if (imgCF.complete && imgCF.naturalWidth > 0) {{
                     ctx.drawImage(imgCF, xInicio - 50, py - 14, 28, 28);
+                }} else {{
+                    ctx.fillStyle = "#F59E0B";
+                    ctx.fillRect(xInicio - 50, py - 10, 20, 20);
                 }}
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 11px Arial";
@@ -1481,21 +1523,18 @@ html_gps_canvas = f"""
                 let t = v.cycleTime;
 
                 if (!isTrackingActive) {{
-                    // POSTURA EN ESPERA
-                    v.x = xInicio - 25 - (idx * 32);
+                    v.x = xInicio - 25 - (idx * 38);
                     v.y = yIda;
                     v.isLoaded = false;
                     v.statusText = "En Fila de Espera";
                     v.speedKmh = 0;
                 }} else if (t < timeLoading) {{
-                    // FASE 1: CARGANDO EN FRENTE (3.0 min)
                     v.x = xInicio;
                     v.y = yIda;
                     v.isLoaded = false;
                     v.statusText = "En Carga (Pala)";
                     v.speedKmh = 0;
                 }} else if (t < timeLoading + timeHaul) {{
-                    // FASE 2: ACARREO IDA CARGADO A 18 KM/H (11.67 min)
                     let progressRatio = (t - timeLoading) / timeHaul;
                     v.x = xInicio + (progressRatio * trackWidth);
                     v.y = yIda;
@@ -1503,14 +1542,12 @@ html_gps_canvas = f"""
                     v.statusText = "Acarreo Ida (Cargado)";
                     v.speedKmh = 18;
                 }} else if (t < timeLoading + timeHaul + timeDumping) {{
-                    // FASE 3: DESCARGANDO EN BOTADERO / CHANCADOR (1.33 min)
                     v.x = xFin;
                     v.y = (yIda + yRetorno) / 2;
                     v.isLoaded = true;
                     v.statusText = "En Volteo / Descarga";
                     v.speedKmh = 0;
                 }} else {{
-                    // FASE 4: RETORNO VACÍO A 30 KM/H (7.0 min)
                     let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
                     v.x = xFin - (progressRatio * trackWidth);
                     v.y = yRetorno;
@@ -1519,24 +1556,22 @@ html_gps_canvas = f"""
                     v.speedKmh = 30;
                 }}
 
-                // DIBUJAR VEHÍCULO
+                // DIBUJAR IMAGEN O DIBUJO VECTORIAL DEL CAMIÓN
                 let imgToDraw = v.isLoaded ? imgCaexCargado : imgCaexVacio;
-                let size = 32;
 
-                if (imgToDraw.complete && imgToDraw.src) {{
-                    ctx.drawImage(imgToDraw, v.x - (size/2), v.y - (size/2), size, size);
+                if (imgToDraw.complete && imgToDraw.naturalWidth > 0 && imgToDraw.src.length > 50) {{
+                    ctx.drawImage(imgToDraw, v.x - 20, v.y - 20, 40, 40);
                 }} else {{
-                    ctx.fillStyle = v.isLoaded ? "#10B981" : "#EF4444";
-                    ctx.fillRect(v.x - 12, v.y - 12, 24, 24);
+                    drawCaexTruck(v.x, v.y, v.isLoaded, v.id, v.speedKmh);
                 }}
 
-                // ETIQUETADO DE ID Y VELOCIDAD
+                // ETIQUETADO DE ID Y VELOCIDAD PAUSADO
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 10px Arial";
                 ctx.textAlign = "center";
-                let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh + " km/h]" : "";
-                let label = "C" + v.id + (v.isLoaded ? " (44.6T)" : " (0T)") + speedLabel;
-                let labelY = v.isLoaded ? v.y - 18 : v.y + 22;
+                let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh + " km/h]" : " [0 km/h]";
+                let label = "CAEX " + v.id + (v.isLoaded ? " (44.6T)" : " (0T)") + speedLabel;
+                let labelY = (v.y === yIda) ? v.y - 22 : v.y + 26;
                 ctx.fillText(label, v.x, labelY);
             }});
 
@@ -1554,14 +1589,14 @@ html_gps_canvas = f"""
             let hovered = false;
             vehicles.forEach(v => {{
                 let dist = Math.hypot(mouseX - v.x, mouseY - v.y);
-                if (dist < 20) {{
+                if (dist < 25) {{
                     hovered = true;
                     tooltip.style.display = 'block';
                     tooltip.style.left = (v.x + 15) + 'px';
                     tooltip.style.top = (v.y - 35) + 'px';
-                    tooltip.innerHTML = '<b>CAMIÓN CAEX C' + v.id + '</b><br>' +
+                    tooltip.innerHTML = '<b>CAMIÓN CAEX ' + v.id + '</b><br>' +
                                         '• Estado: ' + v.statusText + '<br>' +
-                                        '• Velocidad Teórica: ' + v.speedKmh + ' km/h<br>' +
+                                        '• Velocidad: ' + v.speedKmh + ' km/h<br>' +
                                         '• Modelo: ' + v.modelo + '<br>' +
                                         '• Operador: ' + v.operador + '<br>' +
                                         '• Carga: ' + (v.isLoaded ? '44.6 Ton' : '0.0 Ton');
