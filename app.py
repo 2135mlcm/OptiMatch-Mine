@@ -427,11 +427,12 @@ st.markdown(
         margin-bottom: 6px !important;
     }
 
-    /* 1. BOTÓN ROJO DE CONTROL INDUSTRIAL MÁS GRANDE Y SIN MARCO */
+    /* 1. BOTÓN ROJO PROMINENTE - SIN MARCO CONTENEDOR O BORDE SECUNDARIO */
     div.stButton > button[kind="primary"] {
         background-color: #DC2626 !important;
         color: #FFFFFF !important;
         border: none !important;
+        outline: none !important;
         font-weight: 900 !important;
         font-size: 18px !important;
         border-radius: 35px !important;
@@ -1205,7 +1206,7 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS (2. REMOCIÓN DE LIENZO PREVIO SOBRANTE)
+# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS (2. REMOCIÓN COMPLETA DE CUALQUIER RECUADRO O LIENZO SOBRANTE)
 # ---------------------------------------------------------
 st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo de Dos Vías")
 
@@ -1216,22 +1217,20 @@ dist_km_val = (
     distancia_acarreo_km if "distancia_acarreo_km" in locals() else 3.5
 )
 
-# Banderola limpia de distancia
 st.markdown(
     f"""
     <div style="background-color: #0F172A; border: 3px solid #F59E0B; border-radius: 10px; padding: 12px 20px; text-align: center; margin-bottom: 15px;">
         <span style="color: #FFFFFF !important; font-size: 20px !important; font-weight: 900 !important;">
-            🛣️ DISTANCIA OFICIAL DE ACARREO: 
-            <span style="color: #38BDF8 !important; font-size: 24px !important; font-weight: 900 !important; text-decoration: underline;">{dist_km_val:.1f} KM (TRAMO IDA)</span> 
-            <span style="color: #FFFFFF !important; font-size: 20px !important; font-weight: 900 !important;">/</span> 
-            <span style="color: #EF4444 !important; font-size: 24px !important; font-weight: 900 !important; text-decoration: underline;">{dist_km_val:.1f} KM (TRAMO RETORNO)</span>
+            DISTANCIA OFICIAL DE ACARREO: 
+            <span style="color: #38BDF8 !important; font-size: 24px !important; font-weight: 900 !important;">{dist_km_val:.1f} KM (IDA)</span> / 
+            <span style="color: #EF4444 !important; font-size: 24px !important; font-weight: 900 !important;">{dist_km_val:.1f} KM (RETORNO)</span>
         </span>
     </div>
 """,
     unsafe_allow_html=True,
 )
 
-# 1. BOTÓN ROJO DE CONTROL INDUSTRIAL MÁS GRANDE Y SIN MARCO
+# 1. BOTÓN ROJO DE CONTROL INDUSTRIAL PROMINENTE Y SIN MARCO EXTERNO
 col_trig1, col_trig2, col_trig3 = st.columns([2.2, 3.2, 1.5])
 
 with col_trig1:
@@ -1258,29 +1257,29 @@ with col_trig3:
   if st.button("🔄 Reiniciar Postura", use_container_width=True):
     st.session_state.acarreo_iniciado = False
 
-# 3. CARGA DIRECTA E INFALIBLE DE IMÁGENES EN BASE64
-img_pala = (
+# 3. CARGA ROBUSTA E INFALIBLE DE IMÁGENES BASE64 CON FALLBACK MINERO
+img_pala_b64 = (
     obtener_base64_img("image_859ef9.png")
     or obtener_base64_img("Gif Pala.jpg")
-    or "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    or "https://upload.wikimedia.org/wikipedia/commons/ thumb/3/3a/Excavator_icon.svg/240px-Excavator_icon.svg.png"
 )
-img_cf = (
+img_cf_b64 = (
     obtener_base64_img("image_859f19.png")
     or obtener_base64_img("Gif Cargador Frontal.jpg")
-    or "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    or "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Wheel_loader_icon.svg/240px-Wheel_loader_icon.svg.png"
 )
-img_caex_vacio = (
+img_caex_vacio_b64 = (
     obtener_base64_img("image_85a67d.png")
-    or "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    or "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Mining_haul_truck_icon.svg/240px-Mining_haul_truck_icon.svg.png"
 )
-img_caex_cargado = (
+img_caex_cargado_b64 = (
     obtener_base64_img("image_86137b.png")
-    or "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    or "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Mining_haul_truck_icon.svg/240px-Mining_haul_truck_icon.svg.png"
 )
 
 fig_circuito = go.Figure()
 
-# Vía de Ida Cargado (Superior y = +0.15)
+# Vía de Ida Cargado
 fig_circuito.add_trace(
     go.Scatter(
         x=[0, 3.5],
@@ -1292,7 +1291,7 @@ fig_circuito.add_trace(
     )
 )
 
-# Vía de Retorno Vacío (Inferior y = -0.15)
+# Vía de Retorno Vacío
 fig_circuito.add_trace(
     go.Scatter(
         x=[0, 3.5],
@@ -1312,7 +1311,7 @@ for _, r in ed_palas.iterrows():
 
     fig_circuito.add_layout_image(
         dict(
-            source=img_pala,
+            source=img_pala_b64,
             xref="x",
             yref="y",
             x=-0.15,
@@ -1350,7 +1349,7 @@ for _, r in ed_palas.iterrows():
     )
     idx_pala += 1
 
-# 4. RENDERIZADO INDEPENDIENTE PARA MÚLTIPLES CARGADORES FRONTALES (CF)
+# 4. RENDERIZADO CORREGIDO PARA MOSTRAR TODOS LOS CARGADORES FRONTALES (CF)
 idx_cf = 0
 for _, r in ed_cf.iterrows():
   if r["Agendar"] and r["Estado"] == "🟢 Disponible":
@@ -1358,7 +1357,7 @@ for _, r in ed_cf.iterrows():
 
     fig_circuito.add_layout_image(
         dict(
-            source=img_cf,
+            source=img_cf_b64,
             xref="x",
             yref="y",
             x=-0.15,
@@ -1396,7 +1395,7 @@ for _, r in ed_cf.iterrows():
     )
     idx_cf += 1
 
-# 3. RENDERIZADO DE CAMIONES CAEX CON FICHAS BASE64
+# RENDERIZADO DE CAMIONES CAEX CON SUS FICHAS TÉCNICAS AL HACER CLIC
 caex_agendados = ed_caex[ed_caex["Agendar"] == True]
 total_caex_count = len(caex_agendados)
 
@@ -1408,7 +1407,7 @@ if not st.session_state.acarreo_iniciado:
 
     fig_circuito.add_layout_image(
         dict(
-            source=img_caex_vacio,
+            source=img_caex_vacio_b64,
             xref="x",
             yref="y",
             x=pos_x,
@@ -1459,14 +1458,14 @@ else:
     if es_ida:
       pos_x = 0.4 + (i * (2.6 / max(1, total_caex_count)))
       pos_y = 0.15
-      src_b64 = img_caex_cargado
+      src_b64 = img_caex_cargado_b64
       carga_txt = "44.6 Ton (Cargado)"
       label_txt = f"<b>C{r['ID']} (44.6T)</b>"
       tramo_txt = "Acarreo Cargado -> Chancador/Pila"
     else:
       pos_x = 3.1 - (i * (2.6 / max(1, total_caex_count)))
       pos_y = -0.15
-      src_b64 = img_caex_vacio
+      src_b64 = img_caex_vacio_b64
       carga_txt = "0.0 Ton (Vacío)"
       label_txt = f"<b>C{r['ID']} (0T)</b>"
       tramo_txt = "Retorno Vacío -> Pala"
