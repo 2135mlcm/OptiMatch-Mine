@@ -1175,14 +1175,14 @@ with col_eval2:
 st.markdown("---")
 st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo de Dos Vías")
 st.caption(
-    "Circuito de dos vías (Vía Superior: Ida Cargado | Vía Inferior: Retorno"
-    " Vacío). Presione el botón de disparo para iniciar la transmisión."
+    "Circuito de dos vías (Vía Superior: Acarreo Cargado | Vía Inferior:"
+    " Retorno Vacío)."
 )
 
 if "acarreo_iniciado" not in st.session_state:
     st.session_state.acarreo_iniciado = False
 
-# 3. BOTÓN DISPARADOR / TRIGGER VISIBLE Y DESTACADO
+# 3. BOTÓN DISPARADOR / TRIGGER VISIBLE
 col_trig_a, col_trig_b = st.columns([2, 1])
 with col_trig_a:
     if st.button(
@@ -1200,97 +1200,149 @@ with col_trig_b:
     if st.button("🔄 Reiniciar Postura en Fila", use_container_width=True):
         st.session_state.acarreo_iniciado = False
 
-# Rutas de imágenes
-IMG_PALA = "Gif Pala.jpg"
-IMG_CARGADOR = "Gif Cargador Frontal.jpg"
-IMG_CAEX_VACIO = "image_85a67d.png"
-IMG_CAEX_CARGADO = "image_86137b.png"
-
-# 1. Lienzo del circuito
+# 1. Crear lienzo de Plotly
 fig_circuito = go.Figure()
 
-# Vía de Ida Cargado (Superior y = +0.15)
+# Dibujar Vía de Ida Cargado (Superior y = +0.15)
 fig_circuito.add_trace(
     go.Scatter(
         x=[0, 3.5],
         y=[0.15, 0.15],
         mode="lines",
-        line=dict(color="#10B981", width=6, dash="dash"),
+        line=dict(color="#10B981", width=5, dash="dash"),
         name="Vía Ida (Cargado)",
         hoverinfo="none",
     )
 )
 
-# Vía de Retorno Vacío (Inferior y = -0.15)
+# Dibujar Vía de Retorno Vacío (Inferior y = -0.15)
 fig_circuito.add_trace(
     go.Scatter(
         x=[0, 3.5],
         y=[-0.15, -0.15],
         mode="lines",
-        line=dict(color="#DC2626", width=6, dash="solid"),
+        line=dict(color="#DC2626", width=5, dash="solid"),
         name="Vía Retorno (Vacío)",
         hoverinfo="none",
     )
 )
 
-# 2. Posicionar Palas y Cargadores en el Frente (x=0)
-x_frente, y_frente, txt_frente, hover_frente = [], [], [], []
+# 2. Posicionar Palas y Cargadores en el Frente (x = 0) con Imágenes/GIFs
 idx_c = 0
-
 for _, r in ed_palas.iterrows():
     if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-        offset_y = 0.35 + (idx_c * 0.25)
-        x_frente.append(0)
-        y_frente.append(offset_y)
-        txt_frente.append(f"Pala {r['ID']}")
-        hover_frente.append(
-            f"<b>Pala {r['ID']}</b><br>Modelo: {r['Modelo']}<br>Estado:"
-            f" {r['Estado']}<br>Operador: {r['Operador']}"
+        pos_y = 0.38 + (idx_c * 0.28)
+
+        # Insertar GIF/Imagen de la Pala
+        fig_circuito.add_layout_image(
+            dict(
+                source="Gif Pala.jpg",
+                xref="x",
+                yref="y",
+                x=-0.12,
+                y=pos_y + 0.1,
+                sizex=0.25,
+                sizey=0.25,
+                xanchor="center",
+                yanchor="middle",
+            )
+        )
+
+        fig_circuito.add_trace(
+            go.Scatter(
+                x=[0],
+                y=[pos_y - 0.12],
+                mode="text",
+                text=[f"Pala {r['ID']}"],
+                textposition="bottom center",
+                textfont=dict(size=9, color="#0F172A", family="Arial Black"),
+                showlegend=False,
+                hoverinfo="text",
+                hovertext=[
+                    f"<b>Pala {r['ID']}</b><br>Modelo: {r['Modelo']}<br>Operador:"
+                    f" {r['Operador']}"
+                ],
+            )
         )
         idx_c += 1
 
 for _, r in ed_cf.iterrows():
     if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-        offset_y = -0.35 - (idx_c * 0.25)
-        x_frente.append(0)
-        y_frente.append(offset_y)
-        txt_frente.append(f"CF {r['ID']}")
-        hover_frente.append(
-            f"<b>Cargador {r['ID']}</b><br>Modelo: {r['Modelo']}<br>Estado:"
-            f" {r['Estado']}<br>Operador: {r['Operador']}"
+        pos_y = -0.38 - (idx_c * 0.28)
+
+        # Insertar GIF/Imagen del Cargador Frontal
+        fig_circuito.add_layout_image(
+            dict(
+                source="Gif Cargador Frontal.jpg",
+                xref="x",
+                yref="y",
+                x=-0.12,
+                y=pos_y + 0.1,
+                sizex=0.25,
+                sizey=0.25,
+                xanchor="center",
+                yanchor="middle",
+            )
+        )
+
+        fig_circuito.add_trace(
+            go.Scatter(
+                x=[0],
+                y=[pos_y - 0.12],
+                mode="text",
+                text=[f"CF {r['ID']}"],
+                textposition="bottom center",
+                textfont=dict(size=9, color="#0F172A", family="Arial Black"),
+                showlegend=False,
+                hoverinfo="text",
+                hovertext=[
+                    f"<b>Cargador {r['ID']}</b><br>Modelo:"
+                    f" {r['Modelo']}<br>Operador: {r['Operador']}"
+                ],
+            )
         )
         idx_c += 1
 
-fig_circuito.add_trace(
-    go.Scatter(
-        x=x_frente,
-        y=y_frente,
-        mode="markers+text",
-        marker=dict(size=18, symbol="square", color="#0284C7"),
-        text=txt_frente,
-        textposition="top center",
-        textfont=dict(size=9, color="#0F172A"),
-        name="Unidades de Carguío",
-        hoverinfo="text",
-        hovertext=hover_frente,
-    )
-)
-
-# 3. Flota CAEX
+# 3. Flota de Camiones CAEX (Con Imágenes Cargado/Vacío)
 caex_agendados = ed_caex[ed_caex["Agendar"] == True]
 total_caex_count = len(caex_agendados)
-
-x_caex, y_caex, txt_caex, hover_caex, colores_caex = [], [], [], [], []
 
 if not st.session_state.acarreo_iniciado:
     # --- POSICIÓN EN FILA DE ESPERA (x <= 0) ---
     for i, (_, r) in enumerate(caex_agendados.iterrows()):
-        x_caex.append(0.0 - (i * 0.18))
-        y_caex.append(0.15)
-        txt_caex.append(f"C{r['ID']}")
-        colores_caex.append("#F59E0B")
-        hover_caex.append(
-            f"<b>CAEX {r['ID']}</b> (En Fila)<br>Estado: Esperando Primer Balde"
+        pos_x = 0.0 - (i * 0.22)
+        pos_y = 0.15
+
+        # Renderizar CAEX en espera
+        fig_circuito.add_layout_image(
+            dict(
+                source="image_85a67d.png",
+                xref="x",
+                yref="y",
+                x=pos_x,
+                y=pos_y + 0.08,
+                sizex=0.22,
+                sizey=0.22,
+                xanchor="center",
+                yanchor="middle",
+            )
+        )
+
+        fig_circuito.add_trace(
+            go.Scatter(
+                x=[pos_x],
+                y=[pos_y - 0.10],
+                mode="text",
+                text=[f"C{r['ID']}"],
+                textposition="bottom center",
+                textfont=dict(size=8, color="#0F172A"),
+                showlegend=False,
+                hoverinfo="text",
+                hovertext=[
+                    f"<b>CAEX {r['ID']}</b> (En Fila)<br>Estado: Esperando"
+                    " Primer Balde"
+                ],
+            )
         )
 
     st.info(
@@ -1302,54 +1354,62 @@ else:
     # --- MOVIMIENTO EN DOS VÍAS ---
     for i, (_, r) in enumerate(caex_agendados.iterrows()):
         es_ida = i % 2 == 0
+
         if es_ida:
+            # Vía Superior: Acarreo Cargado (mirando a la derecha)
             pos_x = 0.4 + (i * (2.6 / max(1, total_caex_count)))
             pos_y = 0.15
-            txt = f"CAEX {r['ID']} (44.6T)"
-            color = "#10B981"
-            estado_txt = "Acarreo Cargado -> Chancador/Pila"
+            img_src = "image_86137b.png"  # CAEX Cargado
+            label_txt = f"C{r['ID']} (44.6T)"
+            estado_txt = "Acarreo Cargado -> Destino"
         else:
+            # Vía Inferior: Retorno Vacío (retornando a la izquierda)
             pos_x = 3.1 - (i * (2.6 / max(1, total_caex_count)))
             pos_y = -0.15
-            txt = f"CAEX {r['ID']} (0T)"
-            color = "#DC2626"
+            img_src = "image_85a67d.png"  # CAEX Vacío
+            label_txt = f"C{r['ID']} (0T)"
             estado_txt = "Retorno Vacío -> Pala"
 
-        x_caex.append(pos_x)
-        y_caex.append(pos_y)
-        txt_caex.append(txt)
-        colores_caex.append(color)
-        hover_caex.append(
-            f"<b>CAEX {r['ID']}</b><br>Tramo: {estado_txt}<br>Operador:"
-            f" {r['Operador']}"
+        # Insertar imagen del CAEX correspondiente
+        fig_circuito.add_layout_image(
+            dict(
+                source=img_src,
+                xref="x",
+                yref="y",
+                x=pos_x,
+                y=pos_y + 0.08,
+                sizex=0.24,
+                sizey=0.24,
+                xanchor="center",
+                yanchor="middle",
+            )
         )
 
-# Trazar puntos de Camiones con texto ajustado
-fig_circuito.add_trace(
-    go.Scatter(
-        x=x_caex,
-        y=y_caex,
-        mode="markers+text",
-        marker=dict(size=16, symbol="circle", color=colores_caex),
-        text=txt_caex,
-        textposition="bottom center",
-        textfont=dict(size=9, color="#0F172A"),
-        name="Flota CAEX",
-        hoverinfo="text",
-        hovertext=hover_caex,
-    )
-)
+        fig_circuito.add_trace(
+            go.Scatter(
+                x=[pos_x],
+                y=[pos_y - 0.10],
+                mode="text",
+                text=[label_txt],
+                textposition="bottom center",
+                textfont=dict(size=8, color="#0F172A", family="Arial"),
+                showlegend=False,
+                hoverinfo="text",
+                hovertext=[
+                    f"<b>CAEX {r['ID']}</b><br>Tramo: {estado_txt}<br>Operador:"
+                    f" {r['Operador']}"
+                ],
+            )
+        )
 
-# 5. Punto de Llegada Ajustado
+# 5. PUNTO DE LLEGADA (CHANCADOR / BOTADERO / PILA)
+# Marcador visual de destino (x = 3.5)
 fig_circuito.add_trace(
     go.Scatter(
         x=[3.5],
         y=[0],
-        mode="markers+text",
-        marker=dict(size=24, symbol="hexagram", color="#DC2626"),
-        text=["CHANCADOR / BOTADERO / PILA"],
-        textposition="top center",
-        textfont=dict(size=10, color="#0F172A"),
+        mode="markers",
+        marker=dict(size=22, symbol="hexagram", color="#DC2626"),
         name="Zona de Entrega",
         hoverinfo="text",
         hovertext=[
@@ -1358,21 +1418,36 @@ fig_circuito.add_trace(
     )
 )
 
+# Texto destacado POR ENCIMA del hito (y = 0.45) para no tapar la línea verde
+fig_circuito.add_trace(
+    go.Scatter(
+        x=[3.5],
+        y=[0.45],
+        mode="text",
+        text=["<b>CHANCADOR / BOTADERO / PILA</b>"],
+        textposition="top center",
+        textfont=dict(size=13, color="#DC2626", family="Arial Black"),
+        showlegend=False,
+        hoverinfo="none",
+    )
+)
+
+# Formato visual del lienzo
 fig_circuito.update_layout(
     xaxis=dict(
         title="Distancia de Acarreo (Kilómetros)",
-        range=[-1.2, 4.0],
+        range=[-1.4, 4.2],
         zeroline=False,
         showgrid=True,
     ),
     yaxis=dict(
         title="",
-        range=[-1.0, 1.0],
+        range=[-1.1, 1.1],
         showticklabels=False,
         zeroline=False,
         showgrid=False,
     ),
-    height=380,
+    height=420,
     margin=dict(l=20, r=20, t=30, b=30),
     paper_bgcolor="#F8FAFC",
     plot_bgcolor="#FFFFFF",
