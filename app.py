@@ -1182,10 +1182,13 @@ st.caption(
 if "acarreo_iniciado" not in st.session_state:
     st.session_state.acarreo_iniciado = False
 
+# 3. BOTÓN DISPARADOR / TRIGGER VISIBLE Y DESTACADO
 col_trig_a, col_trig_b = st.columns([2, 1])
 with col_trig_a:
     if st.button(
-        "🚀 DISPARADOR: CONFIRMAR PRIMER BALDE DE PALA (AVISO POR RADIO VHF)"
+        "🚀 DISPARADOR: CONFIRMAR PRIMER BALDE DE PALA (AVISO POR RADIO VHF)",
+        type="primary",
+        use_container_width=True,
     ):
         st.session_state.acarreo_iniciado = True
         st.success(
@@ -1194,13 +1197,19 @@ with col_trig_a:
         )
 
 with col_trig_b:
-    if st.button("🔄 Reiniciar Postura en Fila"):
+    if st.button("🔄 Reiniciar Postura en Fila", use_container_width=True):
         st.session_state.acarreo_iniciado = False
 
-# 1. Crear lienzo Plotly para las 2 vías
+# Rutas de imágenes
+IMG_PALA = "Gif Pala.jpg"
+IMG_CARGADOR = "Gif Cargador Frontal.jpg"
+IMG_CAEX_VACIO = "image_85a67d.png"
+IMG_CAEX_CARGADO = "image_86137b.png"
+
+# 1. Lienzo del circuito
 fig_circuito = go.Figure()
 
-# Dibujar Vía de Ida Cargado (Superior y = +0.15)
+# Vía de Ida Cargado (Superior y = +0.15)
 fig_circuito.add_trace(
     go.Scatter(
         x=[0, 3.5],
@@ -1212,7 +1221,7 @@ fig_circuito.add_trace(
     )
 )
 
-# Dibujar Vía de Retorno Vacío (Inferior y = -0.15)
+# Vía de Retorno Vacío (Inferior y = -0.15)
 fig_circuito.add_trace(
     go.Scatter(
         x=[0, 3.5],
@@ -1224,7 +1233,7 @@ fig_circuito.add_trace(
     )
 )
 
-# 2. Posicionar Unidades de Carguío en el Frente (Origen x=0)
+# 2. Posicionar Palas y Cargadores en el Frente (x=0)
 x_frente, y_frente, txt_frente, hover_frente = [], [], [], []
 idx_c = 0
 
@@ -1245,7 +1254,7 @@ for _, r in ed_cf.iterrows():
         offset_y = -0.35 - (idx_c * 0.25)
         x_frente.append(0)
         y_frente.append(offset_y)
-        txt_frente.append(f"Cargador {r['ID']}")
+        txt_frente.append(f"CF {r['ID']}")
         hover_frente.append(
             f"<b>Cargador {r['ID']}</b><br>Modelo: {r['Modelo']}<br>Estado:"
             f" {r['Estado']}<br>Operador: {r['Operador']}"
@@ -1257,16 +1266,17 @@ fig_circuito.add_trace(
         x=x_frente,
         y=y_frente,
         mode="markers+text",
-        marker=dict(size=20, symbol="square", color="#0284C7"),
+        marker=dict(size=18, symbol="square", color="#0284C7"),
         text=txt_frente,
         textposition="top center",
+        textfont=dict(size=9, color="#0F172A"),
         name="Unidades de Carguío",
         hoverinfo="text",
         hovertext=hover_frente,
     )
 )
 
-# 3. Lógica de Camiones CAEX (Escenario 1: Espera en fila | Escenario 2: Turno activo)
+# 3. Flota CAEX
 caex_agendados = ed_caex[ed_caex["Agendar"] == True]
 total_caex_count = len(caex_agendados)
 
@@ -1275,9 +1285,9 @@ x_caex, y_caex, txt_caex, hover_caex, colores_caex = [], [], [], [], []
 if not st.session_state.acarreo_iniciado:
     # --- POSICIÓN EN FILA DE ESPERA (x <= 0) ---
     for i, (_, r) in enumerate(caex_agendados.iterrows()):
-        x_caex.append(0.0 - (i * 0.15))
+        x_caex.append(0.0 - (i * 0.18))
         y_caex.append(0.15)
-        txt_caex.append(f"CAEX {r['ID']}")
+        txt_caex.append(f"C{r['ID']}")
         colores_caex.append("#F59E0B")
         hover_caex.append(
             f"<b>CAEX {r['ID']}</b> (En Fila)<br>Estado: Esperando Primer Balde"
@@ -1295,13 +1305,13 @@ else:
         if es_ida:
             pos_x = 0.4 + (i * (2.6 / max(1, total_caex_count)))
             pos_y = 0.15
-            txt = f"CAEX {r['ID']} (44.6 Ton)"
+            txt = f"CAEX {r['ID']} (44.6T)"
             color = "#10B981"
-            estado_txt = "Acarreo Cargado -> Botadero"
+            estado_txt = "Acarreo Cargado -> Chancador/Pila"
         else:
             pos_x = 3.1 - (i * (2.6 / max(1, total_caex_count)))
             pos_y = -0.15
-            txt = f"CAEX {r['ID']} (0 Ton)"
+            txt = f"CAEX {r['ID']} (0T)"
             color = "#DC2626"
             estado_txt = "Retorno Vacío -> Pala"
 
@@ -1314,32 +1324,37 @@ else:
             f" {r['Operador']}"
         )
 
+# Trazar puntos de Camiones con texto ajustado
 fig_circuito.add_trace(
     go.Scatter(
         x=x_caex,
         y=y_caex,
         mode="markers+text",
-        marker=dict(size=18, symbol="circle", color=colores_caex),
+        marker=dict(size=16, symbol="circle", color=colores_caex),
         text=txt_caex,
         textposition="bottom center",
+        textfont=dict(size=9, color="#0F172A"),
         name="Flota CAEX",
         hoverinfo="text",
         hovertext=hover_caex,
     )
 )
 
-# 4. Zona de Entrega / Chancador Primario (Destino x=3.5)
+# 5. Punto de Llegada Ajustado
 fig_circuito.add_trace(
     go.Scatter(
         x=[3.5],
         y=[0],
         mode="markers+text",
-        marker=dict(size=26, symbol="hexagram", color="#DC2626"),
-        text=["CHANCADOR / BOTADERO"],
+        marker=dict(size=24, symbol="hexagram", color="#DC2626"),
+        text=["CHANCADOR / BOTADERO / PILA"],
         textposition="top center",
+        textfont=dict(size=10, color="#0F172A"),
         name="Zona de Entrega",
         hoverinfo="text",
-        hovertext=["<b>Chancador Primario & Botadero</b><br>Punto de Descarga"],
+        hovertext=[
+            "<b>Chancador / Botadero / Pila</b><br>Punto de Descarga Final"
+        ],
     )
 )
 
