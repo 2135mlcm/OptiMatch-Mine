@@ -216,11 +216,11 @@ def fmt_num(val, dec=0):
 
 
 def obtener_base64_img(nombre_archivo):
-  # Busca en la carpeta raíz o directorio actual
   posibles_rutas = [
       nombre_archivo,
       os.path.join(os.getcwd(), nombre_archivo),
       os.path.join(os.path.dirname(__file__), nombre_archivo),
+      os.path.join(os.getcwd(), "static", nombre_archivo),
   ]
   for r in posibles_rutas:
     if os.path.exists(r):
@@ -427,20 +427,22 @@ st.markdown(
         margin-bottom: 6px !important;
     }
 
-    /* ESTILO BOTÓN ROJO DE INICIO SIN MARCO ROJO CONTENEDOR */
+    /* 1. BOTÓN ROJO DE CONTROL INDUSTRIAL MÁS GRANDE Y SIN MARCO */
     div.stButton > button[kind="primary"] {
         background-color: #DC2626 !important;
         color: #FFFFFF !important;
         border: none !important;
         font-weight: 900 !important;
-        font-size: 16px !important;
-        border-radius: 30px !important;
-        height: 48px !important;
-        box-shadow: 0px 4px 10px rgba(220, 38, 38, 0.3) !important;
+        font-size: 18px !important;
+        border-radius: 35px !important;
+        height: 60px !important;
+        box-shadow: 0px 6px 14px rgba(220, 38, 38, 0.4) !important;
+        transition: all 0.2s ease-in-out !important;
     }
     div.stButton > button[kind="primary"]:hover {
         background-color: #B91C1C !important;
         color: #FFFFFF !important;
+        transform: scale(1.02) !important;
     }
     </style>
 """,
@@ -1203,19 +1205,18 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS (IMÁGENES Y BANDEROLA LIMPIA)
+# MÓDULO DE SEGUIMIENTO ESPACIAL EN DOS VÍAS (2. REMOCIÓN DE LIENZO PREVIO SOBRANTE)
 # ---------------------------------------------------------
-st.markdown("---")
 st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo de Dos Vías")
 
 if "acarreo_iniciado" not in st.session_state:
   st.session_state.acarreo_iniciado = False
 
-# 1. BANDEROLA DE DISTANCIA DE ACARREO
 dist_km_val = (
     distancia_acarreo_km if "distancia_acarreo_km" in locals() else 3.5
 )
 
+# Banderola limpia de distancia
 st.markdown(
     f"""
     <div style="background-color: #0F172A; border: 3px solid #F59E0B; border-radius: 10px; padding: 12px 20px; text-align: center; margin-bottom: 15px;">
@@ -1230,8 +1231,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 2. BOTÓN DISPARADOR ROJO DIRECTO SIN CONTENEDOR ENMARCADO
-col_trig1, col_trig2, col_trig3 = st.columns([1.8, 3.2, 1.5])
+# 1. BOTÓN ROJO DE CONTROL INDUSTRIAL MÁS GRANDE Y SIN MARCO
+col_trig1, col_trig2, col_trig3 = st.columns([2.2, 3.2, 1.5])
 
 with col_trig1:
   btn_trig = st.button(
@@ -1244,7 +1245,7 @@ with col_trig1:
 with col_trig2:
   st.markdown(
       """
-        <div style="padding: 10px 0px;">
+        <div style="padding: 12px 0px;">
             <span style="color: #0F172A !important; font-weight: 900 !important; font-size: 15px !important; display: block;">
                 📻 <b>AVISO RADIO VHF:</b> Presione el botón rojo de inicio para autorizar el zarpe de la flota tras el primer balde cargado.
             </span>
@@ -1257,24 +1258,24 @@ with col_trig3:
   if st.button("🔄 Reiniciar Postura", use_container_width=True):
     st.session_state.acarreo_iniciado = False
 
-# 3. CARGA ROBUSTA DE IMÁGENES BASE64
+# 3. CARGA DIRECTA E INFALIBLE DE IMÁGENES EN BASE64
 img_pala = (
     obtener_base64_img("image_859ef9.png")
     or obtener_base64_img("Gif Pala.jpg")
-    or "https://img.icons8.com/color/96/excavator.png"
+    or "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 )
 img_cf = (
     obtener_base64_img("image_859f19.png")
     or obtener_base64_img("Gif Cargador Frontal.jpg")
-    or "https://img.icons8.com/color/96/bulldozer.png"
+    or "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 )
 img_caex_vacio = (
     obtener_base64_img("image_85a67d.png")
-    or "https://img.icons8.com/color/96/dump-truck.png"
+    or "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 )
 img_caex_cargado = (
     obtener_base64_img("image_86137b.png")
-    or "https://img.icons8.com/color/96/dump-truck.png"
+    or "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 )
 
 fig_circuito = go.Figure()
@@ -1303,11 +1304,11 @@ fig_circuito.add_trace(
     )
 )
 
-# 4. PALAS Y CARGADORES (CON IMAGEN Y TEXTO A LA DERECHA)
-idx_c = 0
+# RENDERIZADO DE PALAS
+idx_pala = 0
 for _, r in ed_palas.iterrows():
   if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-    pos_y = 0.45 + (idx_c * 0.32)
+    pos_y = 0.40 + (idx_pala * 0.28)
 
     fig_circuito.add_layout_image(
         dict(
@@ -1324,27 +1325,36 @@ for _, r in ed_palas.iterrows():
         )
     )
 
+    hover_details = (
+        f"<b>EQUIPO DE CARGUÍO: Pala {r['ID']}</b><br>"
+        f"• Modelo: {r['Modelo']}<br>"
+        f"• Operador Asignado: {r['Operador']}<br>"
+        f"• Rendimiento: {r['Rend_TonH']} Ton/h<br>"
+        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
+        f"• Costo Fijo: ${r['Costo_USDH']} USD/h"
+    )
+
     fig_circuito.add_trace(
         go.Scatter(
-            x=[0.15],
-            y=[pos_y],
-            mode="text",
-            text=[f"<b>Pala {r['ID']}</b>"],
+            x=[-0.15, 0.18],
+            y=[pos_y, pos_y],
+            mode="markers+text",
+            marker=dict(size=[28, 1], opacity=[0.01, 0]),
+            text=["", f"<b>Pala {r['ID']}</b>"],
             textposition="middle right",
-            textfont=dict(size=12, color="#0F172A", family="Arial Black"),
+            textfont=dict(size=11, color="#0F172A", family="Arial Black"),
             showlegend=False,
             hoverinfo="text",
-            hovertext=[
-                f"<b>Pala {r['ID']}</b><br>Modelo: {r['Modelo']}<br>Operador:"
-                f" {r['Operador']}"
-            ],
+            hovertext=[hover_details, hover_details],
         )
     )
-    idx_c += 1
+    idx_pala += 1
 
+# 4. RENDERIZADO INDEPENDIENTE PARA MÚLTIPLES CARGADORES FRONTALES (CF)
+idx_cf = 0
 for _, r in ed_cf.iterrows():
   if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-    pos_y = -0.45 - (idx_c * 0.32)
+    pos_y = -0.38 - (idx_cf * 0.28)
 
     fig_circuito.add_layout_image(
         dict(
@@ -1361,25 +1371,32 @@ for _, r in ed_cf.iterrows():
         )
     )
 
+    hover_details = (
+        f"<b>EQUIPO DE CARGUÍO: Cargador {r['ID']}</b><br>"
+        f"• Modelo: {r['Modelo']}<br>"
+        f"• Operador Asignado: {r['Operador']}<br>"
+        f"• Rendimiento: {r['Rend_TonH']} Ton/h<br>"
+        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
+        f"• Costo Fijo: ${r['Costo_USDH']} USD/h"
+    )
+
     fig_circuito.add_trace(
         go.Scatter(
-            x=[0.15],
-            y=[pos_y],
-            mode="text",
-            text=[f"<b>CF {r['ID']}</b>"],
+            x=[-0.15, 0.18],
+            y=[pos_y, pos_y],
+            mode="markers+text",
+            marker=dict(size=[28, 1], opacity=[0.01, 0]),
+            text=["", f"<b>CF {r['ID']}</b>"],
             textposition="middle right",
-            textfont=dict(size=12, color="#0F172A", family="Arial Black"),
+            textfont=dict(size=11, color="#0F172A", family="Arial Black"),
             showlegend=False,
             hoverinfo="text",
-            hovertext=[
-                f"<b>Cargador {r['ID']}</b><br>Modelo:"
-                f" {r['Modelo']}<br>Operador: {r['Operador']}"
-            ],
+            hovertext=[hover_details, hover_details],
         )
     )
-    idx_c += 1
+    idx_cf += 1
 
-# 5. FLOTA DE CAMIONES CAEX (CON IMAGEN Y TEXTO DEBAJO)
+# 3. RENDERIZADO DE CAMIONES CAEX CON FICHAS BASE64
 caex_agendados = ed_caex[ed_caex["Agendar"] == True]
 total_caex_count = len(caex_agendados)
 
@@ -1404,23 +1421,34 @@ if not st.session_state.acarreo_iniciado:
         )
     )
 
+    hover_caex = (
+        f"<b>CAMIÓN MINERO CAEX {r['ID']}</b><br>"
+        f"• Estado: En Fila de Espera (Pala)<br>"
+        f"• Modelo: {r['Modelo']}<br>"
+        f"• Operador: {r['Operador']}<br>"
+        f"• Carga Actual: 0.0 Ton (Vacío)<br>"
+        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
+        f"• Costo OPEX: ${r['Costo_USDH']} USD/h"
+    )
+
     fig_circuito.add_trace(
         go.Scatter(
-            x=[pos_x],
-            y=[pos_y - 0.14],
-            mode="text",
-            text=[f"<b>C{r['ID']}</b>"],
+            x=[pos_x, pos_x],
+            y=[pos_y + 0.10, pos_y - 0.14],
+            mode="markers+text",
+            marker=dict(size=[30, 1], opacity=[0.01, 0]),
+            text=["", f"<b>C{r['ID']}</b>"],
             textposition="bottom center",
-            textfont=dict(size=11, color="#0F172A", family="Arial Black"),
+            textfont=dict(size=10, color="#0F172A", family="Arial Black"),
             showlegend=False,
             hoverinfo="text",
-            hovertext=[f"<b>CAEX {r['ID']}</b><br>Estado: En Fila de Espera"],
+            hovertext=[hover_caex, hover_caex],
         )
     )
 
   st.info(
-      "📍 **FLOTA PARQUEADA EN FILA DE ESPERA:** Presione el botón '🔴 INICIO"
-      " DE ACARREO' para desplegar la flota en ruta."
+      "📍 **FLOTA PARQUEADA EN FILA DE ESPERA:** Presione '🔴 INICIO DE ACARREO'"
+      " para despejar la ruta."
   )
 
 else:
@@ -1432,14 +1460,16 @@ else:
       pos_x = 0.4 + (i * (2.6 / max(1, total_caex_count)))
       pos_y = 0.15
       src_b64 = img_caex_cargado
+      carga_txt = "44.6 Ton (Cargado)"
       label_txt = f"<b>C{r['ID']} (44.6T)</b>"
-      estado_txt = "Acarreo Cargado -> Destino"
+      tramo_txt = "Acarreo Cargado -> Chancador/Pila"
     else:
       pos_x = 3.1 - (i * (2.6 / max(1, total_caex_count)))
       pos_y = -0.15
       src_b64 = img_caex_vacio
+      carga_txt = "0.0 Ton (Vacío)"
       label_txt = f"<b>C{r['ID']} (0T)</b>"
-      estado_txt = "Retorno Vacío -> Pala"
+      tramo_txt = "Retorno Vacío -> Pala"
 
     fig_circuito.add_layout_image(
         dict(
@@ -1456,24 +1486,33 @@ else:
         )
     )
 
+    hover_caex = (
+        f"<b>CAMIÓN MINERO CAEX {r['ID']}</b><br>"
+        f"• Tramo: {tramo_txt}<br>"
+        f"• Modelo: {r['Modelo']}<br>"
+        f"• Operador Asignado: {r['Operador']}<br>"
+        f"• Capacidad / Carga: {carga_txt}<br>"
+        f"• Rendimiento Acarreo: {r['Rend_TonH']} Ton/h<br>"
+        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
+        f"• Costo Fijo Turno: ${r['Costo_USDH']} USD/h"
+    )
+
     fig_circuito.add_trace(
         go.Scatter(
-            x=[pos_x],
-            y=[pos_y - 0.14],
-            mode="text",
-            text=[label_txt],
+            x=[pos_x, pos_x],
+            y=[pos_y + 0.10, pos_y - 0.14],
+            mode="markers+text",
+            marker=dict(size=[32, 1], opacity=[0.01, 0]),
+            text=["", label_txt],
             textposition="bottom center",
             textfont=dict(size=10, color="#0F172A", family="Arial Black"),
             showlegend=False,
             hoverinfo="text",
-            hovertext=[
-                f"<b>CAEX {r['ID']}</b><br>Tramo: {estado_txt}<br>Operador:"
-                f" {r['Operador']}"
-            ],
+            hovertext=[hover_caex, hover_caex],
         )
     )
 
-# 6. DESTINO DESTACADO (CHANCADOR / BOTADERO / PILA)
+# DESTINO DESTACADO (CHANCADOR / BOTADERO / PILA)
 fig_circuito.add_trace(
     go.Scatter(
         x=[3.5],
@@ -1495,7 +1534,7 @@ fig_circuito.add_trace(
         mode="text",
         text=["<b>CHANCADOR / BOTADERO / PILA</b>"],
         textposition="top center",
-        textfont=dict(size=14, color="#DC2626", family="Arial Black"),
+        textfont=dict(size=13, color="#DC2626", family="Arial Black"),
         showlegend=False,
         hoverinfo="none",
     )
@@ -1511,7 +1550,7 @@ fig_circuito.update_layout(
     ),
     yaxis=dict(
         title="",
-        range=[-1.2, 1.2],
+        range=[-1.1, 1.1],
         showticklabels=False,
         zeroline=False,
         showgrid=False,
