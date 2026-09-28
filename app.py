@@ -18,7 +18,7 @@ import streamlit.components.v1 as components
 # ---------------------------------------------------------
 def keep_alive_ping():
   while True:
-    time.sleep(900)  # Pulso en segundo plano cada 15 minutos
+    time.sleep(900)
     _ = datetime.now()
 
 
@@ -236,7 +236,7 @@ def obtener_base64_img(nombre_archivo):
 
 
 # ---------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA Y ESTILOS CSS
+# CONFIGURACIÓN DE PÁGINA Y CSS PERSONALIZADO (COMPACTO)
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="OptiMatch Mine - Control de Flota", page_icon="⛏️", layout="wide"
@@ -267,15 +267,6 @@ st.markdown(
         color: #F8FAFC !important;
         font-weight: 700 !important;
     }
-    
-    section[data-testid="stSidebar"] input {
-        background-color: #0F172A !important;
-        color: #FFFFFF !important;
-        border: 1px solid #F59E0B !important;
-        border-radius: 6px !important;
-        text-align: center !important;
-        font-weight: bold !important;
-    }
 
     .orange-container-box {
         background-color: #1E293B;
@@ -286,98 +277,22 @@ st.markdown(
         box-shadow: 0px 0px 6px rgba(245, 158, 11, 0.3);
     }
 
-    div[data-baseweb="select"],
-    div[data-baseweb="select"] *,
-    div[data-baseweb="select"] > div,
-    div[data-baseweb="select"] div[role="button"],
-    div[data-baseweb="select"] div[data-testid="stMarkdownContainer"] {
-        background-color: #0F172A !important;
-        color: #FFFFFF !important;
-        border-color: #F59E0B !important;
-    }
-
-    div[data-baseweb="select"] > div {
-        border: 1px solid #F59E0B !important;
-        border-radius: 6px !important;
-    }
-
-    div[data-baseweb="select"] span, 
-    div[data-baseweb="select"] p,
-    div[data-baseweb="select"] div {
-        color: #FFFFFF !important;
-        font-weight: 800 !important;
-        font-size: 14px !important;
-    }
-
-    div[data-baseweb="select"] svg {
-        fill: #F59E0B !important;
-        color: #F59E0B !important;
-    }
-
-    ul[data-baseweb="menu"], 
-    div[data-baseweb="popover"] > div,
-    div[data-baseweb="popover"] * {
-        background-color: #0F172A !important;
-        color: #FFFFFF !important;
-    }
-
-    li[data-baseweb="option"]:hover, 
-    li[data-baseweb="option"]:hover * {
-        background-color: #F59E0B !important;
-        color: #000000 !important;
-        font-weight: 900 !important;
-    }
-
-    .selector-label-centered {
-        color: #F59E0B !important;
-        font-size: 12px !important;
-        font-weight: 900 !important;
-        text-align: center !important;
-        display: block !important;
-        margin-bottom: 2px !important;
-        margin-top: 0px !important;
-    }
-
-    .auto-box {
-        background-color: #0F172A;
-        border: 1px solid #F59E0B;
-        border-radius: 6px;
-        padding: 6px 10px;
-        text-align: center;
-        font-size: 15px;
-        font-weight: 800;
-        color: #FFFFFF !important;
-        margin-bottom: 8px;
-    }
-
-    section[data-testid="stSidebar"] button,
-    section[data-testid="stSidebar"] button *,
-    section[data-testid="stSidebar"] button p,
-    section[data-testid="stSidebar"] button span {
-        background-color: #F59E0B !important;
-        color: #000000 !important;
-        -webkit-text-fill-color: #000000 !important;
-        font-weight: 900 !important;
-        font-size: 15px !important;
-        border-radius: 6px !important;
-    }
-
     .title-box {
         background-color: #F8FAFC;
-        padding: 20px 40px;
+        padding: 12px 30px;
         border-radius: 12px;
         border: 2px solid #D97706;
         box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.08);
         text-align: center;
         width: fit-content;
-        margin: 10px auto 25px auto;
+        margin: 5px auto 15px auto;
     }
 
     .centered-title {
         text-align: center !important;
         width: 100% !important;
-        margin-top: 20px !important;
-        margin-bottom: 15px !important;
+        margin-top: 10px !important;
+        margin-bottom: 10px !important;
     }
 
     div[data-testid="stDataFrame"] {
@@ -386,48 +301,13 @@ st.markdown(
         border-radius: 10px;
     }
 
-    div[data-testid="stMetricValue"] {
-        color: #0284C7 !important;
-        font-size: 20px !important;
-        font-weight: bold !important;
-        white-space: nowrap !important;
+    /* REDUCCIÓN DE ESPACIOS VERTICALES ENTRE SECCIONES */
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 1rem !important;
     }
 
-    .mf-label {
-        font-size: 22px !important;
-        font-weight: 800 !important;
-        color: #0F172A !important;
-        margin-bottom: 4px !important;
-    }
-    .mf-value {
-        font-size: 36px !important;
-        font-weight: 900 !important;
-        color: #0284C7 !important;
-        margin-top: 0px !important;
-    }
-
-    .highlight-red-large {
-        color: #DC2626 !important;
-        font-size: 19px !important;
-        font-weight: 800 !important;
-        margin-bottom: 8px !important;
-    }
-
-    .adh-green-large {
-        color: #16A34A !important;
-        font-size: 22px !important;
-        font-weight: 900 !important;
-        margin-bottom: 6px !important;
-    }
-
-    .adh-red-large {
-        color: #DC2626 !important;
-        font-size: 22px !important;
-        font-weight: 900 !important;
-        margin-bottom: 6px !important;
-    }
-
-    /* ELIMINACIÓN TOTAL DE ENMARCADOS O BORDES EN EL BOTÓN ROJO DE CONTROL */
+    /* BOTÓN ROJO TOTALMENTE LIBRE SIN MARCOS EXTERNOS */
     div.stButton > button[kind="primary"] {
         background-color: #DC2626 !important;
         color: #FFFFFF !important;
@@ -435,18 +315,16 @@ st.markdown(
         outline: none !important;
         box-shadow: none !important;
         font-weight: 900 !important;
-        font-size: 18px !important;
-        border-radius: 35px !important;
-        height: 60px !important;
-        padding: 0px 25px !important;
+        font-size: 16px !important;
+        border-radius: 30px !important;
+        height: 52px !important;
+        padding: 0px 20px !important;
         margin: 0px !important;
     }
     div.stButton > button[kind="primary"]:hover {
         background-color: #B91C1C !important;
         color: #FFFFFF !important;
         border: none !important;
-        outline: none !important;
-        box-shadow: none !important;
     }
     </style>
 """,
@@ -467,25 +345,12 @@ if not st.session_state.autenticado:
     st.markdown("<br>", unsafe_allow_html=True)
     if os.path.exists(LOGO_PATH):
       st.image(LOGO_PATH, width=320)
-    else:
-      st.markdown(
-          """
-                <div style="text-align: center; background-color: #1E293B; padding: 20px; border-radius: 15px; border: 2px solid #F59E0B;">
-                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️ OptiMatch Mine</h1>
-                    <h3 style="color: #F8FAFC; margin-top: 5px;">Control de Flota y Agendamiento Pre-Turno</h3>
-                </div>
-            """,
-          unsafe_allow_html=True,
-      )
-
     st.markdown(
         "<p style='text-align: center; font-weight: 800; font-size:"
         " 15px;'>Acceso Restringido por Perfil | Universidad Alberto"
         " Hurtado</p>",
         unsafe_allow_html=True,
     )
-    st.markdown("<br>", unsafe_allow_html=True)
-
     with st.form("login_form_secure", clear_on_submit=True):
       usuario = st.text_input(
           "Nombre de Usuario:",
@@ -529,16 +394,14 @@ if os.path.exists(LOGO_PATH):
 st.markdown(
     """
     <div class="title-box">
-        <h1 style="color: #0F172A; margin: 0; font-size: 28px; font-weight: 800;">OptiMatch Mine — Control de Flota</h1>
-        <p style="color: #0284C7; margin: 6px 0 0 0; font-size: 14px; font-weight: 800; letter-spacing: 0.5px;">
+        <h1 style="color: #0F172A; margin: 0; font-size: 26px; font-weight: 800;">OptiMatch Mine — Control de Flota</h1>
+        <p style="color: #0284C7; margin: 4px 0 0 0; font-size: 13px; font-weight: 800; letter-spacing: 0.5px;">
             SISTEMA PRESCRIPTIVO DE DECISIONES PRE-TURNO PARA LA MEDIANA MINERÍA
         </p>
     </div>
 """,
     unsafe_allow_html=True,
 )
-
-st.markdown("---")
 
 # ---------------------------------------------------------
 # BARRA LATERAL (SIDEBAR)
@@ -547,13 +410,10 @@ st.sidebar.header("🏢 Registro Operativo Mina")
 nombre_mina = st.sidebar.text_input(
     "Nombre de la Mina / Faena", value="Mina Franke - Calama"
 )
-
 num_agendamiento_auto = obtener_siguiente_agendamiento()
 num_agendamiento = st.sidebar.text_input(
     "N° de Agendamiento Correlativo", value=num_agendamiento_auto
 )
-
-st.sidebar.markdown("---")
 
 now_dt = datetime.now()
 fecha_str = now_dt.strftime("%d/%m/%Y")
@@ -568,50 +428,24 @@ dias_semana_es = [
 ]
 nombre_dia_actual = dias_semana_es[now_dt.weekday()]
 
-st.sidebar.markdown(
-    f'<div class="auto-box">{nombre_dia_actual}, {fecha_str}</div>',
-    unsafe_allow_html=True,
-)
-
-hora_str = now_dt.strftime("%H:%M:%S")
-
-st.sidebar.markdown(
-    '<div class="orange-container-box">', unsafe_allow_html=True
-)
-st.sidebar.markdown(
-    '<span class="selector-label-centered">RÉGIMEN Y GUARDIA DE TRABAJO</span>',
-    unsafe_allow_html=True,
-)
 tipo_turno_sel = st.sidebar.selectbox(
-    "",
+    "Régimen Guardia",
     ["Turno 7x7", "Turno 4x3", "Turno 8x6", "Turno 5x2", "Otro"],
     key="select_regimen_box",
 )
 regimen_guardia = f"{tipo_turno_sel} ({nombre_dia_actual})"
-st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
-st.sidebar.markdown(
-    '<div class="orange-container-box">', unsafe_allow_html=True
-)
-st.sidebar.markdown(
-    '<span class="selector-label-centered">SELECCIONAR TURNO'
-    " OPERATIVO</span>",
-    unsafe_allow_html=True,
-)
 turno_seleccionado = st.sidebar.selectbox(
-    "",
+    "Turno Operativo",
     ["Turno 1 (Día / 08:00 - 18:00)", "Turno 2 (Noche / 20:00 - 06:00)"],
     key="select_turno_box",
 )
-st.sidebar.markdown("</div>", unsafe_allow_html=True)
-
 horas_turno = st.sidebar.number_input(
     "Horas Efectivas Turno", value=10.0, step=0.5
 )
 
 st.sidebar.markdown("---")
 st.sidebar.header("⛏️ Plan de Producción")
-
 target_mineral_num = st.sidebar.number_input(
     "Objetivo Mineral (Ton)", value=18000, step=1000
 )
@@ -619,10 +453,7 @@ target_esteril_num = st.sidebar.number_input(
     "Objetivo Estéril (Ton)", value=12000, step=1000
 )
 
-st.sidebar.markdown("---")
-
 tc_mercado, diesel_mercado = obtener_indicadores_mercado()
-
 precio_diesel = st.sidebar.number_input(
     "Precio Diésel (USD / Litro Contrato)",
     value=float(diesel_mercado),
@@ -639,7 +470,7 @@ distancia_acarreo_km = st.sidebar.number_input(
 )
 
 # ---------------------------------------------------------
-# TABLAS DINÁMICAS DE FLOTA
+# TABLAS DINÁMICAS DE FLOTA (CON IMÁGENES AL INICIO DEL TEXTO)
 # ---------------------------------------------------------
 if "palas_df" not in st.session_state:
   st.session_state.palas_df = pd.DataFrame([
@@ -752,25 +583,76 @@ if "caex_df" not in st.session_state:
       },
   ])
 
-st.markdown("<h2 class='centered-title'>🚜 Flota Operativa</h2>", unsafe_allow_html=True)
+st.markdown(
+    "<h3 style='text-align: center; margin-bottom: 12px;'>🚜 Estado y"
+    " Agendamiento de Flota Operativa</h3>",
+    unsafe_allow_html=True,
+)
 col_t1, col_t2, col_t3 = st.columns(3)
 
+opciones_estado = ["🟢 Disponible", "🟡 Mantenimiento", "🔴 Falla Mecánica"]
+
+# RESTABLECIMIENTO DE LAS IMÁGENES AL INICIO DEL TEXTO DE CADA EQUIPO
 with col_t1:
-  st.markdown("### Palas de Carguío")
+  c_img, c_txt = st.columns([1, 2])
+  with c_img:
+    if os.path.exists("Gif Pala.jpg"):
+      st.image("Gif Pala.jpg", width=65)
+  with c_txt:
+    st.markdown("### Palas de Carguío")
+
   ed_palas = st.data_editor(
-      st.session_state.palas_df, hide_index=True, key="ed_palas"
+      st.session_state.palas_df,
+      column_config={
+          "Item": st.column_config.NumberColumn("Item", disabled=True),
+          "Estado": st.column_config.SelectboxColumn(
+              "Estado", options=opciones_estado
+          ),
+      },
+      hide_index=True,
+      key="ed_palas",
   )
 
 with col_t2:
-  st.markdown("### Cargadores Frontales")
+  c_img, c_txt = st.columns([1, 2])
+  with c_img:
+    if os.path.exists("Gif Cargador Frontal.jpg"):
+      st.image("Gif Cargador Frontal.jpg", width=65)
+  with c_txt:
+    st.markdown("### Cargadores Frontales")
+
   ed_cf = st.data_editor(
-      st.session_state.cf_df, hide_index=True, key="ed_cf"
+      st.session_state.cf_df,
+      column_config={
+          "Item": st.column_config.NumberColumn("Item", disabled=True),
+          "Estado": st.column_config.SelectboxColumn(
+              "Estado", options=opciones_estado
+          ),
+      },
+      hide_index=True,
+      key="ed_cf",
   )
 
 with col_t3:
-  st.markdown("### Camiones CAEX")
+  c_img, c_txt = st.columns([1, 2])
+  with c_img:
+    if os.path.exists("Camión CAEX Vacío.png"):
+      st.image("Camión CAEX Vacío.png", width=65)
+    elif os.path.exists("Gif Camión Minero.jpg"):
+      st.image("Gif Camión Minero.jpg", width=65)
+  with c_txt:
+    st.markdown("### Camiones CAEX")
+
   ed_caex = st.data_editor(
-      st.session_state.caex_df, hide_index=True, key="ed_caex"
+      st.session_state.caex_df,
+      column_config={
+          "Item": st.column_config.NumberColumn("Item", disabled=True),
+          "Estado": st.column_config.SelectboxColumn(
+              "Estado", options=opciones_estado
+          ),
+      },
+      hide_index=True,
+      key="ed_caex",
   )
 
 # ---------------------------------------------------------
@@ -810,10 +692,14 @@ tasa_efectiva = min(cap_carguio, cap_transporte)
 tonelaje_proyectado = tasa_efectiva * horas_turno
 
 # ---------------------------------------------------------
-# MONITOREO ESPACIAL DEL CIRCUITO DE ACARREO DE DOS VÍAS
+# MONITOREO ESPACIAL DEL CIRCUITO DE ACARREO (COMPACTO Y PRECISO)
 # ---------------------------------------------------------
-st.markdown("---")
-st.subheader("Monitoreo Espacial del Circuito de Acarreo de Dos Vías")
+st.markdown("<br>", unsafe_allow_html=True)
+st.markdown(
+    "<h3 style='margin-bottom: 6px;'>🗺️ Monitoreo Espacial del Circuito de"
+    " Acarreo de Dos Vías</h3>",
+    unsafe_allow_html=True,
+)
 
 if "acarreo_iniciado" not in st.session_state:
   st.session_state.acarreo_iniciado = False
@@ -822,8 +708,8 @@ dist_km_val = (
     distancia_acarreo_km if "distancia_acarreo_km" in locals() else 3.5
 )
 
-# SECCIÓN DEL BOTÓN DISPARADOR: SOLO EL BOTÓN ROJO FLOTANTE
-col_trig1, col_trig2, col_trig3 = st.columns([2.2, 3.2, 1.5])
+# FILA DE CONTROL COMPACTA SIN MARCOS
+col_trig1, col_trig2, col_trig3 = st.columns([2.0, 3.8, 1.5])
 
 with col_trig1:
   if st.button("🔴 INICIO DE ACARREO", type="primary"):
@@ -833,11 +719,11 @@ with col_trig1:
 with col_trig2:
   st.markdown(
       f"""
-        <div style="padding: 10px 0px;">
-            <span style="color: #0F172A !important; font-weight: 900 !important; font-size: 15px !important; display: block;">
+        <div style="padding: 2px 0px;">
+            <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 14px !important;">
                 📻 <b>AVISO RADIO VHF:</b> Presione el botón rojo para autorizar el zarpe.
-            </span>
-            <span style="color: #0284C7 !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
+            </span><br>
+            <span style="color: #0284C7 !important; font-weight: 800 !important; font-size: 13px !important;">
                 🛣️ Distancia Oficial: {dist_km_val:.1f} km (Ida) / {dist_km_val:.1f} km (Retorno)
             </span>
         </div>
@@ -849,147 +735,135 @@ with col_trig3:
   if st.button("🔄 Reiniciar Postura", use_container_width=True):
     st.session_state.acarreo_iniciado = False
 
-# CARGA DE IMÁGENES EXACTAS DE TU CARPETA
+# CONEXIÓN DIRECTA Y GARANTIZADA DE IMÁGENES BASE64
 img_pala_b64 = obtener_base64_img("Gif Pala.jpg") or obtener_base64_img(
     "image_859ef9.png"
 )
 img_cf_b64 = obtener_base64_img(
     "Gif Cargador Frontal.jpg"
 ) or obtener_base64_img("image_859f19.png")
-img_caex_vacio_b64 = obtener_base64_img(
-    "Camión CAEX Vacío.png"
-) or obtener_base64_img("Camion CAEX Vacio.png")
-img_caex_cargado_b64 = obtener_base64_img(
-    "Camión CAEX Cargado.png"
-) or obtener_base64_img("Camion CAEX Cargado.png")
+img_caex_vacio_b64 = (
+    obtener_base64_img("Camión CAEX Vacío.png")
+    or obtener_base64_img("Camion CAEX Vacio.png")
+    or obtener_base64_img("Gif Camión Minero.jpg")
+)
+img_caex_cargado_b64 = (
+    obtener_base64_img("Camión CAEX Cargado.png")
+    or obtener_base64_img("Camion CAEX Cargado.png")
+    or obtener_base64_img("Gif Camión Minero.jpg")
+)
 
 fig_circuito = go.Figure()
 
-# Vía Ida Cargado
+# Vías de Acarreo
 fig_circuito.add_trace(
     go.Scatter(
         x=[0, 3.5],
         y=[0.15, 0.15],
         mode="lines",
-        line=dict(color="#10B981", width=6, dash="dash"),
+        line=dict(color="#10B981", width=5, dash="dash"),
         name=f"Vía Ida Cargado ({dist_km_val:.1f} km)",
         hoverinfo="none",
     )
 )
-
-# Vía Retorno Vacío
 fig_circuito.add_trace(
     go.Scatter(
         x=[0, 3.5],
         y=[-0.15, -0.15],
         mode="lines",
-        line=dict(color="#DC2626", width=6, dash="solid"),
+        line=dict(color="#DC2626", width=5, dash="solid"),
         name=f"Vía Retorno Vacío ({dist_km_val:.1f} km)",
         hoverinfo="none",
     )
 )
 
-# RENDERIZADO DE PALAS
+# 1. RENDERIZADO DE PALAS
 idx_pala = 0
 for _, r in ed_palas.iterrows():
   if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-    pos_y = 0.40 + (idx_pala * 0.28)
-
+    pos_y = 0.38 + (idx_pala * 0.26)
     if img_pala_b64:
       fig_circuito.add_layout_image(
           dict(
               source=img_pala_b64,
               xref="x",
               yref="y",
-              x=-0.15,
+              x=-0.18,
               y=pos_y,
-              sizex=0.35,
-              sizey=0.35,
+              sizex=0.32,
+              sizey=0.32,
               xanchor="center",
               yanchor="middle",
               layer="above",
           )
       )
 
-    hover_details = (
-        f"<b>EQUIPO DE CARGUÍO: Pala {r['ID']}</b><br>"
-        f"• Modelo: {r['Modelo']}<br>"
-        f"• Operador Asignado: {r['Operador']}<br>"
-        f"• Rendimiento: {r['Rend_TonH']} Ton/h<br>"
-        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
-        f"• Costo Fijo: ${r['Costo_USDH']} USD/h"
-    )
-
     fig_circuito.add_trace(
         go.Scatter(
-            x=[-0.15, 0.18],
+            x=[-0.18, 0.15],
             y=[pos_y, pos_y],
             mode="markers+text",
-            marker=dict(size=[28, 1], opacity=[0.01, 0]),
+            marker=dict(size=[24, 1], opacity=[0.01, 0]),
             text=["", f"<b>Pala {r['ID']}</b>"],
             textposition="middle right",
             textfont=dict(size=11, color="#0F172A", family="Arial Black"),
             showlegend=False,
             hoverinfo="text",
-            hovertext=[hover_details, hover_details],
+            hovertext=[
+                f"<b>Pala {r['ID']}</b><br>Operador: {r['Operador']}",
+                f"<b>Pala {r['ID']}</b><br>Operador: {r['Operador']}",
+            ],
         )
     )
     idx_pala += 1
 
-# RENDERIZADO DE CARGADORES FRONTALES
+# 2. RENDERIZADO DE CARGADORES FRONTALES
 idx_cf = 0
 for _, r in ed_cf.iterrows():
   if r["Agendar"] and r["Estado"] == "🟢 Disponible":
-    pos_y = -0.38 - (idx_cf * 0.28)
-
+    pos_y = -0.36 - (idx_cf * 0.26)
     if img_cf_b64:
       fig_circuito.add_layout_image(
           dict(
               source=img_cf_b64,
               xref="x",
               yref="y",
-              x=-0.15,
+              x=-0.18,
               y=pos_y,
-              sizex=0.35,
-              sizey=0.35,
+              sizex=0.32,
+              sizey=0.32,
               xanchor="center",
               yanchor="middle",
               layer="above",
           )
       )
 
-    hover_details = (
-        f"<b>EQUIPO DE CARGUÍO: Cargador {r['ID']}</b><br>"
-        f"• Modelo: {r['Modelo']}<br>"
-        f"• Operador Asignado: {r['Operador']}<br>"
-        f"• Rendimiento: {r['Rend_TonH']} Ton/h<br>"
-        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
-        f"• Costo Fijo: ${r['Costo_USDH']} USD/h"
-    )
-
     fig_circuito.add_trace(
         go.Scatter(
-            x=[-0.15, 0.18],
+            x=[-0.18, 0.15],
             y=[pos_y, pos_y],
             mode="markers+text",
-            marker=dict(size=[28, 1], opacity=[0.01, 0]),
+            marker=dict(size=[24, 1], opacity=[0.01, 0]),
             text=["", f"<b>CF {r['ID']}</b>"],
             textposition="middle right",
             textfont=dict(size=11, color="#0F172A", family="Arial Black"),
             showlegend=False,
             hoverinfo="text",
-            hovertext=[hover_details, hover_details],
+            hovertext=[
+                f"<b>Cargador {r['ID']}</b><br>Operador: {r['Operador']}",
+                f"<b>Cargador {r['ID']}</b><br>Operador: {r['Operador']}",
+            ],
         )
     )
     idx_cf += 1
 
-# RENDERIZADO DE CAMIONES CAEX CON IMÁGENES EXACTAS Y TOOLTIPS INTERACTIVOS
+# 3. RENDERIZADO CONECTADO DE CAMIONES CAEX CON IMÁGENES MOSTRADAS EN RUTA
 caex_agendados = ed_caex[ed_caex["Agendar"] == True]
 total_caex_count = len(caex_agendados)
 
 if not st.session_state.acarreo_iniciado:
   for i, (_, r) in enumerate(caex_agendados.iterrows()):
-    pos_x = 0.0 - (i * 0.32)
+    pos_x = 0.0 - (i * 0.30)
     pos_y = 0.15
 
     if img_caex_vacio_b64:
@@ -999,43 +873,36 @@ if not st.session_state.acarreo_iniciado:
               xref="x",
               yref="y",
               x=pos_x,
-              y=pos_y + 0.10,
-              sizex=0.32,
-              sizey=0.32,
+              y=pos_y + 0.08,
+              sizex=0.30,
+              sizey=0.30,
               xanchor="center",
               yanchor="middle",
               layer="above",
           )
       )
 
-    hover_caex = (
-        f"<b>CAMIÓN MINERO CAEX {r['ID']}</b><br>"
-        f"• Estado: En Fila de Espera (Pala)<br>"
-        f"• Modelo: {r['Modelo']}<br>"
-        f"• Operador: {r['Operador']}<br>"
-        f"• Carga Actual: 0.0 Ton (Vacío)<br>"
-        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
-        f"• Costo OPEX: ${r['Costo_USDH']} USD/h"
-    )
-
     fig_circuito.add_trace(
         go.Scatter(
             x=[pos_x, pos_x],
-            y=[pos_y + 0.10, pos_y - 0.14],
+            y=[pos_y + 0.08, pos_y - 0.12],
             mode="markers+text",
-            marker=dict(size=[30, 1], opacity=[0.01, 0]),
+            marker=dict(size=[28, 1], opacity=[0.01, 0]),
             text=["", f"<b>C{r['ID']}</b>"],
             textposition="bottom center",
             textfont=dict(size=10, color="#0F172A", family="Arial Black"),
             showlegend=False,
             hoverinfo="text",
-            hovertext=[hover_caex, hover_caex],
+            hovertext=[
+                f"<b>CAEX {r['ID']}</b> (Vacío)",
+                f"<b>CAEX {r['ID']}</b> (Vacío)",
+            ],
         )
     )
 
   st.info(
       "📍 **FLOTA PARQUEADA EN FILA DE ESPERA:** Presione '🔴 INICIO DE ACARREO'"
-      " para desplegar la flota en ruta."
+      " para zarpar."
   )
 
 else:
@@ -1046,14 +913,12 @@ else:
       pos_x = 0.4 + (i * (2.6 / max(1, total_caex_count)))
       pos_y = 0.15
       src_b64 = img_caex_cargado_b64
-      carga_txt = "44.6 Ton (Cargado)"
       label_txt = f"<b>C{r['ID']} (44.6T)</b>"
       tramo_txt = "Acarreo Cargado -> Chancador/Pila"
     else:
       pos_x = 3.1 - (i * (2.6 / max(1, total_caex_count)))
       pos_y = -0.15
       src_b64 = img_caex_vacio_b64
-      carga_txt = "0.0 Ton (Vacío)"
       label_txt = f"<b>C{r['ID']} (0T)</b>"
       tramo_txt = "Retorno Vacío -> Pala"
 
@@ -1064,86 +929,76 @@ else:
               xref="x",
               yref="y",
               x=pos_x,
-              y=pos_y + 0.10,
-              sizex=0.34,
-              sizey=0.34,
+              y=pos_y + 0.08,
+              sizex=0.32,
+              sizey=0.32,
               xanchor="center",
               yanchor="middle",
               layer="above",
           )
       )
 
-    hover_caex = (
-        f"<b>CAMIÓN MINERO CAEX {r['ID']}</b><br>"
-        f"• Tramo: {tramo_txt}<br>"
-        f"• Modelo: {r['Modelo']}<br>"
-        f"• Operador Asignado: {r['Operador']}<br>"
-        f"• Capacidad / Carga: {carga_txt}<br>"
-        f"• Rendimiento Acarreo: {r['Rend_TonH']} Ton/h<br>"
-        f"• Consumo Diésel: {r['Consumo_LtsH']} Lts/h<br>"
-        f"• Costo Fijo Turno: ${r['Costo_USDH']} USD/h"
-    )
-
     fig_circuito.add_trace(
         go.Scatter(
             x=[pos_x, pos_x],
-            y=[pos_y + 0.10, pos_y - 0.14],
+            y=[pos_y + 0.08, pos_y - 0.12],
             mode="markers+text",
-            marker=dict(size=[32, 1], opacity=[0.01, 0]),
+            marker=dict(size=[28, 1], opacity=[0.01, 0]),
             text=["", label_txt],
             textposition="bottom center",
             textfont=dict(size=10, color="#0F172A", family="Arial Black"),
             showlegend=False,
             hoverinfo="text",
-            hovertext=[hover_caex, hover_caex],
+            hovertext=[
+                f"<b>CAEX {r['ID']}</b><br>{tramo_txt}",
+                f"<b>CAEX {r['ID']}</b><br>{tramo_txt}",
+            ],
         )
     )
 
-# DESTINO FINAL DE DESCARGA
+# DESTINO DE DESCARGA
 fig_circuito.add_trace(
     go.Scatter(
         x=[3.5],
         y=[0],
         mode="markers",
-        marker=dict(size=26, symbol="hexagram", color="#DC2626"),
+        marker=dict(size=22, symbol="hexagram", color="#DC2626"),
         name="Zona de Entrega",
         hoverinfo="text",
-        hovertext=[
-            "<b>Chancador / Botadero / Pila</b><br>Punto de Descarga Final"
-        ],
+        hovertext=["<b>Chancador / Botadero / Pila</b>"],
     )
 )
 
 fig_circuito.add_trace(
     go.Scatter(
         x=[3.5],
-        y=[0.48],
+        y=[0.42],
         mode="text",
         text=["<b>CHANCADOR / BOTADERO / PILA</b>"],
         textposition="top center",
-        textfont=dict(size=13, color="#DC2626", family="Arial Black"),
+        textfont=dict(size=12, color="#DC2626", family="Arial Black"),
         showlegend=False,
         hoverinfo="none",
     )
 )
 
-# AJUSTES DE LIENZO DE PLOTLY
+# CONFIGURACIÓN COMPACTA Y AJUSTADA DEL LIENZO
 fig_circuito.update_layout(
     xaxis=dict(
         title="<b>Distancia de Acarreo (Kilómetros)</b>",
-        range=[-1.5, 4.2],
+        range=[-1.4, 4.1],
         zeroline=False,
         showgrid=True,
     ),
     yaxis=dict(
         title="",
-        range=[-1.1, 1.1],
+        range=[-0.95, 0.95],
         showticklabels=False,
         zeroline=False,
         showgrid=False,
     ),
-    height=460,
-    margin=dict(l=20, r=20, t=30, b=30),
+    height=380,
+    margin=dict(l=10, r=10, t=10, b=20),
     paper_bgcolor="#F8FAFC",
     plot_bgcolor="#FFFFFF",
     showlegend=True,
