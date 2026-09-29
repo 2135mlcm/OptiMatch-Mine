@@ -1298,7 +1298,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON VELOCIDAD ULTRA PAUSADA Y TEXTO DEBAJO DE LA IMAGEN
+# LIENZO HTML5 CON VELOCIDAD RALENTIZADA, ÍCONOS MÁS GRANDES Y DESTINOS EN LISTA
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1378,15 +1378,15 @@ html_gps_canvas = f"""
         const imgCF = new Image();
         imgCF.src = "{img_cf_b64 or ''}";
 
-        // MODELADO DE CICLO DE ACARREO OPTIMATCH-MINE (PAUSADO Y REALISTA)
+        // MODELADO DE CICLO DE ACARREO OPTIMATCH-MINE
         const totalCycleUnits = 23.0;
         const timeLoading = 3.0;        // 3 min en Frente Carguío
         const timeHaul = 11.67;         // 11.67 min Ida Cargado a 18 km/h
-        const timeDumping = 1.33;       // 1.33 min Volteo en Botadero / Chancador / Pila
+        const timeDumping = 1.33;       // 1.33 min Volteo
         const timeReturn = 7.0;         // 7 min Retorno Vacío a 30 km/h
 
-        // VELOCIDAD DEL RELOJ DE SIMULACIÓN ULTRA LENTA
-        const simSpeed = 0.0008;
+        // VELOCIDAD DEL RELOJ DE SIMULACIÓN RALENTIZADA PARA MAYOR REALISMO
+        const simSpeed = 0.0004;
 
         let vehicles = caexList.map((c, i) => ({{
             id: c.id,
@@ -1400,7 +1400,7 @@ html_gps_canvas = f"""
             speedKmh: 0
         }}));
 
-        // DIBUJO VECTORIAL CAEX DE RESPALDO SI LA IMAGEN BASE64 SE DEMORA EN CARGAR
+        // DIBUJO VECTORIAL CAEX DE RESPALDO
         function drawCaexTruck(x, y, isLoaded, id) {{
             ctx.save();
             ctx.translate(x, y);
@@ -1444,16 +1444,15 @@ html_gps_canvas = f"""
         function animate() {{
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            const paddingL = 160;
-            const paddingR = 160;
+            const paddingL = 170;
+            const paddingR = 170;
             const trackWidth = canvas.width - paddingL - paddingR;
             const yIda = canvas.height * 0.35;
             const yRetorno = canvas.height * 0.65;
             const xInicio = paddingL;
             const xFin = paddingL + trackWidth;
 
-            // 1. DIBUJAR VÍAS DE ACARREO DE DOS VÍAS
-            // Vía Ida (Verde Punteada)
+            // 1. DIBUJAR VÍAS DE ACARREO
             ctx.beginPath();
             ctx.setLineDash([8, 6]);
             ctx.strokeStyle = "#10B981";
@@ -1462,7 +1461,6 @@ html_gps_canvas = f"""
             ctx.lineTo(xFin, yIda);
             ctx.stroke();
 
-            // Vía Retorno (Roja Continua)
             ctx.beginPath();
             ctx.setLineDash([]);
             ctx.strokeStyle = "#DC2626";
@@ -1479,43 +1477,48 @@ html_gps_canvas = f"""
             ctx.fillStyle = "#DC2626";
             ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ 30 km/h)", xInicio, yRetorno - 22);
 
-            // 2. EQUIPOS FRENTE DE CARGUÍO
+            // 2. EQUIPOS EN FRENTE DE CARGUÍO (ÍCONOS MÁS GRANDES 38x38 px)
             palasList.forEach((p, idx) => {{
-                let py = yIda - 20 - (idx * 36);
+                let py = yIda - 20 - (idx * 42);
                 if (imgPala.complete && imgPala.naturalWidth > 0) {{
-                    ctx.drawImage(imgPala, xInicio - 50, py - 14, 28, 28);
+                    ctx.drawImage(imgPala, xInicio - 60, py - 19, 38, 38);
                 }} else {{
                     ctx.fillStyle = "#F59E0B";
-                    ctx.fillRect(xInicio - 50, py - 10, 20, 20);
+                    ctx.fillRect(xInicio - 60, py - 15, 30, 30);
                 }}
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 11px Arial";
                 ctx.textAlign = "right";
-                ctx.fillText("Pala " + p.id, xInicio - 58, py + 4);
+                ctx.fillText("Pala " + p.id, xInicio - 68, py + 4);
             }});
 
             cfList.forEach((cf, idx) => {{
-                let py = yRetorno + 10 + (idx * 36);
+                let py = yRetorno + 10 + (idx * 42);
                 if (imgCF.complete && imgCF.naturalWidth > 0) {{
-                    ctx.drawImage(imgCF, xInicio - 50, py - 14, 28, 28);
+                    ctx.drawImage(imgCF, xInicio - 60, py - 19, 38, 38);
                 }} else {{
                     ctx.fillStyle = "#F59E0B";
-                    ctx.fillRect(xInicio - 50, py - 10, 20, 20);
+                    ctx.fillRect(xInicio - 60, py - 15, 30, 30);
                 }}
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 11px Arial";
                 ctx.textAlign = "right";
-                ctx.fillText("CF " + cf.id, xInicio - 58, py + 4);
+                ctx.fillText("CF " + cf.id, xInicio - 68, py + 4);
             }});
 
-            // 3. ZONA DE DESCARGA (BOTADERO / CHANCADOR / PILA)
+            // 3. ZONA DE DESCARGA (LISTA VERTICAL DETALLADA)
             ctx.fillStyle = "#DC2626";
             ctx.beginPath();
-            ctx.arc(xFin + 30, (yIda + yRetorno) / 2, 12, 0, 2 * Math.PI);
+            ctx.arc(xFin + 25, (yIda + yRetorno) / 2, 12, 0, 2 * Math.PI);
             ctx.fill();
+
             ctx.font = "bold 11px Arial";
+            ctx.fillStyle = "#DC2626";
             ctx.textAlign = "left";
-            ctx.fillText("BOTADERO / CHANCADOR / PILA", xFin + 48, ((yIda + yRetorno) / 2) + 4);
+            const yCentro = (yIda + yRetorno) / 2;
+            ctx.fillText("• BOTADERO", xFin + 45, yCentro - 14);
+            ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
+            ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
             // 4. ACTUALIZACIÓN Y DIBUJO DE CAMIONES CAEX CON AVANCE PAUSADO
             vehicles.forEach((v, idx) => {{
@@ -1526,21 +1529,18 @@ html_gps_canvas = f"""
                 let t = v.cycleTime;
 
                 if (!isTrackingActive) {{
-                    // POSTURA PARQUEADA EN ESPERA
                     v.x = xInicio - 25 - (idx * 38);
                     v.y = yIda;
                     v.isLoaded = false;
                     v.statusText = "En Fila de Espera";
                     v.speedKmh = 0;
                 }} else if (t < timeLoading) {{
-                    // FASE 1: EN FRENTE DE CARGUÍO
                     v.x = xInicio;
                     v.y = yIda;
                     v.isLoaded = false;
                     v.statusText = "En Carga (Pala)";
                     v.speedKmh = 0;
                 }} else if (t < timeLoading + timeHaul) {{
-                    // FASE 2: ACARREO IDA CARGADO A BOTADERO / CHANCADOR / PILA (18 km/h)
                     let progressRatio = (t - timeLoading) / timeHaul;
                     v.x = xInicio + (progressRatio * trackWidth);
                     v.y = yIda;
@@ -1548,14 +1548,12 @@ html_gps_canvas = f"""
                     v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila";
                     v.speedKmh = 18;
                 }} else if (t < timeLoading + timeHaul + timeDumping) {{
-                    // FASE 3: DESCARGANDO / VOLTEO EN BOTADERO / CHANCADOR / PILA
                     v.x = xFin;
                     v.y = (yIda + yRetorno) / 2;
                     v.isLoaded = true;
                     v.statusText = "En Volteo / Descarga";
                     v.speedKmh = 0;
                 }} else {{
-                    // FASE 4: RETORNO VACÍO A PALA (30 km/h)
                     let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
                     v.x = xFin - (progressRatio * trackWidth);
                     v.y = yRetorno;
@@ -1564,7 +1562,6 @@ html_gps_canvas = f"""
                     v.speedKmh = 30;
                 }}
 
-                // DIBUJAR IMAGEN O DIBUJO VECTORIAL DE CAEX
                 let imgToDraw = v.isLoaded ? imgCaexCargado : imgCaexVacio;
 
                 if (imgToDraw.complete && imgToDraw.naturalWidth > 0 && imgToDraw.src.length > 50) {{
@@ -1573,14 +1570,12 @@ html_gps_canvas = f"""
                     drawCaexTruck(v.x, v.y, v.isLoaded, v.id);
                 }}
 
-                // ETIQUETA SIEMPRE COLOCADA DEBAJO DE LA IMAGEN DEL CAEX
+                // ETIQUETA SIEMPRE COLOCADA DEBAJO DE LA IMAGEN
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 10px Arial";
                 ctx.textAlign = "center";
                 let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh + " km/h]" : " [0 km/h]";
                 let label = "CAEX " + v.id + (v.isLoaded ? " (44.6T)" : " (0T)") + speedLabel;
-                
-                // SIEMPRE DEBAJO DE LA IMAGEN (y + 26)
                 ctx.fillText(label, v.x, v.y + 26);
             }});
 
