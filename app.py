@@ -459,7 +459,7 @@ st.markdown(
 LOGO_PATH = "Logo_OptiMatch.png"
 
 # ---------------------------------------------------------
-# 1. AUTENTICACIÓN PRIVADA CON CAMPOS LIMPIOS OBLIGATORIOS
+# AUTENTICACIÓN PRIVADA CON CAMPOS LIMPIOS OBLIGATORIOS
 # ---------------------------------------------------------
 if "autenticado" not in st.session_state:
   st.session_state.autenticado = False
@@ -1220,10 +1220,16 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL MULTIPALA CON CIRCUITO CONTINUO (MATCH FACTOR ÓPTIMO)
+# MÓDULO DE SEGUIMIENTO ESPACIAL CON DISTRIBUCIÓN UNIFORME DE CICLO CONTINUO (360°)
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader("🗺️️ Monitoreo Espacial del Circuito y Contador de Vueltas")
+st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
+st.markdown(
+    "💡 **Control Operativo:** Haz clic sobre cualquier camión CAEX para"
+    " **detenerlo por falla/mantención** o para **reanudarlo**. La flota se"
+    " distribuye homogéneamente en el circuito de 360° evitando la 'pala"
+    " hambrienta'."
+)
 
 if "acarreo_iniciado" not in st.session_state:
   st.session_state.acarreo_iniciado = False
@@ -1238,14 +1244,14 @@ with col_trig1:
   btn_trig = st.button("🔴 INICIO DE ACARREO", type="primary")
   if btn_trig:
     st.session_state.acarreo_iniciado = True
-    st.success("✅ Acarreo iniciado por confirmación VHF (Circuito Continuo).")
+    st.success("✅ Acarreo iniciado por confirmación VHF.")
 
 with col_trig2:
   st.markdown(
       """
         <div style="padding: 6px 0px;">
             <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
-                📻 <b>AVISO RADIAL OPERADOR PALA - DESPACHO Y CONTROL DE FLOTA EN RUTA CONTINUA</b>
+                📻 <b>AVISO RADIAL OPERADOR PALA - CIRCUITO CONTINUO UNIFORME</b>
             </span>
         </div>
     """,
@@ -1274,12 +1280,16 @@ img_cf_b64 = obtener_base64_img(
     "Gif Cargador Frontal.jpg"
 ) or obtener_base64_img("image_859f19.png")
 
-# OBTENER LISTAS COMPLETAS DE FLOTA
 caex_agendados = ed_caex[
     (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
 ]
 lista_caex_js = [
-    {"id": str(r["ID"]), "modelo": str(r["Modelo"]), "operador": str(r["Operador"])}
+    {
+        "id": str(r["ID"]),
+        "modelo": str(r["Modelo"]),
+        "operador": str(r["Operador"]),
+        "rend": float(r["Rend_TonH"]),
+    }
     for _, r in caex_agendados.iterrows()
 ]
 
@@ -1288,8 +1298,7 @@ palas_activas_js = [
         "id": str(r["ID"]),
         "modelo": str(r["Modelo"]),
         "operador": str(r["Operador"]),
-        "rend": str(r["Rend_TonH"]),
-        "consumo": str(r["Consumo_LtsH"]),
+        "rend": float(r["Rend_TonH"]),
     }
     for _, r in ed_palas[
         (ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")
@@ -1301,8 +1310,7 @@ cf_activos_js = [
         "id": str(r["ID"]),
         "modelo": str(r["Modelo"]),
         "operador": str(r["Operador"]),
-        "rend": str(r["Rend_TonH"]),
-        "consumo": str(r["Consumo_LtsH"]),
+        "rend": float(r["Rend_TonH"]),
     }
     for _, r in ed_cf[
         (ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")
@@ -1314,7 +1322,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON CIRCUITO CONTINUO SINCRO-MATCH FACTOR (~1.8 MINUTOS ENTRE SALIDAS)
+# LIENZO HTML5 CON DESFASE MATEMÁTICO EQUIDISTANTE (23 / N) Y CONTROL INTERACTIVO
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1340,12 +1348,13 @@ html_gps_canvas = f"""
             width: 100%;
             height: 100%;
             display: block;
+            cursor: pointer;
         }}
         .kpi-panel {{
             position: absolute;
             top: 10px;
             right: 15px;
-            background: rgba(15, 23, 42, 0.92);
+            background: rgba(15, 23, 42, 0.95);
             border: 2px solid #F59E0B;
             border-radius: 8px;
             padding: 8px 14px;
@@ -1365,12 +1374,12 @@ html_gps_canvas = f"""
         }}
         .kpi-grid {{
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
             gap: 10px;
             text-align: center;
         }}
         .kpi-val {{
-            font-size: 16px;
+            font-size: 15px;
             color: #38BDF8;
             font-weight: 900;
         }}
@@ -1393,11 +1402,12 @@ html_gps_canvas = f"""
 <body>
     <div id="mapContainer">
         <div class="kpi-panel">
-            <div class="kpi-title">📊 METRICAS DE VUELTAS TURNO (FLOTA)</div>
+            <div class="kpi-title">📊 METRICAS DE VUELTAS Y DINÁMICA DE TURNO</div>
             <div class="kpi-grid">
-                <div><span>META</span><div class="kpi-val" id="kpiMeta">{vueltas_totales_meta}</div></div>
+                <div><span>META VTS</span><div class="kpi-val" id="kpiMeta">{vueltas_totales_meta}</div></div>
                 <div><span>ACTUAL</span><div class="kpi-val" style="color:#10B981;" id="kpiActual">0</div></div>
-                <div><span>FALTAN</span><div class="kpi-val" style="color:#F59E0B;" id="kpiFaltan">{vueltas_totales_meta}</div></div>
+                <div><span>M. FACTOR</span><div class="kpi-val" style="color:#F59E0B;" id="kpiMF">{match_factor:.2f}</div></div>
+                <div><span>FLOTA ACT.</span><div class="kpi-val" style="color:#E2E8F0;" id="kpiFlota">{len(lista_caex_js)}/{len(lista_caex_js)}</div></div>
             </div>
         </div>
         <canvas id="gpsCanvas"></canvas>
@@ -1435,16 +1445,20 @@ html_gps_canvas = f"""
         imgCF.src = "{img_cf_b64 or ''}";
 
         const totalCycleUnits = 23.0;
-        const timeLoading = 3.0;        // 3.0 min Carga
-        const timeHaul = 11.67;         // 11.67 min Acarreo Ida
-        const timeDumping = 1.33;       // 1.33 min Volteo
-        const timeReturn = 7.0;         // 7.0 min Retorno
+        const timeLoading = 3.0;
+        const timeHaul = 11.67;
+        const timeDumping = 1.33;
+        const timeReturn = 7.0;
         const simSpeed = 0.0004;
 
-        // INTERVALO DE DESPACHO AJUSTADO AL RITMO DE CARGUÍO (~1.8 min entre camiones)
-        const staggerInterval = 1.80; 
+        // CÁLCULO DE DESFASE EQUIDISTANTE EXACTO BASADO EN EL TOTAL DE LA FLOTA (23.0 / N)
+        const totalNumCaex = Math.max(1, caexList.length);
+        const staggerInterval = totalCycleUnits / totalNumCaex; // 4.60 para 5 camiones
 
         let totalVueltasCompletadas = 0;
+
+        const capCarguioTotal = palasList.reduce((a, b) => a + b.rend, 0) + cfList.reduce((a, b) => a + b.rend, 0);
+        const factorDistancia = (distKm > 0) ? (3.5 / distKm) : 1.0;
 
         let vehicles = caexList.map((c, idx) => {{
             let offset = idx * staggerInterval;
@@ -1454,6 +1468,7 @@ html_gps_canvas = f"""
                 id: c.id,
                 modelo: c.modelo,
                 operador: c.operador,
+                rend: c.rend,
                 cycleTime: offset,
                 prevCycleTime: offset,
                 vueltas: 0,
@@ -1463,19 +1478,38 @@ html_gps_canvas = f"""
                 statusText: "Postura Previa (Listo para Cargar)",
                 speedKmh: 0,
                 isReturning: false,
-                equipmentAssigned: assignedEq
+                equipmentAssigned: assignedEq,
+                stoppedByFault: false
             }};
         }});
 
         let palaHitboxes = [];
         let cfHitboxes = [];
 
-        function drawCaexTruck(x, y, isLoaded, isReturning) {{
+        function recalculateDynamicMF() {{
+            let activeCaex = vehicles.filter(v => !v.stoppedByFault);
+            let capTranspEfectiva = activeCaex.reduce((sum, v) => sum + v.rend, 0) * factorDistancia;
+            let mfDinamico = (capCarguioTotal > 0) ? (capTranspEfectiva / capCarguioTotal) : 0.0;
+            
+            document.getElementById('kpiMF').innerText = mfDinamico.toFixed(2);
+            document.getElementById('kpiFlota').innerText = activeCaex.length + "/" + vehicles.length;
+
+            let elemMF = document.getElementById('kpiMF');
+            if (mfDinamico >= 0.80 && mfDinamico <= 1.05) {{
+                elemMF.style.color = "#10B981";
+            }} else if (mfDinamico < 0.80) {{
+                elemMF.style.color = "#EF4444";
+            }} else {{
+                elemMF.style.color = "#F59E0B";
+            }}
+        }}
+
+        function drawCaexTruck(x, y, isLoaded, isReturning, isStopped) {{
             ctx.save();
             ctx.translate(x, y);
             if (isReturning) {{ ctx.scale(-1, 1); }}
 
-            ctx.fillStyle = isLoaded ? "#D97706" : "#CBD5E1";
+            ctx.fillStyle = isStopped ? "#EF4444" : (isLoaded ? "#D97706" : "#CBD5E1");
             ctx.strokeStyle = "#0F172A";
             ctx.lineWidth = 1.5;
             ctx.beginPath();
@@ -1483,14 +1517,14 @@ html_gps_canvas = f"""
             ctx.fill();
             ctx.stroke();
 
-            if (isLoaded) {{
+            if (isLoaded && !isStopped) {{
                 ctx.fillStyle = "#78350F";
                 ctx.beginPath();
                 ctx.arc(-5, -5, 6, Math.PI, 0);
                 ctx.fill();
             }}
 
-            ctx.fillStyle = "#F59E0B";
+            ctx.fillStyle = isStopped ? "#991B1B" : "#F59E0B";
             ctx.beginPath();
             ctx.roundRect(8, -6, 9, 12, 2);
             ctx.fill();
@@ -1501,7 +1535,7 @@ html_gps_canvas = f"""
             ctx.arc(-10, 8, 4, 0, 2 * Math.PI);
             ctx.arc(6, 8, 4, 0, 2 * Math.PI);
             ctx.arc(-10, -8, 4, 0, 2 * Math.PI);
-            ctx.arc(-10, -8, 4, 0, 2 * Math.PI);
+            ctx.arc(6, -8, 4, 0, 2 * Math.PI);
             ctx.fill();
 
             ctx.restore();
@@ -1601,9 +1635,9 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO DE MOVIMIENTO CONTINUO
+            // CÁLCULO DE MOVIMIENTO HOMOGÉNEO Y CONTROL DE DETENCIÓN
             vehicles.forEach((v, idx) => {{
-                if (isTrackingActive) {{
+                if (isTrackingActive && !v.stoppedByFault) {{
                     v.prevCycleTime = v.cycleTime;
                     v.cycleTime = (v.cycleTime + simSpeed) % totalCycleUnits;
 
@@ -1629,43 +1663,48 @@ html_gps_canvas = f"""
                     eqNombre = cfList[cfIdx] ? cfList[cfIdx].id : "CF";
                 }}
 
-                if (!isTrackingActive) {{
-                    v.x = xInicio;
-                    v.y = targetY;
-                    v.isLoaded = false;
-                    v.isReturning = false;
-                    v.statusText = "Postura Previa (Acolado en " + eqNombre + ")";
-                    v.speedKmh = 0;
-                }} else if (t < timeLoading) {{
-                    v.x = xInicio;
-                    v.y = targetY;
-                    v.isLoaded = false;
-                    v.isReturning = false;
-                    v.statusText = "En Carga (" + eqNombre + ")";
-                    v.speedKmh = 0;
-                }} else if (t < timeLoading + timeHaul) {{
-                    let progressRatio = (t - timeLoading) / timeHaul;
-                    v.x = xInicio + (progressRatio * trackWidth);
-                    v.y = targetY + progressRatio * (yIda - targetY);
-                    v.isLoaded = true;
-                    v.isReturning = false;
-                    v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila";
-                    v.speedKmh = 18;
-                }} else if (t < timeLoading + timeHaul + timeDumping) {{
-                    v.x = xFin;
-                    v.y = (yIda + yRetorno) / 2;
-                    v.isLoaded = true;
-                    v.isReturning = true;
-                    v.statusText = "En Volteo / Descarga";
-                    v.speedKmh = 0;
+                if (!v.stoppedByFault) {{
+                    if (!isTrackingActive) {{
+                        v.x = xInicio;
+                        v.y = targetY;
+                        v.isLoaded = false;
+                        v.isReturning = false;
+                        v.statusText = "Postura Previa (Acolado en " + eqNombre + ")";
+                        v.speedKmh = 0;
+                    }} else if (t < timeLoading) {{
+                        v.x = xInicio;
+                        v.y = targetY;
+                        v.isLoaded = false;
+                        v.isReturning = false;
+                        v.statusText = "En Carga (" + eqNombre + ")";
+                        v.speedKmh = 0;
+                    }} else if (t < timeLoading + timeHaul) {{
+                        let progressRatio = (t - timeLoading) / timeHaul;
+                        v.x = xInicio + (progressRatio * trackWidth);
+                        v.y = targetY + progressRatio * (yIda - targetY);
+                        v.isLoaded = true;
+                        v.isReturning = false;
+                        v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila";
+                        v.speedKmh = 18;
+                    }} else if (t < timeLoading + timeHaul + timeDumping) {{
+                        v.x = xFin;
+                        v.y = (yIda + yRetorno) / 2;
+                        v.isLoaded = true;
+                        v.isReturning = true;
+                        v.statusText = "En Volteo / Descarga";
+                        v.speedKmh = 0;
+                    }} else {{
+                        let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
+                        v.x = xFin - (progressRatio * trackWidth);
+                        v.y = yRetorno;
+                        v.isLoaded = false;
+                        v.isReturning = true;
+                        v.statusText = "Retorno Vacío -> " + eqNombre;
+                        v.speedKmh = 30;
+                    }}
                 }} else {{
-                    let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
-                    v.x = xFin - (progressRatio * trackWidth);
-                    v.y = yRetorno;
-                    v.isLoaded = false;
-                    v.isReturning = true;
-                    v.statusText = "Retorno Vacío -> " + eqNombre;
-                    v.speedKmh = 30;
+                    v.statusText = "🔴 DETENIDO POR FALLA / MANTENCIÓN";
+                    v.speedKmh = 0;
                 }}
 
                 let imgToDraw = v.isLoaded ? imgCaexCargado : imgCaexVacio;
@@ -1674,34 +1713,51 @@ html_gps_canvas = f"""
                 ctx.translate(v.x, v.y);
                 if (v.isReturning) {{ ctx.scale(-1, 1); }}
 
-                if (imgToDraw.complete && imgToDraw.naturalWidth > 0 && imgToDraw.src.length > 50) {{
+                if (!v.stoppedByFault && imgToDraw.complete && imgToDraw.naturalWidth > 0 && imgToDraw.src.length > 50) {{
                     ctx.drawImage(imgToDraw, -20, -20, 40, 40);
                 }} else {{
-                    drawCaexTruck(0, 0, v.isLoaded, false);
+                    drawCaexTruck(0, 0, v.isLoaded, false, v.stoppedByFault);
                 }}
                 ctx.restore();
 
-                // ETIQUETAS VISIBLES PARA CADA UNIDAD
-                ctx.fillStyle = "#0F172A";
+                // ETIQUETAS VISIBLES
                 ctx.font = "bold 10px Arial";
                 ctx.textAlign = "center";
-                let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh + " km/h]" : " [0 km/h]";
-                let label = "CAEX " + v.id + " (" + v.vueltas + " vts)" + speedLabel;
-                ctx.fillText(label, v.x, v.y + 26);
+                if (v.stoppedByFault) {{
+                    ctx.fillStyle = "#DC2626";
+                    ctx.fillText("🔴 CAEX " + v.id + " (FALLA)", v.x, v.y + 26);
+                }} else {{
+                    ctx.fillStyle = "#0F172A";
+                    let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh + " km/h]" : " [0 km/h]";
+                    ctx.fillText("CAEX " + v.id + " (" + v.vueltas + " vts)" + speedLabel, v.x, v.y + 26);
+                }}
             }});
 
             if (isTrackingActive) {{
                 document.getElementById('kpiActual').innerText = totalVueltasCompletadas;
-                let faltan = Math.max(0, metaVueltas - totalVueltasCompletadas);
-                document.getElementById('kpiFaltan').innerText = faltan;
             }}
 
+            recalculateDynamicMF();
             requestAnimationFrame(animate);
         }}
 
         requestAnimationFrame(animate);
 
-        // HOVER DETALLADO PARA MOUSE
+        // EVENTO DE CLIC DIRECTO SOBRE CAMIÓN PARA DETENER / REANUDAR
+        canvas.addEventListener('click', function(e) {{
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            vehicles.forEach(v => {{
+                let dist = Math.hypot(clickX - v.x, clickY - v.y);
+                if (dist < 28) {{
+                    v.stoppedByFault = !v.stoppedByFault;
+                }}
+            }});
+        }});
+
+        // HOVER DETALLADO CON INSTRUCCIÓN DE CLIC
         canvas.addEventListener('mousemove', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
@@ -1711,17 +1767,17 @@ html_gps_canvas = f"""
 
             vehicles.forEach(v => {{
                 let dist = Math.hypot(mouseX - v.x, mouseY - v.y);
-                if (dist < 25) {{
+                if (dist < 28) {{
                     hovered = true;
                     tooltip.style.display = 'block';
                     tooltip.style.left = (v.x + 15) + 'px';
                     tooltip.style.top = (v.y - 35) + 'px';
+                    let toggleMsg = v.stoppedByFault ? "<span style='color:#10B981;'><b>(Haz clic para REANUDAR)</b></span>" : "<span style='color:#EF4444;'><b>(Haz clic para DETENER POR FALLA)</b></span>";
                     tooltip.innerHTML = '<b>🚛 CAMIÓN CAEX ' + v.id + '</b><br>' +
                                         '• Estado: ' + v.statusText + '<br>' +
-                                        '• Vueltas Individuales: ' + v.vueltas + ' de {vueltas_por_camion_meta}<br>' +
-                                        '• Velocidad Teórica: ' + v.speedKmh + ' km/h<br>' +
-                                        '• Modelo: ' + v.modelo + '<br>' +
-                                        '• Operador: ' + v.operador;
+                                        '• Vueltas Individuales: ' + v.vueltas + '<br>' +
+                                        '• Velocidad: ' + v.speedKmh + ' km/h<br>' +
+                                        toggleMsg;
                 }}
             }});
 
@@ -1735,8 +1791,7 @@ html_gps_canvas = f"""
                         tooltip.style.top = (p.y - 35) + 'px';
                         tooltip.innerHTML = '<b>🏗️ PALA DE CARGUÍO ' + p.data.id + '</b><br>' +
                                             '• Modelo: ' + p.data.modelo + '<br>' +
-                                            '• Operador: ' + p.data.operador + '<br>' +
-                                            '• Rendimiento: ' + p.data.rend + ' Ton/h';
+                                            '• Operador: ' + p.data.operador;
                     }}
                 }});
             }}
