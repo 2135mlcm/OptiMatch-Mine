@@ -1226,7 +1226,6 @@ dist_km_val = (
     distancia_acarreo_km if "distancia_acarreo_km" in locals() else 3.5
 )
 
-# BOTONERA DE CONTROL INDUSTRIAL CON AVISO ATÓMICO REQUERIDO
 col_trig1, col_trig2, col_trig3 = st.columns([1.8, 3.5, 1.5])
 
 with col_trig1:
@@ -1269,7 +1268,7 @@ img_cf_b64 = obtener_base64_img(
     "Gif Cargador Frontal.jpg"
 ) or obtener_base64_img("image_859f19.png")
 
-# OBTENER LISTA DE CAMIONES ACTIVOS
+# OBTENER LISTAS COMPLETAS CON DETALLES OPERATIVOS
 caex_agendados = ed_caex[
     (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
 ]
@@ -1278,27 +1277,38 @@ lista_caex_js = [
     for _, r in caex_agendados.iterrows()
 ]
 
-# PALAS Y CARGADORES ACTIVOS
 palas_activas_js = [
-    {"id": str(r["ID"]), "modelo": str(r["Modelo"])}
+    {
+        "id": str(r["ID"]),
+        "modelo": str(r["Modelo"]),
+        "operador": str(r["Operador"]),
+        "rend": str(r["Rend_TonH"]),
+        "consumo": str(r["Consumo_LtsH"]),
+    }
     for _, r in ed_palas[
         (ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")
     ].iterrows()
 ]
+
 cf_activos_js = [
-    {"id": str(r["ID"]), "modelo": str(r["Modelo"])}
+    {
+        "id": str(r["ID"]),
+        "modelo": str(r["Modelo"]),
+        "operador": str(r["Operador"]),
+        "rend": str(r["Rend_TonH"]),
+        "consumo": str(r["Consumo_LtsH"]),
+    }
     for _, r in ed_cf[
         (ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")
     ].iterrows()
 ]
 
-# CONVERTIR A JSON PARA INYECTAR EN JAVASCRIPT
 caex_json_str = json.dumps(lista_caex_js)
 palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON VELOCIDAD RALENTIZADA, ÍCONOS MÁS GRANDES Y DESTINOS EN LISTA
+# LIENZO HTML5 CON PALAS MÁS GRANDES (48x48 px) Y HOVER COMPLETO PARA PALAS Y CARGADORES
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1358,14 +1368,12 @@ html_gps_canvas = f"""
         }}
         resizeCanvas();
 
-        // DATOS DE FLOTA Y PARÁMETROS OPTIMATCH-MINE
         const caexList = {caex_json_str};
         const palasList = {palas_json_str};
         const cfList = {cf_json_str};
         const isTrackingActive = {acarreo_activo_bool};
         const distKm = {dist_km_val};
 
-        // CARGA DE IMÁGENES
         const imgCaexCargado = new Image();
         imgCaexCargado.src = "{img_caex_cargado_b64 or ''}";
         
@@ -1378,14 +1386,13 @@ html_gps_canvas = f"""
         const imgCF = new Image();
         imgCF.src = "{img_cf_b64 or ''}";
 
-        // MODELADO DE CICLO DE ACARREO OPTIMATCH-MINE
+        // PARAMETRIZACIÓN PROPORCIONAL DE CICLO REAL OPTIMATCH-MINE
         const totalCycleUnits = 23.0;
-        const timeLoading = 3.0;        // 3 min en Frente Carguío
-        const timeHaul = 11.67;         // 11.67 min Ida Cargado a 18 km/h
+        const timeLoading = 3.0;        // 3.0 min Carga
+        const timeHaul = 11.67;         // 11.67 min Acarreo Ida (18 km/h)
         const timeDumping = 1.33;       // 1.33 min Volteo
-        const timeReturn = 7.0;         // 7 min Retorno Vacío a 30 km/h
+        const timeReturn = 7.0;         // 7.0 min Retorno Vacío (30 km/h)
 
-        // VELOCIDAD DEL RELOJ DE SIMULACIÓN RALENTIZADA PARA MAYOR REALISMO
         const simSpeed = 0.0004;
 
         let vehicles = caexList.map((c, i) => ({{
@@ -1400,12 +1407,14 @@ html_gps_canvas = f"""
             speedKmh: 0
         }}));
 
-        // DIBUJO VECTORIAL CAEX DE RESPALDO
+        // ARRAYS PARA REGISTRAR ÁREAS SENSIBLES AL HOVER
+        let palaHitboxes = [];
+        let cfHitboxes = [];
+
         function drawCaexTruck(x, y, isLoaded, id) {{
             ctx.save();
             ctx.translate(x, y);
 
-            // Tolva CAEX
             ctx.fillStyle = isLoaded ? "#D97706" : "#CBD5E1";
             ctx.strokeStyle = "#0F172A";
             ctx.lineWidth = 1.5;
@@ -1414,7 +1423,6 @@ html_gps_canvas = f"""
             ctx.fill();
             ctx.stroke();
 
-            // Material Cargado
             if (isLoaded) {{
                 ctx.fillStyle = "#78350F";
                 ctx.beginPath();
@@ -1422,14 +1430,12 @@ html_gps_canvas = f"""
                 ctx.fill();
             }}
 
-            // Cabina
             ctx.fillStyle = "#F59E0B";
             ctx.beginPath();
             ctx.roundRect(8, -6, 9, 12, 2);
             ctx.fill();
             ctx.stroke();
 
-            // Ruedas Neumáticas
             ctx.fillStyle = "#1E293B";
             ctx.beginPath();
             ctx.arc(-10, 8, 4, 0, 2 * Math.PI);
@@ -1452,7 +1458,10 @@ html_gps_canvas = f"""
             const xInicio = paddingL;
             const xFin = paddingL + trackWidth;
 
-            // 1. DIBUJAR VÍAS DE ACARREO
+            palaHitboxes = [];
+            cfHitboxes = [];
+
+            // VÍAS DE ACARREO
             ctx.beginPath();
             ctx.setLineDash([8, 6]);
             ctx.strokeStyle = "#10B981";
@@ -1469,7 +1478,6 @@ html_gps_canvas = f"""
             ctx.lineTo(xFin, yRetorno);
             ctx.stroke();
 
-            // ETIQUETAS OFICIALES DE RUTA
             ctx.font = "bold 11px Arial";
             ctx.fillStyle = "#10B981";
             ctx.textAlign = "left";
@@ -1477,36 +1485,59 @@ html_gps_canvas = f"""
             ctx.fillStyle = "#DC2626";
             ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ 30 km/h)", xInicio, yRetorno - 22);
 
-            // 2. EQUIPOS EN FRENTE DE CARGUÍO (ÍCONOS MÁS GRANDES 38x38 px)
+            // PALAS DE CARGUÍO DE MAYOR TAMAÑO (48x48 px)
             palasList.forEach((p, idx) => {{
-                let py = yIda - 20 - (idx * 42);
+                let py = yIda - 20 - (idx * 46);
+                let px = xInicio - 65;
+                let size = 48;
+
                 if (imgPala.complete && imgPala.naturalWidth > 0) {{
-                    ctx.drawImage(imgPala, xInicio - 60, py - 19, 38, 38);
+                    ctx.drawImage(imgPala, px, py - (size / 2), size, size);
                 }} else {{
                     ctx.fillStyle = "#F59E0B";
-                    ctx.fillRect(xInicio - 60, py - 15, 30, 30);
+                    ctx.fillRect(px, py - 20, 38, 38);
                 }}
+
+                palaHitboxes.push({{
+                    x: px + (size / 2),
+                    y: py,
+                    radius: 25,
+                    data: p
+                }});
+
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 11px Arial";
                 ctx.textAlign = "right";
-                ctx.fillText("Pala " + p.id, xInicio - 68, py + 4);
+                ctx.fillText("Pala " + p.id, px - 8, py + 4);
             }});
 
+            // CARGADORES FRONTALES (38x38 px)
             cfList.forEach((cf, idx) => {{
                 let py = yRetorno + 10 + (idx * 42);
+                let px = xInicio - 60;
+                let size = 38;
+
                 if (imgCF.complete && imgCF.naturalWidth > 0) {{
-                    ctx.drawImage(imgCF, xInicio - 60, py - 19, 38, 38);
+                    ctx.drawImage(imgCF, px, py - (size / 2), size, size);
                 }} else {{
                     ctx.fillStyle = "#F59E0B";
-                    ctx.fillRect(xInicio - 60, py - 15, 30, 30);
+                    ctx.fillRect(px, py - 15, 30, 30);
                 }}
+
+                cfHitboxes.push({{
+                    x: px + (size / 2),
+                    y: py,
+                    radius: 22,
+                    data: cf
+                }});
+
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 11px Arial";
                 ctx.textAlign = "right";
-                ctx.fillText("CF " + cf.id, xInicio - 68, py + 4);
+                ctx.fillText("CF " + cf.id, px - 8, py + 4);
             }});
 
-            // 3. ZONA DE DESCARGA (LISTA VERTICAL DETALLADA)
+            // ZONA DE DESCARGA
             ctx.fillStyle = "#DC2626";
             ctx.beginPath();
             ctx.arc(xFin + 25, (yIda + yRetorno) / 2, 12, 0, 2 * Math.PI);
@@ -1520,7 +1551,7 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // 4. ACTUALIZACIÓN Y DIBUJO DE CAMIONES CAEX CON AVANCE PAUSADO
+            // CÁLCULO PROPORCIONAL DE POSICIONES
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive) {{
                     v.cycleTime = (v.cycleTime + simSpeed) % totalCycleUnits;
@@ -1570,7 +1601,6 @@ html_gps_canvas = f"""
                     drawCaexTruck(v.x, v.y, v.isLoaded, v.id);
                 }}
 
-                // ETIQUETA SIEMPRE COLOCADA DEBAJO DE LA IMAGEN
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 10px Arial";
                 ctx.textAlign = "center";
@@ -1584,13 +1614,15 @@ html_gps_canvas = f"""
 
         requestAnimationFrame(animate);
 
-        // HOVER CON FICHA COMPLETA AL PASAR EL CURSOR
+        // HOVER COMPLETO PARA TODOS LOS EQUIPOS DE CARGUÍO Y TRANSPORTE
         canvas.addEventListener('mousemove', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
             let hovered = false;
+
+            // 1. HOVER CAMIONES CAEX
             vehicles.forEach(v => {{
                 let dist = Math.hypot(mouseX - v.x, mouseY - v.y);
                 if (dist < 25) {{
@@ -1598,7 +1630,7 @@ html_gps_canvas = f"""
                     tooltip.style.display = 'block';
                     tooltip.style.left = (v.x + 15) + 'px';
                     tooltip.style.top = (v.y - 35) + 'px';
-                    tooltip.innerHTML = '<b>CAMIÓN CAEX ' + v.id + '</b><br>' +
+                    tooltip.innerHTML = '<b>🚛 CAMIÓN CAEX ' + v.id + '</b><br>' +
                                         '• Estado: ' + v.statusText + '<br>' +
                                         '• Velocidad Teórica: ' + v.speedKmh + ' km/h<br>' +
                                         '• Modelo: ' + v.modelo + '<br>' +
@@ -1606,6 +1638,42 @@ html_gps_canvas = f"""
                                         '• Carga Actual: ' + (v.isLoaded ? '44.6 Ton' : '0.0 Ton');
                 }}
             }});
+
+            // 2. HOVER PALAS DE CARGUÍO
+            if (!hovered) {{
+                palaHitboxes.forEach(p => {{
+                    let dist = Math.hypot(mouseX - p.x, mouseY - p.y);
+                    if (dist < p.radius) {{
+                        hovered = true;
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = (p.x + 20) + 'px';
+                        tooltip.style.top = (p.y - 35) + 'px';
+                        tooltip.innerHTML = '<b>🏗️ PALA DE CARGUÍO ' + p.data.id + '</b><br>' +
+                                            '• Modelo: ' + p.data.modelo + '<br>' +
+                                            '• Operador: ' + p.data.operador + '<br>' +
+                                            '• Rendimiento: ' + p.data.rend + ' Ton/h<br>' +
+                                            '• Consumo: ' + p.data.consumo + ' Lts/h';
+                    }}
+                }});
+            }}
+
+            // 3. HOVER CARGADORES FRONTALES
+            if (!hovered) {{
+                cfHitboxes.forEach(cf => {{
+                    let dist = Math.hypot(mouseX - cf.x, mouseY - cf.y);
+                    if (dist < cf.radius) {{
+                        hovered = true;
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = (cf.x + 20) + 'px';
+                        tooltip.style.top = (cf.y - 35) + 'px';
+                        tooltip.innerHTML = '<b>🚜 CARGADOR FRONTAL ' + cf.data.id + '</b><br>' +
+                                            '• Modelo: ' + cf.data.modelo + '<br>' +
+                                            '• Operador: ' + cf.data.operador + '<br>' +
+                                            '• Rendimiento: ' + cf.data.rend + ' Ton/h<br>' +
+                                            '• Consumo: ' + cf.data.consumo + ' Lts/h';
+                    }}
+                }});
+            }}
 
             if (!hovered) {{
                 tooltip.style.display = 'none';
