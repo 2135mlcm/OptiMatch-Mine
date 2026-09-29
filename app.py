@@ -1220,10 +1220,10 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL MULTIPALA CON DESPACHO INDIVIDUAL Y HOLGURA EN RUTA
+# MÓDULO DE SEGUIMIENTO ESPACIAL MULTIPALA CON CIRCUITO CONTINUO (MATCH FACTOR ÓPTIMO)
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader("🗺️ Monitoreo Espacial del Circuito y Contador de Vueltas")
+st.subheader("🗺️️ Monitoreo Espacial del Circuito y Contador de Vueltas")
 
 if "acarreo_iniciado" not in st.session_state:
   st.session_state.acarreo_iniciado = False
@@ -1238,14 +1238,14 @@ with col_trig1:
   btn_trig = st.button("🔴 INICIO DE ACARREO", type="primary")
   if btn_trig:
     st.session_state.acarreo_iniciado = True
-    st.success("✅ Acarreo iniciado por confirmación VHF (Flota Desfasada).")
+    st.success("✅ Acarreo iniciado por confirmación VHF (Circuito Continuo).")
 
 with col_trig2:
   st.markdown(
       """
         <div style="padding: 6px 0px;">
             <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
-                📻 <b>AVISO RADIAL OPERADOR PALA - DESPACHO Y CONTROL DE FLOTA EN RUTA</b>
+                📻 <b>AVISO RADIAL OPERADOR PALA - DESPACHO Y CONTROL DE FLOTA EN RUTA CONTINUA</b>
             </span>
         </div>
     """,
@@ -1314,7 +1314,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON DESPACHO INDIVIDUAL DE TODOS LOS CAMIONES Y HOLGURA AMPLIADA
+# LIENZO HTML5 CON CIRCUITO CONTINUO SINCRO-MATCH FACTOR (~1.8 MINUTOS ENTRE SALIDAS)
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1441,12 +1441,11 @@ html_gps_canvas = f"""
         const timeReturn = 7.0;         // 7.0 min Retorno
         const simSpeed = 0.0004;
 
-        // INTERVALO DE DESPACHO AMPLIADO PARA DISTANCIAR A CADA CAMIÓN (~3.8 min de holgura entre unidades)
-        const staggerInterval = 3.80; 
+        // INTERVALO DE DESPACHO AJUSTADO AL RITMO DE CARGUÍO (~1.8 min entre camiones)
+        const staggerInterval = 1.80; 
 
         let totalVueltasCompletadas = 0;
 
-        // CADA CAMIÓN TIENE SU PROPIO DESFASE ÚNICO BASADO EN SU ÍNDICE INDIVIDUAL (idx)
         let vehicles = caexList.map((c, idx) => {{
             let offset = idx * staggerInterval;
             let totalEquipos = Math.max(1, palasList.length + cfList.length);
@@ -1502,7 +1501,7 @@ html_gps_canvas = f"""
             ctx.arc(-10, 8, 4, 0, 2 * Math.PI);
             ctx.arc(6, 8, 4, 0, 2 * Math.PI);
             ctx.arc(-10, -8, 4, 0, 2 * Math.PI);
-            ctx.arc(6, -8, 4, 0, 2 * Math.PI);
+            ctx.arc(-10, -8, 4, 0, 2 * Math.PI);
             ctx.fill();
 
             ctx.restore();
@@ -1602,7 +1601,7 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO INDIVIDUAL DE MOVIMIENTO PARA TODOS LOS CAMIONES
+            // CÁLCULO DE MOVIMIENTO CONTINUO
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive) {{
                     v.prevCycleTime = v.cycleTime;
@@ -1631,7 +1630,6 @@ html_gps_canvas = f"""
                 }}
 
                 if (!isTrackingActive) {{
-                    // POSICIÓN PREVIA EN SU PALA ASIGNADA
                     v.x = xInicio;
                     v.y = targetY;
                     v.isLoaded = false;
@@ -2065,7 +2063,7 @@ if not df_hist.empty:
       )
     else:
       st.info(
-          "ℹ️️ No hay agendamientos registrados para el turno del día de hoy."
+          "ℹ️ No hay agendamientos registrados para el turno del día de hoy."
           " Configure su flota en la barra lateral y presione 'CIERRE Y GUARDADO"
           " EN BD'."
       )
