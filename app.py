@@ -474,7 +474,7 @@ if not st.session_state.autenticado:
       st.markdown(
           """
                 <div style="text-align: center; background-color: #1E293B; padding: 20px; border-radius: 15px; border: 2px solid #F59E0B;">
-                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️ OptiMatch Mine</h1>
+                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️️ OptiMatch Mine</h1>
                     <h3 style="color: #F8FAFC; margin-top: 5px;">Control de Flota y Agendamiento Pre-Turno</h3>
                 </div>
             """,
@@ -1220,15 +1220,14 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL - MANEJO DINÁMICO DE N EQUIPOS
+# MÓDULO DE SEGUIMIENTO ESPACIAL - PALAS Y CARGADORES EN FRENTE DE CARGUÍO
 # ---------------------------------------------------------
 st.markdown("---")
 st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
 st.markdown(
-    "💡 **Control Operativo:** Haz clic sobre cualquier camión CAEX para"
-    " **detenerlo por falla/mantención** o para **reanudarlo**. La simulación y"
-    " métricas se adaptan automáticamente a cualquier cantidad de equipos"
-    " agendados."
+    "💡 **Control Operativo:** Palas y Cargadores alineados en la Zona de"
+    " Carguío. Haz clic sobre cualquier camión CAEX para **detenerlo por"
+    " falla/mantención** o para **reanudarlo**."
 )
 
 if "acarreo_iniciado" not in st.session_state:
@@ -1251,7 +1250,7 @@ with col_trig2:
       """
         <div style="padding: 6px 0px;">
             <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
-                📻 <b>AVISO RADIAL OPERADOR PALA - CIRCUITO CONTINUO UNIFORME</b>
+                📻 <b>AVISO RADIAL OPERADOR PALA - CIRCUITO CONTINUO DE RAJO</b>
             </span>
         </div>
     """,
@@ -1280,7 +1279,7 @@ img_cf_b64 = obtener_base64_img(
     "Gif Cargador Frontal.jpg"
 ) or obtener_base64_img("image_859f19.png")
 
-# PREPARAR LISTAS COMPLETAS CON ATRIBUTOS SEGUROS
+# PREPARAR LISTAS COMPLETAS DE EQUIPOS AGENDADOS
 caex_agendados = ed_caex[
     (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
 ]
@@ -1320,7 +1319,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 DINÁMICO QUE COMPLETA DETALLES TÉCNICOS Y ADMITE N EQUIPOS
+# LIENZO HTML5 CON FRENTE ÚNICO DE CARGUÍO ARRIBA (PALAS Y CARGADORES JUNTOS)
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1456,10 +1455,12 @@ html_gps_canvas = f"""
         const capCarguioTotal = palasList.reduce((a, b) => a + (b.rend || 0), 0) + cfList.reduce((a, b) => a + (b.rend || 0), 0);
         const factorDistancia = (distKm > 0) ? (3.5 / distKm) : 1.0;
 
+        // CONSOLIDACIÓN DE FRENTE ÚNICO DE CARGUÍO (PALAS + CARGADORES EN LA ZONA SUPERIOR)
+        let totalEquiposCarguio = palasList.length + cfList.length;
+
         let vehicles = caexList.map((c, idx) => {{
             let offset = idx * staggerInterval;
-            let totalEquipos = Math.max(1, palasList.length + cfList.length);
-            let assignedEq = idx % totalEquipos;
+            let assignedEq = (totalEquiposCarguio > 0) ? (idx % totalEquiposCarguio) : 0;
             return {{
                 id: c.id,
                 modelo: c.modelo,
@@ -1575,7 +1576,7 @@ html_gps_canvas = f"""
             ctx.fillStyle = "#DC2626";
             ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ 30 km/h)", xInicio, yRetorno - 22);
 
-            // PALAS DE CARGUÍO
+            // DIBUJO DE PALAS EN FRENTE DE CARGUÍO (ZONA SUPERIOR)
             palasList.forEach((p, idx) => {{
                 let py = yIda - 20 - (idx * 46);
                 let px = xInicio - 65;
@@ -1596,10 +1597,11 @@ html_gps_canvas = f"""
                 ctx.fillText("Pala " + p.id, px - 8, py + 4);
             }});
 
-            // CARGADORES FRONTALES
+            // DIBUJO DE CARGADORES FRONTALES AL LADO DE LAS PALAS (FRENTE DE CARGUÍO SUPERIOR)
             cfList.forEach((cf, idx) => {{
-                let py = yRetorno + 10 + (idx * 42);
-                let px = xInicio - 60;
+                let totalPalas = palasList.length;
+                let py = yIda - 20 - ((totalPalas + idx) * 46);
+                let px = xInicio - 65;
                 let size = 38;
 
                 if (imgCF.complete && imgCF.naturalWidth > 0) {{
@@ -1631,7 +1633,7 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO DE MOVIMIENTO HOMOGÉNEO Y CONTROL DE DETENCIÓN DE VEHÍCULOS
+            // CÁLCULO DE MOVIMIENTO DESDE FRENTE ÚNICO DE CARGUÍO
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive && !v.stoppedByFault) {{
                     v.prevCycleTime = v.cycleTime;
@@ -1644,18 +1646,15 @@ html_gps_canvas = f"""
                 }}
 
                 let t = v.cycleTime;
-                let totalEquipos = Math.max(1, palasList.length + cfList.length);
-                let eqIndex = v.equipmentAssigned % totalEquipos;
+                let eqIndex = (totalEquiposCarguio > 0) ? (v.equipmentAssigned % totalEquiposCarguio) : 0;
 
-                let targetY = yIda;
+                let targetY = yIda - 20 - (eqIndex * 46);
                 let eqNombre = "Pala/CF";
 
                 if (eqIndex < palasList.length) {{
-                    targetY = yIda - 20 - (eqIndex * 46);
                     eqNombre = palasList[eqIndex] ? palasList[eqIndex].id : "Pala";
                 }} else {{
                     let cfIdx = eqIndex - palasList.length;
-                    targetY = yRetorno + 10 + (cfIdx * 42);
                     eqNombre = cfList[cfIdx] ? cfList[cfIdx].id : "CF";
                 }}
 
@@ -1753,7 +1752,7 @@ html_gps_canvas = f"""
             }});
         }});
 
-        // HOVER DETALLADO CON TODOS LOS ATRIBUTOS TÉCNICOS
+        // HOVER DETALLADO CON ATRIBUTOS TÉCNICOS
         canvas.addEventListener('mousemove', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
@@ -2122,7 +2121,7 @@ if not df_hist.empty:
       )
     else:
       st.info(
-          "ℹ️ No hay agendamientos registrados para el turno del día de hoy."
+          "ℹ️️ No hay agendamientos registrados para el turno del día de hoy."
           " Configure su flota en la barra lateral y presione 'CIERRE Y GUARDADO"
           " EN BD'."
       )
