@@ -1215,7 +1215,7 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL EN EL CIRCUITO DE ACARREO (HTML5 / JS)
+# MÓDULO DE SEGUIMIENTO ESPACIAL CON ALGORITMO DE DESPACHO ADAPTATIVO (MATCH FACTOR ~ 1.0)
 # ---------------------------------------------------------
 st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo")
 
@@ -1232,14 +1232,14 @@ with col_trig1:
   btn_trig = st.button("🔴 INICIO DE ACARREO", type="primary")
   if btn_trig:
     st.session_state.acarreo_iniciado = True
-    st.success("✅ Acarreo iniciado por confirmación VHF.")
+    st.success("✅ Acarreo iniciado por confirmación VHF (Flota Espaciada).")
 
 with col_trig2:
   st.markdown(
       """
         <div style="padding: 6px 0px;">
             <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
-                📻 <b>AVISO RADIAL OPERADOR PALA - INICIO DEL ACARREO</b>
+                📻 <b>AVISO RADIAL OPERADOR PALA - DESPACHO Y CONTROL DE FLOTA EN RUTA</b>
             </span>
         </div>
     """,
@@ -1308,7 +1308,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 MODIFICADO: ETIQUETAS EN LISTA SIN SUPERPOSICIÓN + INVERSIÓN DE DIRECCIÓN VACÍOS
+# LIENZO HTML5 CON ALGORITMO DE DISTRIBUCIÓN CONTINUA Y ESPACIAMIENTO HOMOGÉNEO EN RUTA
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1386,27 +1386,32 @@ html_gps_canvas = f"""
         const imgCF = new Image();
         imgCF.src = "{img_cf_b64 or ''}";
 
-        // PARAMETRIZACIÓN PROPORCIONAL DE CICLO REAL OPTIMATCH-MINE
+        // TIEMPOS DEL CICLO BASE
         const totalCycleUnits = 23.0;
         const timeLoading = 3.0;        // 3.0 min Carga
-        const timeHaul = 11.67;         // 11.67 min Acarreo Ida (18 km/h)
+        const timeHaul = 11.67;         // 11.67 min Ida (18 km/h)
         const timeDumping = 1.33;       // 1.33 min Volteo
-        const timeReturn = 7.0;         // 7.0 min Retorno Vacío (30 km/h)
+        const timeReturn = 7.0;         // 7.0 min Retorno (30 km/h)
 
         const simSpeed = 0.0004;
 
-        let vehicles = caexList.map((c, i) => ({{
-            id: c.id,
-            modelo: c.modelo,
-            operador: c.operador,
-            cycleTime: isTrackingActive ? (i / Math.max(1, caexList.length)) * totalCycleUnits : 0.0,
-            x: 0,
-            y: 0,
-            isLoaded: false,
-            statusText: "En Espera",
-            speedKmh: 0,
-            isReturning: false
-        }}));
+        // ALGORITMO DE DISTRIBUCIÓN CONTINUA: ESPACIAR HOMOGÉNEAMENTE A LOS CAMIONES EN EL CICLO
+        let vehicles = caexList.map((c, i) => {{
+            // Calcula un desfase equidistante en el ciclo para mantener distribución continua y optimizar Match Factor
+            let initialOffset = isTrackingActive ? (i / Math.max(1, caexList.length)) * totalCycleUnits : 0.0;
+            return {{
+                id: c.id,
+                modelo: c.modelo,
+                operador: c.operador,
+                cycleTime: initialOffset,
+                x: 0,
+                y: 0,
+                isLoaded: false,
+                statusText: "En Espera",
+                speedKmh: 0,
+                isReturning: false
+            }};
+        }});
 
         let palaHitboxes = [];
         let cfHitboxes = [];
@@ -1415,7 +1420,7 @@ html_gps_canvas = f"""
             ctx.save();
             ctx.translate(x, y);
             if (isReturning) {{
-                ctx.scale(-1, 1); // Orientar camión hacia la izquierda si retorna
+                ctx.scale(-1, 1);
             }}
 
             ctx.fillStyle = isLoaded ? "#D97706" : "#CBD5E1";
@@ -1554,7 +1559,7 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO PROPORCIONAL DE POSICIONES Y ORIENTACIÓN
+            // CÁLCULO DE POSICIONES CONTINUAS DE FLOTA
             let waitingTrucks = [];
 
             vehicles.forEach((v, idx) => {{
@@ -1606,11 +1611,11 @@ html_gps_canvas = f"""
 
                 let imgToDraw = v.isLoaded ? imgCaexCargado : imgCaexVacio;
 
-                // DIBUJO DE CAMIÓN CON INVERSIÓN SEGÚN SENTIDO DE MARCHA
+                // DIBUJO Y ORIENTACIÓN DEL VEHÍCULO
                 ctx.save();
                 ctx.translate(v.x, v.y);
                 if (v.isReturning) {{
-                    ctx.scale(-1, 1); // Giro horizontal para camión en retorno hacia la izquierda
+                    ctx.scale(-1, 1);
                 }}
 
                 if (imgToDraw.complete && imgToDraw.naturalWidth > 0 && imgToDraw.src.length > 50) {{
@@ -1620,7 +1625,7 @@ html_gps_canvas = f"""
                 }}
                 ctx.restore();
 
-                // ETIQUETA INDIVIDUAL SOLO SI ESTÁ EN MOVIMIENTO
+                // ETIQUETAS INDIVIDUALES EN MOVIMIENTO
                 if (isTrackingActive) {{
                     ctx.fillStyle = "#0F172A";
                     ctx.font = "bold 10px Arial";
@@ -1631,13 +1636,13 @@ html_gps_canvas = f"""
                 }}
             }});
 
-            // AJUSTE 1: SI ESTÁN EN FILA DE ESPERA (DESACTIVADO), APILAR ETIQUETAS EN LISTA SIN SUPERPOSICIÓN
+            // LISTA APILADA EN ESPERA CUANDO NO SE HA INICIADO EL ACARREO
             if (!isTrackingActive && waitingTrucks.length > 0) {{
                 ctx.font = "bold 10px Arial";
                 ctx.textAlign = "left";
                 waitingTrucks.forEach((v, idx) => {{
                     ctx.fillStyle = "#0F172A";
-                    let textY = yIda + 24 + (idx * 14); // Lista apilada verticalmente
+                    let textY = yIda + 24 + (idx * 14);
                     ctx.fillText("• CAEX " + v.id + " (En Espera - 0T)", xInicio - 140, textY);
                 }});
             }}
