@@ -849,81 +849,33 @@ t_ciclo_fisico_min = t_carga_min + t_ida_min + t_descarga_min + t_retorno_min
 st.sidebar.markdown("---")
 
 # ---------------------------------------------------------
-# INICIALIZACIÓN DE FLOTA
+# INICIALIZACIÓN DE FLOTA (AJUSTADA A MEDIANA MINERÍA: 1 PALA, 1 CF Y 6 CAEX)
 # ---------------------------------------------------------
 if "palas_df" not in st.session_state:
-  st.session_state.palas_df = pd.DataFrame([
-      {
-          "Item": 1,
-          "Agendar": True,
-          "Estado": "🟢 Disponible",
-          "ID": "PA622",
-          "Modelo": "R9200",
-          "Operador": "Carlos Araya",
-          "Rend_TonH": 1424,
-          "Consumo_LtsH": 120.0,
-          "Costo_USDH": 441.44,
-      },
-      {
-          "Item": 2,
-          "Agendar": True,
-          "Estado": "🟢 Disponible",
-          "ID": "PA624",
-          "Modelo": "R9300",
-          "Operador": "Roberto Gómez",
-          "Rend_TonH": 1854,
-          "Consumo_LtsH": 145.0,
-          "Costo_USDH": 444.96,
-      },
-      {
-          "Item": 3,
-          "Agendar": False,
-          "Estado": "🔴 Falla Mecánica",
-          "ID": "PA626",
-          "Modelo": "R9300",
-          "Operador": "Sin Asignar",
-          "Rend_TonH": 1854,
-          "Consumo_LtsH": 145.0,
-          "Costo_USDH": 444.96,
-      },
-  ])
+  st.session_state.palas_df = pd.DataFrame([{
+      "Item": 1,
+      "Agendar": True,
+      "Estado": "🟢 Disponible",
+      "ID": "PA622",
+      "Modelo": "R9200",
+      "Operador": "Carlos Araya",
+      "Rend_TonH": 1424,
+      "Consumo_LtsH": 120.0,
+      "Costo_USDH": 441.44,
+  }])
 
 if "cf_df" not in st.session_state:
-  st.session_state.cf_df = pd.DataFrame([
-      {
-          "Item": 1,
-          "Agendar": True,
-          "Estado": "🟢 Disponible",
-          "ID": "CF437",
-          "Modelo": "WA900",
-          "Operador": "Juan Pérez",
-          "Rend_TonH": 685,
-          "Consumo_LtsH": 75.0,
-          "Costo_USDH": 342.50,
-      },
-      {
-          "Item": 2,
-          "Agendar": True,
-          "Estado": "🟢 Disponible",
-          "ID": "CF440",
-          "Modelo": "CAT 994K",
-          "Operador": "Mario Silva",
-          "Rend_TonH": 820,
-          "Consumo_LtsH": 90.0,
-          "Costo_USDH": 380.00,
-      },
-      {
-          "Item": 3,
-          "Agendar": False,
-          "Estado": "🟡 Mantenimiento",
-          "ID": "CF447",
-          "Modelo": "WA900",
-          "Operador": "Sin Asignar",
-          "Rend_TonH": 685,
-          "Consumo_LtsH": 75.0,
-          "Costo_USDH": 342.50,
-      },
-  ])
+  st.session_state.cf_df = pd.DataFrame([{
+      "Item": 1,
+      "Agendar": False,  # Prescripción: CF desactivado para concentrar 6 CAEX en 1 frente
+      "Estado": "🟡 Mantenimiento / Resguardo",
+      "ID": "CF437",
+      "Modelo": "WA900",
+      "Operador": "Sin Asignar",
+      "Rend_TonH": 685,
+      "Consumo_LtsH": 75.0,
+      "Costo_USDH": 342.50,
+  }])
 
 if "caex_df" not in st.session_state:
   st.session_state.caex_df = pd.DataFrame([
@@ -982,6 +934,17 @@ if "caex_df" not in st.session_state:
           "Consumo_LtsH": 110.0,
           "Costo_USDH": 310.00,
       },
+      {
+          "Item": 6,
+          "Agendar": True,
+          "Estado": "🟢 Disponible",
+          "ID": "CA324",
+          "Modelo": "HD1500-8",
+          "Operador": "Felipe Salinas",
+          "Rend_TonH": 604,
+          "Consumo_LtsH": 95.0,
+          "Costo_USDH": 289.92,
+      },
   ])
 
 # ---------------------------------------------------------
@@ -994,7 +957,11 @@ st.markdown(
 )
 
 col_t1, col_t2, col_t3 = st.columns(3)
-opciones_estado = ["🟢 Disponible", "🟡 Mantenimiento", "🔴 Falla Mecánica"]
+opciones_estado = [
+    "🟢 Disponible",
+    "🟡 Mantenimiento / Resguardo",
+    "🔴 Falla Mecánica",
+]
 
 with col_t1:
   c_img, c_txt = st.columns([1, 2])
@@ -1077,7 +1044,7 @@ caex_activos = ed_caex[
 n_puestos_carguio = max(1, len(palas_activas) + len(cf_activos))
 n_caex_activos = len(caex_activos)
 
-# UNIFICACIÓN DEL MATCH FACTOR A PARTIR DEL CICLO FÍSICO REAL:
+# UNIFICACIÓN DEL MATCH FACTOR A PARTIR DEL CICLO FÍSICO REAL
 match_factor = (
     (n_caex_activos * t_carga_min) / (n_puestos_carguio * t_ciclo_fisico_min)
 ) if (n_puestos_carguio * t_ciclo_fisico_min) > 0 else 0.0
@@ -1236,7 +1203,8 @@ with col_eval2:
   elif match_factor < 0.80:
     st.error(
         "🔴 **DESCALCE POR SUB-TRANSPORTE (Match Factor:"
-        f" {fmt_num(match_factor, 2)})**"
+        f" {fmt_num(match_factor, 2)})** — *Prescripción: Concentrar CAEX en 1"
+        " solo frente de carguío para minimizar OPEX e ineficiencias.*"
     )
   else:
     st.warning(
@@ -2145,7 +2113,7 @@ if not df_hist.empty:
       )
     else:
       st.info(
-          "ℹ️️ No hay agendamientos registrados para el turno del día de hoy."
+          "ℹ️ No hay agendamientos registrados para el turno del día de hoy."
           " Configure su flota en la barra lateral y presione 'CIERRE Y GUARDADO"
           " EN BD'."
       )
