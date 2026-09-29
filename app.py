@@ -1043,7 +1043,7 @@ with col_t3:
   )
 
 # ---------------------------------------------------------
-# CÁLCULOS MATEMÁTICOS DE BALANCE
+# CÁLCULOS MATEMÁTICOS DE BALANCE Y CONTABILIZACIÓN DE VUELTAS
 # ---------------------------------------------------------
 palas_activas = ed_palas[
     (ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")
@@ -1103,6 +1103,12 @@ emisiones_co2_kg = litros_diesel_turno * 2.68
 co2_por_ton = (
     (emisiones_co2_kg / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0.0
 )
+
+# CÁLCULO DE VUELTAS (META PLANIFICADA POR FLOTA Y POR CAMIÓN)
+t_ciclo_min = 23.0  # Tiempo base ciclo estándar
+n_caex_totales = max(1, len(caex_activos))
+vueltas_totales_meta = int((horas_turno * 60.0 / t_ciclo_min) * n_caex_totales)
+vueltas_por_camion_meta = int(horas_turno * 60.0 / t_ciclo_min)
 
 if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
   guardar_agendamiento_db(
@@ -1215,9 +1221,10 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL CON ALGORITMO DE DESPACHO ADAPTATIVO (MATCH FACTOR ~ 1.0)
+# MÓDULO DE SEGUIMIENTO ESPACIAL MULTIPALA Y CONTABILIZACIÓN DE VUELTAS
 # ---------------------------------------------------------
-st.subheader("🗺️ Monitoreo Espacial del Circuito de Acarreo")
+st.markdown("---")
+st.subheader("🗺️ Monitoreo Espacial del Circuito y Contador de Vueltas")
 
 if "acarreo_iniciado" not in st.session_state:
   st.session_state.acarreo_iniciado = False
@@ -1232,14 +1239,14 @@ with col_trig1:
   btn_trig = st.button("🔴 INICIO DE ACARREO", type="primary")
   if btn_trig:
     st.session_state.acarreo_iniciado = True
-    st.success("✅ Acarreo iniciado por confirmación VHF (Flota Espaciada).")
+    st.success("✅ Acarreo iniciado por confirmación VHF.")
 
 with col_trig2:
   st.markdown(
       """
         <div style="padding: 6px 0px;">
             <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
-                📻 <b>AVISO RADIAL OPERADOR PALA - DESPACHO Y CONTROL DE FLOTA EN RUTA</b>
+                📻 <b>AVISO RADIAL OPERADOR PALA - DESPACHO Y CONTROL DE FLOTA MULTIPALA</b>
             </span>
         </div>
     """,
@@ -1268,7 +1275,7 @@ img_cf_b64 = obtener_base64_img(
     "Gif Cargador Frontal.jpg"
 ) or obtener_base64_img("image_859f19.png")
 
-# OBTENER LISTAS COMPLETAS CON DETALLES OPERATIVOS
+# OBTENER LISTAS COMPLETAS DE FLOTA
 caex_agendados = ed_caex[
     (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
 ]
@@ -1308,7 +1315,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON ALGORITMO DE DISTRIBUCIÓN CONTINUA Y ESPACIAMIENTO HOMOGÉNEO EN RUTA
+# LIENZO HTML5 MULTIPALA Y PANEL CONTABLE DE VUELTAS EN TIEMPO REAL
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1335,6 +1342,39 @@ html_gps_canvas = f"""
             height: 100%;
             display: block;
         }}
+        .kpi-panel {{
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: rgba(15, 23, 42, 0.92);
+            border: 2px solid #F59E0B;
+            border-radius: 8px;
+            padding: 8px 14px;
+            color: #FFFFFF;
+            font-size: 11px;
+            font-weight: 800;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
+            z-index: 10;
+        }}
+        .kpi-title {{
+            color: #F59E0B;
+            font-size: 11px;
+            text-align: center;
+            margin-bottom: 4px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 2px;
+        }}
+        .kpi-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            text-align: center;
+        }}
+        .kpi-val {{
+            font-size: 16px;
+            color: #38BDF8;
+            font-weight: 900;
+        }}
         .tooltip {{
             position: absolute;
             display: none;
@@ -1353,6 +1393,14 @@ html_gps_canvas = f"""
 </head>
 <body>
     <div id="mapContainer">
+        <div class="kpi-panel">
+            <div class="kpi-title">📊 METRICAS DE VUELTAS TURNO (FLOTA)</div>
+            <div class="kpi-grid">
+                <div><span>META</span><div class="kpi-val" id="kpiMeta">{vueltas_totales_meta}</div></div>
+                <div><span>ACTUAL</span><div class="kpi-val" style="color:#10B981;" id="kpiActual">0</div></div>
+                <div><span>FALTAN</span><div class="kpi-val" style="color:#F59E0B;" id="kpiFaltan">{vueltas_totales_meta}</div></div>
+            </div>
+        </div>
         <canvas id="gpsCanvas"></canvas>
         <div id="tooltip" class="tooltip"></div>
     </div>
@@ -1373,6 +1421,7 @@ html_gps_canvas = f"""
         const cfList = {cf_json_str};
         const isTrackingActive = {acarreo_activo_bool};
         const distKm = {dist_km_val};
+        const metaVueltas = {vueltas_totales_meta};
 
         const imgCaexCargado = new Image();
         imgCaexCargado.src = "{img_caex_cargado_b64 or ''}";
@@ -1386,30 +1435,31 @@ html_gps_canvas = f"""
         const imgCF = new Image();
         imgCF.src = "{img_cf_b64 or ''}";
 
-        // TIEMPOS DEL CICLO BASE
         const totalCycleUnits = 23.0;
         const timeLoading = 3.0;        // 3.0 min Carga
-        const timeHaul = 11.67;         // 11.67 min Ida (18 km/h)
+        const timeHaul = 11.67;         // 11.67 min Acarreo Ida
         const timeDumping = 1.33;       // 1.33 min Volteo
-        const timeReturn = 7.0;         // 7.0 min Retorno (30 km/h)
-
+        const timeReturn = 7.0;         // 7.0 min Retorno
         const simSpeed = 0.0004;
 
-        // ALGORITMO DE DISTRIBUCIÓN CONTINUA: ESPACIAR HOMOGÉNEAMENTE A LOS CAMIONES EN EL CICLO
+        let totalVueltasCompletadas = 0;
+
         let vehicles = caexList.map((c, i) => {{
-            // Calcula un desfase equidistante en el ciclo para mantener distribución continua y optimizar Match Factor
-            let initialOffset = isTrackingActive ? (i / Math.max(1, caexList.length)) * totalCycleUnits : 0.0;
+            let offset = isTrackingActive ? (i / Math.max(1, caexList.length)) * totalCycleUnits : 0.0;
             return {{
                 id: c.id,
                 modelo: c.modelo,
                 operador: c.operador,
-                cycleTime: initialOffset,
+                cycleTime: offset,
+                prevCycleTime: offset,
+                vueltas: 0,
                 x: 0,
                 y: 0,
                 isLoaded: false,
                 statusText: "En Espera",
                 speedKmh: 0,
-                isReturning: false
+                isReturning: false,
+                palaAssigned: i % Math.max(1, palasList.length)
             }};
         }});
 
@@ -1419,9 +1469,7 @@ html_gps_canvas = f"""
         function drawCaexTruck(x, y, isLoaded, isReturning) {{
             ctx.save();
             ctx.translate(x, y);
-            if (isReturning) {{
-                ctx.scale(-1, 1);
-            }}
+            if (isReturning) {{ ctx.scale(-1, 1); }}
 
             ctx.fillStyle = isLoaded ? "#D97706" : "#CBD5E1";
             ctx.strokeStyle = "#0F172A";
@@ -1469,7 +1517,7 @@ html_gps_canvas = f"""
             palaHitboxes = [];
             cfHitboxes = [];
 
-            // VÍAS DE ACARREO
+            // VÍAS
             ctx.beginPath();
             ctx.setLineDash([8, 6]);
             ctx.strokeStyle = "#10B981";
@@ -1493,7 +1541,7 @@ html_gps_canvas = f"""
             ctx.fillStyle = "#DC2626";
             ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ 30 km/h)", xInicio, yRetorno - 22);
 
-            // PALAS DE CARGUÍO
+            // RENDERIZADO DE PALAS
             palasList.forEach((p, idx) => {{
                 let py = yIda - 20 - (idx * 46);
                 let px = xInicio - 65;
@@ -1506,12 +1554,7 @@ html_gps_canvas = f"""
                     ctx.fillRect(px, py - 20, 38, 38);
                 }}
 
-                palaHitboxes.push({{
-                    x: px + (size / 2),
-                    y: py,
-                    radius: 25,
-                    data: p
-                }});
+                palaHitboxes.push({{ x: px + (size / 2), y: py, radius: 25, data: p }});
 
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 11px Arial";
@@ -1519,7 +1562,7 @@ html_gps_canvas = f"""
                 ctx.fillText("Pala " + p.id, px - 8, py + 4);
             }});
 
-            // CARGADORES FRONTALES
+            // RENDERIZADO DE CARGADORES
             cfList.forEach((cf, idx) => {{
                 let py = yRetorno + 10 + (idx * 42);
                 let px = xInicio - 60;
@@ -1532,12 +1575,7 @@ html_gps_canvas = f"""
                     ctx.fillRect(px, py - 15, 30, 30);
                 }}
 
-                cfHitboxes.push({{
-                    x: px + (size / 2),
-                    y: py,
-                    radius: 22,
-                    data: cf
-                }});
+                cfHitboxes.push({{ x: px + (size / 2), y: py, radius: 22, data: cf }});
 
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 11px Arial";
@@ -1559,15 +1597,24 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO DE POSICIONES CONTINUAS DE FLOTA
+            // CÁLCULO DE MOVIMIENTO Y CONTABILIZACIÓN DE VUELTAS
             let waitingTrucks = [];
 
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive) {{
+                    v.prevCycleTime = v.cycleTime;
                     v.cycleTime = (v.cycleTime + simSpeed) % totalCycleUnits;
+
+                    // CONTABILIZAR VUELTA COMPLETADA AL CERRAR CICLO
+                    if (v.cycleTime < v.prevCycleTime) {{
+                        v.vueltas++;
+                        totalVueltasCompletadas++;
+                    }}
                 }}
 
                 let t = v.cycleTime;
+                let pIndex = v.palaAssigned % Math.max(1, palasList.length);
+                let palaY = yIda - 20 - (pIndex * 46); // Posición Y exacta de la pala asignada
 
                 if (!isTrackingActive) {{
                     v.x = xInicio - 25 - (idx * 38);
@@ -1578,16 +1625,19 @@ html_gps_canvas = f"""
                     v.speedKmh = 0;
                     waitingTrucks.push(v);
                 }} else if (t < timeLoading) {{
+                    // DIBUJA SIMULTÁNEAMENTE EN LA PALA ASIGNADA
                     v.x = xInicio;
-                    v.y = yIda;
+                    v.y = palaY; 
                     v.isLoaded = false;
                     v.isReturning = false;
-                    v.statusText = "En Carga (Pala)";
+                    let pNombre = palasList[pIndex] ? palasList[pIndex].id : "Pala";
+                    v.statusText = "En Carga (" + pNombre + ")";
                     v.speedKmh = 0;
                 }} else if (t < timeLoading + timeHaul) {{
                     let progressRatio = (t - timeLoading) / timeHaul;
                     v.x = xInicio + (progressRatio * trackWidth);
-                    v.y = yIda;
+                    // Transición suave hacia la vía principal de ida
+                    v.y = palaY + progressRatio * (yIda - palaY); 
                     v.isLoaded = true;
                     v.isReturning = false;
                     v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila";
@@ -1611,12 +1661,9 @@ html_gps_canvas = f"""
 
                 let imgToDraw = v.isLoaded ? imgCaexCargado : imgCaexVacio;
 
-                // DIBUJO Y ORIENTACIÓN DEL VEHÍCULO
                 ctx.save();
                 ctx.translate(v.x, v.y);
-                if (v.isReturning) {{
-                    ctx.scale(-1, 1);
-                }}
+                if (v.isReturning) {{ ctx.scale(-1, 1); }}
 
                 if (imgToDraw.complete && imgToDraw.naturalWidth > 0 && imgToDraw.src.length > 50) {{
                     ctx.drawImage(imgToDraw, -20, -20, 40, 40);
@@ -1625,25 +1672,30 @@ html_gps_canvas = f"""
                 }}
                 ctx.restore();
 
-                // ETIQUETAS INDIVIDUALES EN MOVIMIENTO
                 if (isTrackingActive) {{
                     ctx.fillStyle = "#0F172A";
                     ctx.font = "bold 10px Arial";
                     ctx.textAlign = "center";
                     let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh + " km/h]" : " [0 km/h]";
-                    let label = "CAEX " + v.id + (v.isLoaded ? " (44.6T)" : " (0T)") + speedLabel;
+                    let label = "CAEX " + v.id + " (" + v.vueltas + " vts)" + speedLabel;
                     ctx.fillText(label, v.x, v.y + 26);
                 }}
             }});
 
-            // LISTA APILADA EN ESPERA CUANDO NO SE HA INICIADO EL ACARREO
+            // ACTUALIZAR KPI DE VUELTAS EN PANTALLA
+            if (isTrackingActive) {{
+                document.getElementById('kpiActual').innerText = totalVueltasCompletadas;
+                let faltan = Math.max(0, metaVueltas - totalVueltasCompletadas);
+                document.getElementById('kpiFaltan').innerText = faltan;
+            }}
+
             if (!isTrackingActive && waitingTrucks.length > 0) {{
                 ctx.font = "bold 10px Arial";
                 ctx.textAlign = "left";
                 waitingTrucks.forEach((v, idx) => {{
                     ctx.fillStyle = "#0F172A";
                     let textY = yIda + 24 + (idx * 14);
-                    ctx.fillText("• CAEX " + v.id + " (En Espera - 0T)", xInicio - 140, textY);
+                    ctx.fillText("• CAEX " + v.id + " (En Espera - 0 Vueltas)", xInicio - 140, textY);
                 }});
             }}
 
@@ -1652,7 +1704,7 @@ html_gps_canvas = f"""
 
         requestAnimationFrame(animate);
 
-        // HOVER COMPLETO PARA EQUIPOS
+        // HOVER COMPLETO
         canvas.addEventListener('mousemove', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
@@ -1669,10 +1721,10 @@ html_gps_canvas = f"""
                     tooltip.style.top = (v.y - 35) + 'px';
                     tooltip.innerHTML = '<b>🚛 CAMIÓN CAEX ' + v.id + '</b><br>' +
                                         '• Estado: ' + v.statusText + '<br>' +
+                                        '• Vueltas Completadas: ' + v.vueltas + ' de {vueltas_por_camion_meta}<br>' +
                                         '• Velocidad Teórica: ' + v.speedKmh + ' km/h<br>' +
                                         '• Modelo: ' + v.modelo + '<br>' +
-                                        '• Operador: ' + v.operador + '<br>' +
-                                        '• Carga Actual: ' + (v.isLoaded ? '44.6 Ton' : '0.0 Ton');
+                                        '• Operador: ' + v.operador;
                 }}
             }});
 
@@ -1687,8 +1739,7 @@ html_gps_canvas = f"""
                         tooltip.innerHTML = '<b>🏗️ PALA DE CARGUÍO ' + p.data.id + '</b><br>' +
                                             '• Modelo: ' + p.data.modelo + '<br>' +
                                             '• Operador: ' + p.data.operador + '<br>' +
-                                            '• Rendimiento: ' + p.data.rend + ' Ton/h<br>' +
-                                            '• Consumo: ' + p.data.consumo + ' Lts/h';
+                                            '• Rendimiento: ' + p.data.rend + ' Ton/h';
                     }}
                 }});
             }}
@@ -1703,16 +1754,12 @@ html_gps_canvas = f"""
                         tooltip.style.top = (cf.y - 35) + 'px';
                         tooltip.innerHTML = '<b>🚜 CARGADOR FRONTAL ' + cf.data.id + '</b><br>' +
                                             '• Modelo: ' + cf.data.modelo + '<br>' +
-                                            '• Operador: ' + cf.data.operador + '<br>' +
-                                            '• Rendimiento: ' + cf.data.rend + ' Ton/h<br>' +
-                                            '• Consumo: ' + cf.data.consumo + ' Lts/h';
+                                            '• Operador: ' + cf.data.operador;
                     }}
                 }});
             }}
 
-            if (!hovered) {{
-                tooltip.style.display = 'none';
-            }}
+            if (!hovered) {{ tooltip.style.display = 'none'; }}
         }});
     </script>
 </body>
@@ -2019,7 +2066,7 @@ if not df_hist.empty:
       )
     else:
       st.info(
-          "ℹ️ No hay agendamientos registrados para el turno del día de hoy."
+          "ℹ️️ No hay agendamientos registrados para el turno del día de hoy."
           " Configure su flota en la barra lateral y presione 'CIERRE Y GUARDADO"
           " EN BD'."
       )
