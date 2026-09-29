@@ -1220,7 +1220,7 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL CON POSTURA PREVIA Y DESPACHO ESCALONADO
+# MÓDULO DE SEGUIMIENTO ESPACIAL MULTIPALA CON DESPACHO INDIVIDUAL Y HOLGURA EN RUTA
 # ---------------------------------------------------------
 st.markdown("---")
 st.subheader("🗺️ Monitoreo Espacial del Circuito y Contador de Vueltas")
@@ -1238,7 +1238,7 @@ with col_trig1:
   btn_trig = st.button("🔴 INICIO DE ACARREO", type="primary")
   if btn_trig:
     st.session_state.acarreo_iniciado = True
-    st.success("✅ Acarreo iniciado por confirmación VHF (Despacho Escalonado).")
+    st.success("✅ Acarreo iniciado por confirmación VHF (Flota Desfasada).")
 
 with col_trig2:
   st.markdown(
@@ -1314,7 +1314,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON POSTURA EN RUTA PRE-TRIGGER Y DESPACHO ESCALONADO RECURRENTE
+# LIENZO HTML5 CON DESPACHO INDIVIDUAL DE TODOS LOS CAMIONES Y HOLGURA AMPLIADA
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1436,26 +1436,27 @@ html_gps_canvas = f"""
 
         const totalCycleUnits = 23.0;
         const timeLoading = 3.0;        // 3.0 min Carga
-        const timeHaul = 11.67;         // 11.67 min Ida (18 km/h)
+        const timeHaul = 11.67;         // 11.67 min Acarreo Ida
         const timeDumping = 1.33;       // 1.33 min Volteo
-        const timeReturn = 7.0;         // 7.0 min Retorno (30 km/h)
+        const timeReturn = 7.0;         // 7.0 min Retorno
         const simSpeed = 0.0004;
 
-        // RETARDO ESCALONADO ENTRE EQUIPOS DE CARGUÍO (Equivalente a desfasar la salida ~10 seg entre pala 1, pala 2, pala N)
-        const staggerDelayPerEquipment = 0.35; 
+        // INTERVALO DE DESPACHO AMPLIADO PARA DISTANCIAR A CADA CAMIÓN (~3.8 min de holgura entre unidades)
+        const staggerInterval = 3.80; 
 
         let totalVueltasCompletadas = 0;
 
-        let vehicles = caexList.map((c, i) => {{
-            let equipmentIndex = i % Math.max(1, palasList.length + cfList.length);
-            // Asigna un desfase progresivo y recurrente para cada pala/cargador
-            let staggeredOffset = equipmentIndex * staggerDelayPerEquipment;
+        // CADA CAMIÓN TIENE SU PROPIO DESFASE ÚNICO BASADO EN SU ÍNDICE INDIVIDUAL (idx)
+        let vehicles = caexList.map((c, idx) => {{
+            let offset = idx * staggerInterval;
+            let totalEquipos = Math.max(1, palasList.length + cfList.length);
+            let assignedEq = idx % totalEquipos;
             return {{
                 id: c.id,
                 modelo: c.modelo,
                 operador: c.operador,
-                cycleTime: staggeredOffset,
-                prevCycleTime: staggeredOffset,
+                cycleTime: offset,
+                prevCycleTime: offset,
                 vueltas: 0,
                 x: 0,
                 y: 0,
@@ -1463,7 +1464,7 @@ html_gps_canvas = f"""
                 statusText: "Postura Previa (Listo para Cargar)",
                 speedKmh: 0,
                 isReturning: false,
-                equipmentAssigned: equipmentIndex
+                equipmentAssigned: assignedEq
             }};
         }});
 
@@ -1601,13 +1602,12 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO DE MOVIMIENTO Y CONTABILIZACIÓN DE VUELTAS INDIVIDUAL
+            // CÁLCULO INDIVIDUAL DE MOVIMIENTO PARA TODOS LOS CAMIONES
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive) {{
                     v.prevCycleTime = v.cycleTime;
                     v.cycleTime = (v.cycleTime + simSpeed) % totalCycleUnits;
 
-                    // CONTABILIZA VUELTA INDIVIDUAL AL FINALIZAR EL CICLO COMPLETO
                     if (v.cycleTime < v.prevCycleTime) {{
                         v.vueltas++;
                         totalVueltasCompletadas++;
@@ -1616,7 +1616,7 @@ html_gps_canvas = f"""
 
                 let t = v.cycleTime;
                 let totalEquipos = Math.max(1, palasList.length + cfList.length);
-                let eqIndex = v.equipmentAssigned % totalEquipos;
+                let eqIndex = v.equipmentAssigned;
 
                 let targetY = yIda;
                 let eqNombre = "Pala/CF";
@@ -1631,7 +1631,7 @@ html_gps_canvas = f"""
                 }}
 
                 if (!isTrackingActive) {{
-                    // POSTURA PREVIA: UBICADOS DIRECTAMENTE EN SUS RESPECTIVAS PALAS Y CARGADORES
+                    // POSICIÓN PREVIA EN SU PALA ASIGNADA
                     v.x = xInicio;
                     v.y = targetY;
                     v.isLoaded = false;
@@ -1683,7 +1683,7 @@ html_gps_canvas = f"""
                 }}
                 ctx.restore();
 
-                // ETIQUETAS INDIVIDUALES CON CONTADOR VUELTAS VIVO
+                // ETIQUETAS VISIBLES PARA CADA UNIDAD
                 ctx.fillStyle = "#0F172A";
                 ctx.font = "bold 10px Arial";
                 ctx.textAlign = "center";
@@ -1692,7 +1692,6 @@ html_gps_canvas = f"""
                 ctx.fillText(label, v.x, v.y + 26);
             }});
 
-            // ACTUALIZA KPI PANEL EN PANTALLA
             if (isTrackingActive) {{
                 document.getElementById('kpiActual').innerText = totalVueltasCompletadas;
                 let faltan = Math.max(0, metaVueltas - totalVueltasCompletadas);
@@ -1704,7 +1703,7 @@ html_gps_canvas = f"""
 
         requestAnimationFrame(animate);
 
-        // HOVER COMPLETO
+        // HOVER DETALLADO PARA MOUSE
         canvas.addEventListener('mousemove', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
@@ -2066,7 +2065,7 @@ if not df_hist.empty:
       )
     else:
       st.info(
-          "ℹ️ No hay agendamientos registrados para el turno del día de hoy."
+          "ℹ️️ No hay agendamientos registrados para el turno del día de hoy."
           " Configure su flota en la barra lateral y presione 'CIERRE Y GUARDADO"
           " EN BD'."
       )
