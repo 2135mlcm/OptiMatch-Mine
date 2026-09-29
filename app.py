@@ -1220,15 +1220,15 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL CON DISTRIBUCIÓN UNIFORME DE CICLO CONTINUO (360°)
+# MÓDULO DE SEGUIMIENTO ESPACIAL - MANEJO DINÁMICO DE N EQUIPOS
 # ---------------------------------------------------------
 st.markdown("---")
 st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
 st.markdown(
     "💡 **Control Operativo:** Haz clic sobre cualquier camión CAEX para"
-    " **detenerlo por falla/mantención** o para **reanudarlo**. La flota se"
-    " distribuye homogéneamente en el circuito de 360° evitando la 'pala"
-    " hambrienta'."
+    " **detenerlo por falla/mantención** o para **reanudarlo**. La simulación y"
+    " métricas se adaptan automáticamente a cualquier cantidad de equipos"
+    " agendados."
 )
 
 if "acarreo_iniciado" not in st.session_state:
@@ -1280,49 +1280,47 @@ img_cf_b64 = obtener_base64_img(
     "Gif Cargador Frontal.jpg"
 ) or obtener_base64_img("image_859f19.png")
 
+# PREPARAR LISTAS COMPLETAS CON ATRIBUTOS SEGUROS
 caex_agendados = ed_caex[
     (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
 ]
-lista_caex_js = [
-    {
-        "id": str(r["ID"]),
-        "modelo": str(r["Modelo"]),
-        "operador": str(r["Operador"]),
-        "rend": float(r["Rend_TonH"]),
-    }
-    for _, r in caex_agendados.iterrows()
-]
+lista_caex_js = []
+for _, r in caex_agendados.iterrows():
+  lista_caex_js.append({
+      "id": str(r.get("ID", "CAEX")),
+      "modelo": str(r.get("Modelo", "HD1500-8")),
+      "operador": str(r.get("Operador", "Sin Operador")),
+      "rend": float(r.get("Rend_TonH", 600.0)),
+  })
 
-palas_activas_js = [
-    {
-        "id": str(r["ID"]),
-        "modelo": str(r["Modelo"]),
-        "operador": str(r["Operador"]),
-        "rend": float(r["Rend_TonH"]),
-    }
-    for _, r in ed_palas[
-        (ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")
-    ].iterrows()
-]
+palas_activas_js = []
+for _, r in ed_palas[
+    (ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")
+].iterrows():
+  palas_activas_js.append({
+      "id": str(r.get("ID", "PALA")),
+      "modelo": str(r.get("Modelo", "R9200")),
+      "operador": str(r.get("Operador", "Sin Operador")),
+      "rend": float(r.get("Rend_TonH", 1400.0)),
+  })
 
-cf_activos_js = [
-    {
-        "id": str(r["ID"]),
-        "modelo": str(r["Modelo"]),
-        "operador": str(r["Operador"]),
-        "rend": float(r["Rend_TonH"]),
-    }
-    for _, r in ed_cf[
-        (ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")
-    ].iterrows()
-]
+cf_activos_js = []
+for _, r in ed_cf[
+    (ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")
+].iterrows():
+  cf_activos_js.append({
+      "id": str(r.get("ID", "CF")),
+      "modelo": str(r.get("Modelo", "WA900")),
+      "operador": str(r.get("Operador", "Sin Operador")),
+      "rend": float(r.get("Rend_TonH", 700.0)),
+  })
 
 caex_json_str = json.dumps(lista_caex_js)
 palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON DESFASE MATEMÁTICO EQUIDISTANTE (23 / N) Y CONTROL INTERACTIVO
+# LIENZO HTML5 DINÁMICO QUE COMPLETA DETALLES TÉCNICOS Y ADMITE N EQUIPOS
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1430,7 +1428,6 @@ html_gps_canvas = f"""
         const cfList = {cf_json_str};
         const isTrackingActive = {acarreo_activo_bool};
         const distKm = {dist_km_val};
-        const metaVueltas = {vueltas_totales_meta};
 
         const imgCaexCargado = new Image();
         imgCaexCargado.src = "{img_caex_cargado_b64 or ''}";
@@ -1451,13 +1448,12 @@ html_gps_canvas = f"""
         const timeReturn = 7.0;
         const simSpeed = 0.0004;
 
-        // CÁLCULO DE DESFASE EQUIDISTANTE EXACTO BASADO EN EL TOTAL DE LA FLOTA (23.0 / N)
         const totalNumCaex = Math.max(1, caexList.length);
-        const staggerInterval = totalCycleUnits / totalNumCaex; // 4.60 para 5 camiones
+        const staggerInterval = totalCycleUnits / totalNumCaex;
 
         let totalVueltasCompletadas = 0;
 
-        const capCarguioTotal = palasList.reduce((a, b) => a + b.rend, 0) + cfList.reduce((a, b) => a + b.rend, 0);
+        const capCarguioTotal = palasList.reduce((a, b) => a + (b.rend || 0), 0) + cfList.reduce((a, b) => a + (b.rend || 0), 0);
         const factorDistancia = (distKm > 0) ? (3.5 / distKm) : 1.0;
 
         let vehicles = caexList.map((c, idx) => {{
@@ -1488,7 +1484,7 @@ html_gps_canvas = f"""
 
         function recalculateDynamicMF() {{
             let activeCaex = vehicles.filter(v => !v.stoppedByFault);
-            let capTranspEfectiva = activeCaex.reduce((sum, v) => sum + v.rend, 0) * factorDistancia;
+            let capTranspEfectiva = activeCaex.reduce((sum, v) => sum + (v.rend || 0), 0) * factorDistancia;
             let mfDinamico = (capCarguioTotal > 0) ? (capTranspEfectiva / capCarguioTotal) : 0.0;
             
             document.getElementById('kpiMF').innerText = mfDinamico.toFixed(2);
@@ -1635,7 +1631,7 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO DE MOVIMIENTO HOMOGÉNEO Y CONTROL DE DETENCIÓN
+            // CÁLCULO DE MOVIMIENTO HOMOGÉNEO Y CONTROL DE DETENCIÓN DE VEHÍCULOS
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive && !v.stoppedByFault) {{
                     v.prevCycleTime = v.cycleTime;
@@ -1649,14 +1645,14 @@ html_gps_canvas = f"""
 
                 let t = v.cycleTime;
                 let totalEquipos = Math.max(1, palasList.length + cfList.length);
-                let eqIndex = v.equipmentAssigned;
+                let eqIndex = v.equipmentAssigned % totalEquipos;
 
                 let targetY = yIda;
                 let eqNombre = "Pala/CF";
 
                 if (eqIndex < palasList.length) {{
                     targetY = yIda - 20 - (eqIndex * 46);
-                    eqNombre = palasList[eqIndex].id;
+                    eqNombre = palasList[eqIndex] ? palasList[eqIndex].id : "Pala";
                 }} else {{
                     let cfIdx = eqIndex - palasList.length;
                     targetY = yRetorno + 10 + (cfIdx * 42);
@@ -1743,7 +1739,7 @@ html_gps_canvas = f"""
 
         requestAnimationFrame(animate);
 
-        // EVENTO DE CLIC DIRECTO SOBRE CAMIÓN PARA DETENER / REANUDAR
+        // CLIC PARA DETENER / REANUDAR UNIDAD
         canvas.addEventListener('click', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
@@ -1757,7 +1753,7 @@ html_gps_canvas = f"""
             }});
         }});
 
-        // HOVER DETALLADO CON INSTRUCCIÓN DE CLIC
+        // HOVER DETALLADO CON TODOS LOS ATRIBUTOS TÉCNICOS
         canvas.addEventListener('mousemove', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
@@ -1772,11 +1768,17 @@ html_gps_canvas = f"""
                     tooltip.style.display = 'block';
                     tooltip.style.left = (v.x + 15) + 'px';
                     tooltip.style.top = (v.y - 35) + 'px';
+                    
+                    let tonAprox = (v.vueltas * (v.rend / 10)).toFixed(0);
                     let toggleMsg = v.stoppedByFault ? "<span style='color:#10B981;'><b>(Haz clic para REANUDAR)</b></span>" : "<span style='color:#EF4444;'><b>(Haz clic para DETENER POR FALLA)</b></span>";
+                    
                     tooltip.innerHTML = '<b>🚛 CAMIÓN CAEX ' + v.id + '</b><br>' +
+                                        '• Operador(a): <b>' + (v.operador || "Sin Asignar") + '</b><br>' +
+                                        '• Modelo: ' + (v.modelo || "HD1500-8") + '<br>' +
+                                        '• Capacidad/Rendimiento: ' + v.rend + ' Ton/h<br>' +
+                                        '• Vueltas Completadas: ' + v.vueltas + '<br>' +
+                                        '• Tonelaje Movido Aprox.: ' + tonAprox + ' Ton<br>' +
                                         '• Estado: ' + v.statusText + '<br>' +
-                                        '• Vueltas Individuales: ' + v.vueltas + '<br>' +
-                                        '• Velocidad: ' + v.speedKmh + ' km/h<br>' +
                                         toggleMsg;
                 }}
             }});
@@ -1790,8 +1792,9 @@ html_gps_canvas = f"""
                         tooltip.style.left = (p.x + 20) + 'px';
                         tooltip.style.top = (p.y - 35) + 'px';
                         tooltip.innerHTML = '<b>🏗️ PALA DE CARGUÍO ' + p.data.id + '</b><br>' +
-                                            '• Modelo: ' + p.data.modelo + '<br>' +
-                                            '• Operador: ' + p.data.operador;
+                                            '• Operador(a): <b>' + (p.data.operador || "Sin Asignar") + '</b><br>' +
+                                            '• Modelo: ' + (p.data.modelo || "R9200") + '<br>' +
+                                            '• Rendimiento: ' + p.data.rend + ' Ton/h';
                     }}
                 }});
             }}
@@ -1805,8 +1808,9 @@ html_gps_canvas = f"""
                         tooltip.style.left = (cf.x + 20) + 'px';
                         tooltip.style.top = (cf.y - 35) + 'px';
                         tooltip.innerHTML = '<b>🚜 CARGADOR FRONTAL ' + cf.data.id + '</b><br>' +
-                                            '• Modelo: ' + cf.data.modelo + '<br>' +
-                                            '• Operador: ' + cf.data.operador;
+                                            '• Operador(a): <b>' + (cf.data.operador || "Sin Asignar") + '</b><br>' +
+                                            '• Modelo: ' + (cf.data.modelo || "WA900") + '<br>' +
+                                            '• Rendimiento: ' + cf.data.rend + ' Ton/h';
                     }}
                 }});
             }}
