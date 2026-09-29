@@ -822,10 +822,29 @@ valor_ton_usd = st.sidebar.number_input(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.header("🚛 Distancia de Acarreo")
+st.sidebar.header("🚛 Parámetros Físicos de Acarreo")
 distancia_acarreo_km = st.sidebar.number_input(
     "Distancia Promedio Acarreo (km)", value=3.5, step=0.5
 )
+vel_cargado_kmh = st.sidebar.number_input(
+    "Velocidad Ida Cargado (km/h)", value=18.0, step=1.0
+)
+vel_vacio_kmh = st.sidebar.number_input(
+    "Velocidad Retorno Vacío (km/h)", value=30.0, step=1.0
+)
+
+# CÁLCULOS FÍSICOS EXACTOS DEL CICLO OPERACIONAL
+t_carga_min = 2.20
+t_descarga_min = 2.00
+t_ida_min = (
+    (distancia_acarreo_km / vel_cargado_kmh) * 60.0
+    if vel_cargado_kmh > 0
+    else 11.67
+)
+t_retorno_min = (
+    (distancia_acarreo_km / vel_vacio_kmh) * 60.0 if vel_vacio_kmh > 0 else 7.00
+)
+t_ciclo_fisico_min = t_carga_min + t_ida_min + t_descarga_min + t_retorno_min
 
 st.sidebar.markdown("---")
 
@@ -1043,7 +1062,7 @@ with col_t3:
   )
 
 # ---------------------------------------------------------
-# CÁLCULOS MATEMÁTICOS DE BALANCE Y CONTABILIZACIÓN DE VUELTAS
+# CÁLCULOS MATEMÁTICOS DE BALANCE Y UNIFICACIÓN DE MODELO
 # ---------------------------------------------------------
 palas_activas = ed_palas[
     (ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")
@@ -1054,6 +1073,14 @@ cf_activos = ed_cf[
 caex_activos = ed_caex[
     (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
 ]
+
+n_puestos_carguio = max(1, len(palas_activas) + len(cf_activos))
+n_caex_activos = len(caex_activos)
+
+# UNIFICACIÓN DEL MATCH FACTOR A PARTIR DEL CICLO FÍSICO REAL:
+match_factor = (
+    (n_caex_activos * t_carga_min) / (n_puestos_carguio * t_ciclo_fisico_min)
+) if (n_puestos_carguio * t_ciclo_fisico_min) > 0 else 0.0
 
 factor_distancia = (
     3.5 / distancia_acarreo_km if distancia_acarreo_km > 0 else 1.0
@@ -1076,7 +1103,6 @@ costo_fijo_total_turno = (
 ) * horas_turno
 costo_opex_total_turno = costo_fijo_total_turno + costo_diesel_turno
 
-match_factor = (cap_transporte / cap_carguio) if cap_carguio > 0 else 0.0
 tasa_efectiva = min(cap_carguio, cap_transporte)
 tonelaje_proyectado = tasa_efectiva * horas_turno
 
@@ -1104,10 +1130,9 @@ co2_por_ton = (
     (emisiones_co2_kg / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0.0
 )
 
-t_ciclo_min = 23.0
-n_caex_totales = max(1, len(caex_activos))
-vueltas_totales_meta = int((horas_turno * 60.0 / t_ciclo_min) * n_caex_totales)
-vueltas_por_camion_meta = int(horas_turno * 60.0 / t_ciclo_min)
+vueltas_totales_meta = int(
+    (horas_turno * 60.0 / t_ciclo_fisico_min) * max(1, n_caex_activos)
+)
 
 if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
   guardar_agendamiento_db(
@@ -1195,7 +1220,7 @@ with col_eval2:
   st.markdown("### 🚦 Semáforo Prescriptivo de Balance de Flota")
 
   st.markdown(
-      '<p class="mf-label">Match Factor Calculado:</p>',
+      '<p class="mf-label">Match Factor Calculado (Físico):</p>',
       unsafe_allow_html=True,
   )
   st.markdown(
@@ -1220,22 +1245,21 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL - RETORNO ULTRA-RÁPIDO A 30 KM/H
+# MÓDULO DE SEGUIMIENTO ESPACIAL - SIMULACIÓN FÍSICA ACOPLADA
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
+st.subheader(
+    "🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo"
+    " Acoplado)"
+)
 st.markdown(
-    "💡 **Control Operativo:** El retorno vacío de los camiones CAEX es"
-    " **visiblemente más rápido (30 km/h)** respecto a la ida cargado (18"
-    " km/h)."
+    f"💡 **Ciclo Operacional Calculado:** **{fmt_num(t_ciclo_fisico_min, 2)} min**"
+    f" (Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h: {fmt_num(t_ida_min, 2)}m |"
+    f" Descarga: {t_descarga_min}m | Retorno @ {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
 )
 
 if "acarreo_iniciado" not in st.session_state:
   st.session_state.acarreo_iniciado = False
-
-dist_km_val = (
-    distancia_acarreo_km if "distancia_acarreo_km" in locals() else 3.5
-)
 
 col_trig1, col_trig2, col_trig3 = st.columns([1.8, 3.5, 1.5])
 
@@ -1250,7 +1274,7 @@ with col_trig2:
       """
         <div style="padding: 6px 0px;">
             <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
-                📻 <b>AVISO RADIAL OPERADOR PALA - RETORNO RÁPIDO (30 KM/H DESOCUPADO)</b>
+                📻 <b>AVISO RADIAL OPERADOR PALA - SIMULACIÓN BASADA EN VELOCIDADES REALES Y CICLO FÍSICO</b>
             </span>
         </div>
     """,
@@ -1319,7 +1343,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON RETORNO RÁPIDO Y DINÁMICO
+# LIENZO HTML5 ACOPLADO FÍSICAMENTE
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1426,7 +1450,10 @@ html_gps_canvas = f"""
         const palasList = {palas_json_str};
         const cfList = {cf_json_str};
         const isTrackingActive = {acarreo_activo_bool};
-        const distKm = {dist_km_val};
+
+        const distKm = {distancia_acarreo_km};
+        const speedLoadedKmh = {vel_cargado_kmh};
+        const speedEmptyKmh = {vel_vacio_kmh};
 
         const imgCaexCargado = new Image();
         imgCaexCargado.src = "{img_caex_cargado_b64 or ''}";
@@ -1440,27 +1467,24 @@ html_gps_canvas = f"""
         const imgCF = new Image();
         imgCF.src = "{img_cf_b64 or ''}";
 
-        // PARAMETRIZACIÓN DEL CICLO REAJUSTADA PARA RETORNO RÁPIDO
-        const totalCycleUnits = 23.0;
-        const timeLoading = 3.0;
-        const timeHaul = 14.0;       // Ida cargado @ 18 km/h (desplazamiento pausado)
-        const timeDumping = 2.5;     // Descarga y maniobra en botadero
-        const timeReturn = 3.5;      // Retorno desocupado @ 30 km/h (desplazamiento ultra-rápido)
+        // TRAMOS FÍSICOS CALCULADOS AUTOMÁTICAMENTE
+        const timeLoading = {t_carga_min};
+        const timeHaul = {t_ida_min};
+        const timeDumping = {t_descarga_min};
+        const timeReturn = {t_retorno_min};
+        const totalCycleUnits = {t_ciclo_fisico_min};
+
         const simSpeed = 0.0004;
 
         const totalNumCaex = Math.max(1, caexList.length);
         const staggerInterval = totalCycleUnits / totalNumCaex;
 
         let totalVueltasCompletadas = 0;
-
-        const capCarguioTotal = palasList.reduce((a, b) => a + (b.rend || 0), 0) + cfList.reduce((a, b) => a + (b.rend || 0), 0);
-        const factorDistancia = (distKm > 0) ? (3.5 / distKm) : 1.0;
-
-        let totalEquiposCarguio = palasList.length + cfList.length;
+        let totalEquiposCarguio = Math.max(1, palasList.length + cfList.length);
 
         let vehicles = caexList.map((c, idx) => {{
             let offset = idx * staggerInterval;
-            let assignedEq = (totalEquiposCarguio > 0) ? (idx % totalEquiposCarguio) : 0;
+            let assignedEq = idx % totalEquiposCarguio;
             return {{
                 id: c.id,
                 modelo: c.modelo,
@@ -1485,8 +1509,7 @@ html_gps_canvas = f"""
 
         function recalculateDynamicMF() {{
             let activeCaex = vehicles.filter(v => !v.stoppedByFault);
-            let capTranspEfectiva = activeCaex.reduce((sum, v) => sum + (v.rend || 0), 0) * factorDistancia;
-            let mfDinamico = (capCarguioTotal > 0) ? (capTranspEfectiva / capCarguioTotal) : 0.0;
+            let mfDinamico = (activeCaex.length * timeLoading) / (totalEquiposCarguio * totalCycleUnits);
             
             document.getElementById('kpiMF').innerText = mfDinamico.toFixed(2);
             document.getElementById('kpiFlota').innerText = activeCaex.length + "/" + vehicles.length;
@@ -1572,9 +1595,9 @@ html_gps_canvas = f"""
             ctx.font = "bold 11px Arial";
             ctx.fillStyle = "#10B981";
             ctx.textAlign = "left";
-            ctx.fillText("VÍA IDA CARGADO (" + distKm.toFixed(1) + " km @ 18 km/h)", xInicio, yIda - 22);
+            ctx.fillText("VÍA IDA CARGADO (" + distKm.toFixed(1) + " km @ " + speedLoadedKmh + " km/h)", xInicio, yIda - 22);
             ctx.fillStyle = "#DC2626";
-            ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ 30 km/h)", xInicio, yRetorno - 22);
+            ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ " + speedEmptyKmh + " km/h)", xInicio, yRetorno - 22);
 
             // PALAS DE CARGUÍO
             palasList.forEach((p, idx) => {{
@@ -1597,7 +1620,7 @@ html_gps_canvas = f"""
                 ctx.fillText("Pala " + p.id, px - 8, py + 4);
             }});
 
-            // CARGADORES FRONTALES EN FRENTE DE CARGUÍO
+            // CARGADORES FRONTALES
             cfList.forEach((cf, idx) => {{
                 let totalPalas = palasList.length;
                 let py = yIda - 20 - ((totalPalas + idx) * 46);
@@ -1633,7 +1656,7 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO DE MOVIMIENTO FÍSICO REAL (IDA PAUSADA VS RETORNO ULTRA-RÁPIDO)
+            // ANIMACIÓN FÍSICAMENTE ACOPLADA
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive && !v.stoppedByFault) {{
                     v.prevCycleTime = v.cycleTime;
@@ -1680,7 +1703,7 @@ html_gps_canvas = f"""
                         v.isLoaded = true;
                         v.isReturning = false;
                         v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila";
-                        v.speedKmh = 18;
+                        v.speedKmh = speedLoadedKmh;
                     }} else if (t < timeLoading + timeHaul + timeDumping) {{
                         v.x = xFin;
                         v.y = (yIda + yRetorno) / 2;
@@ -1689,14 +1712,14 @@ html_gps_canvas = f"""
                         v.statusText = "En Volteo / Descarga";
                         v.speedKmh = 0;
                     }} else {{
-                        // FASE DE RETORNO ULTRA-RÁPIDO (3.5 UNIDADES DE TIEMPO)
+                        // FASE DE RETORNO SEGÚN CÁLCULO FÍSICO REAL
                         let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
                         v.x = xFin - (progressRatio * trackWidth);
                         v.y = yRetorno;
                         v.isLoaded = false;
                         v.isReturning = true;
                         v.statusText = "Retorno Vacío -> " + eqNombre;
-                        v.speedKmh = 30;
+                        v.speedKmh = speedEmptyKmh;
                     }}
                 }} else {{
                     v.statusText = "🔴 DETENIDO POR FALLA / MANTENCIÓN";
@@ -2122,7 +2145,7 @@ if not df_hist.empty:
       )
     else:
       st.info(
-          "ℹ️ No hay agendamientos registrados para el turno del día de hoy."
+          "ℹ️️ No hay agendamientos registrados para el turno del día de hoy."
           " Configure su flota en la barra lateral y presione 'CIERRE Y GUARDADO"
           " EN BD'."
       )
