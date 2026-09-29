@@ -1220,14 +1220,14 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL - RETORNO RÁPIDO Y DINÁMICO (30 KM/H)
+# MÓDULO DE SEGUIMIENTO ESPACIAL - RETORNO ULTRA-RÁPIDO A 30 KM/H
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader("🗺️️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
+st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
 st.markdown(
-    "💡 **Control Operativo:** Palas y Cargadores alineados en la Zona de"
-    " Carguío. **El retorno vacío de los CAEX es más rápido (30 km/h)** para"
-    " reflejar la física real de acarreo."
+    "💡 **Control Operativo:** El retorno vacío de los camiones CAEX es"
+    " **visiblemente más rápido (30 km/h)** respecto a la ida cargado (18"
+    " km/h)."
 )
 
 if "acarreo_iniciado" not in st.session_state:
@@ -1250,7 +1250,7 @@ with col_trig2:
       """
         <div style="padding: 6px 0px;">
             <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
-                📻 <b>AVISO RADIAL OPERADOR PALA - CIRCUITO DINÁMICO RAJO (18 vs 30 km/h)</b>
+                📻 <b>AVISO RADIAL OPERADOR PALA - RETORNO RÁPIDO (30 KM/H DESOCUPADO)</b>
             </span>
         </div>
     """,
@@ -1319,7 +1319,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON VELOCIDAD PROPORCIONAL DE RETORNO VACÍO A 30 KM/H
+# LIENZO HTML5 CON RETORNO RÁPIDO Y DINÁMICO
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1440,12 +1440,12 @@ html_gps_canvas = f"""
         const imgCF = new Image();
         imgCF.src = "{img_cf_b64 or ''}";
 
-        // PARAMETRIZACIÓN FÍSICA DEL CICLO (23.0 UNIDADES TOTALES)
+        // PARAMETRIZACIÓN DEL CICLO REAJUSTADA PARA RETORNO RÁPIDO
         const totalCycleUnits = 23.0;
         const timeLoading = 3.0;
-        const timeHaul = 12.5;       // Ida cargado @ 18 km/h
-        const timeDumping = 2.5;     // Acople y volteo en chancado/botadero
-        const timeReturn = 5.0;      // Retorno vacío rápido @ 30 km/h (60% del tiempo de ida)
+        const timeHaul = 14.0;       // Ida cargado @ 18 km/h (desplazamiento pausado)
+        const timeDumping = 2.5;     // Descarga y maniobra en botadero
+        const timeReturn = 3.5;      // Retorno desocupado @ 30 km/h (desplazamiento ultra-rápido)
         const simSpeed = 0.0004;
 
         const totalNumCaex = Math.max(1, caexList.length);
@@ -1633,7 +1633,7 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO DE MOVIMIENTO FÍSICO REAL (IDA 18 KM/H VS RETORNO RÁPIDO 30 KM/H)
+            // CÁLCULO DE MOVIMIENTO FÍSICO REAL (IDA PAUSADA VS RETORNO ULTRA-RÁPIDO)
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive && !v.stoppedByFault) {{
                     v.prevCycleTime = v.cycleTime;
@@ -1689,7 +1689,7 @@ html_gps_canvas = f"""
                         v.statusText = "En Volteo / Descarga";
                         v.speedKmh = 0;
                     }} else {{
-                        // FASE DE RETORNO RÁPIDO (5 UNIDADES DE TIEMPO)
+                        // FASE DE RETORNO ULTRA-RÁPIDO (3.5 UNIDADES DE TIEMPO)
                         let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
                         v.x = xFin - (progressRatio * trackWidth);
                         v.y = yRetorno;
