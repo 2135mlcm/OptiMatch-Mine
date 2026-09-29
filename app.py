@@ -1308,7 +1308,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON PALAS MÁS GRANDES (48x48 px) Y HOVER COMPLETO PARA PALAS Y CARGADORES
+# LIENZO HTML5 MODIFICADO: ETIQUETAS EN LISTA SIN SUPERPOSICIÓN + INVERSIÓN DE DIRECCIÓN VACÍOS
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1404,16 +1404,19 @@ html_gps_canvas = f"""
             y: 0,
             isLoaded: false,
             statusText: "En Espera",
-            speedKmh: 0
+            speedKmh: 0,
+            isReturning: false
         }}));
 
-        // ARRAYS PARA REGISTRAR ÁREAS SENSIBLES AL HOVER
         let palaHitboxes = [];
         let cfHitboxes = [];
 
-        function drawCaexTruck(x, y, isLoaded, id) {{
+        function drawCaexTruck(x, y, isLoaded, isReturning) {{
             ctx.save();
             ctx.translate(x, y);
+            if (isReturning) {{
+                ctx.scale(-1, 1); // Orientar camión hacia la izquierda si retorna
+            }}
 
             ctx.fillStyle = isLoaded ? "#D97706" : "#CBD5E1";
             ctx.strokeStyle = "#0F172A";
@@ -1485,7 +1488,7 @@ html_gps_canvas = f"""
             ctx.fillStyle = "#DC2626";
             ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ 30 km/h)", xInicio, yRetorno - 22);
 
-            // PALAS DE CARGUÍO DE MAYOR TAMAÑO (48x48 px)
+            // PALAS DE CARGUÍO
             palasList.forEach((p, idx) => {{
                 let py = yIda - 20 - (idx * 46);
                 let px = xInicio - 65;
@@ -1511,7 +1514,7 @@ html_gps_canvas = f"""
                 ctx.fillText("Pala " + p.id, px - 8, py + 4);
             }});
 
-            // CARGADORES FRONTALES (38x38 px)
+            // CARGADORES FRONTALES
             cfList.forEach((cf, idx) => {{
                 let py = yRetorno + 10 + (idx * 42);
                 let px = xInicio - 60;
@@ -1551,7 +1554,9 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO PROPORCIONAL DE POSICIONES
+            // CÁLCULO PROPORCIONAL DE POSICIONES Y ORIENTACIÓN
+            let waitingTrucks = [];
+
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive) {{
                     v.cycleTime = (v.cycleTime + simSpeed) % totalCycleUnits;
@@ -1563,12 +1568,15 @@ html_gps_canvas = f"""
                     v.x = xInicio - 25 - (idx * 38);
                     v.y = yIda;
                     v.isLoaded = false;
+                    v.isReturning = false;
                     v.statusText = "En Fila de Espera";
                     v.speedKmh = 0;
+                    waitingTrucks.push(v);
                 }} else if (t < timeLoading) {{
                     v.x = xInicio;
                     v.y = yIda;
                     v.isLoaded = false;
+                    v.isReturning = false;
                     v.statusText = "En Carga (Pala)";
                     v.speedKmh = 0;
                 }} else if (t < timeLoading + timeHaul) {{
@@ -1576,12 +1584,14 @@ html_gps_canvas = f"""
                     v.x = xInicio + (progressRatio * trackWidth);
                     v.y = yIda;
                     v.isLoaded = true;
+                    v.isReturning = false;
                     v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila";
                     v.speedKmh = 18;
                 }} else if (t < timeLoading + timeHaul + timeDumping) {{
                     v.x = xFin;
                     v.y = (yIda + yRetorno) / 2;
                     v.isLoaded = true;
+                    v.isReturning = true;
                     v.statusText = "En Volteo / Descarga";
                     v.speedKmh = 0;
                 }} else {{
@@ -1589,32 +1599,55 @@ html_gps_canvas = f"""
                     v.x = xFin - (progressRatio * trackWidth);
                     v.y = yRetorno;
                     v.isLoaded = false;
+                    v.isReturning = true;
                     v.statusText = "Retorno Vacío -> Pala";
                     v.speedKmh = 30;
                 }}
 
                 let imgToDraw = v.isLoaded ? imgCaexCargado : imgCaexVacio;
 
-                if (imgToDraw.complete && imgToDraw.naturalWidth > 0 && imgToDraw.src.length > 50) {{
-                    ctx.drawImage(imgToDraw, v.x - 20, v.y - 20, 40, 40);
-                }} else {{
-                    drawCaexTruck(v.x, v.y, v.isLoaded, v.id);
+                // DIBUJO DE CAMIÓN CON INVERSIÓN SEGÚN SENTIDO DE MARCHA
+                ctx.save();
+                ctx.translate(v.x, v.y);
+                if (v.isReturning) {{
+                    ctx.scale(-1, 1); // Giro horizontal para camión en retorno hacia la izquierda
                 }}
 
-                ctx.fillStyle = "#0F172A";
-                ctx.font = "bold 10px Arial";
-                ctx.textAlign = "center";
-                let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh + " km/h]" : " [0 km/h]";
-                let label = "CAEX " + v.id + (v.isLoaded ? " (44.6T)" : " (0T)") + speedLabel;
-                ctx.fillText(label, v.x, v.y + 26);
+                if (imgToDraw.complete && imgToDraw.naturalWidth > 0 && imgToDraw.src.length > 50) {{
+                    ctx.drawImage(imgToDraw, -20, -20, 40, 40);
+                }} else {{
+                    drawCaexTruck(0, 0, v.isLoaded, false);
+                }}
+                ctx.restore();
+
+                // ETIQUETA INDIVIDUAL SOLO SI ESTÁ EN MOVIMIENTO
+                if (isTrackingActive) {{
+                    ctx.fillStyle = "#0F172A";
+                    ctx.font = "bold 10px Arial";
+                    ctx.textAlign = "center";
+                    let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh + " km/h]" : " [0 km/h]";
+                    let label = "CAEX " + v.id + (v.isLoaded ? " (44.6T)" : " (0T)") + speedLabel;
+                    ctx.fillText(label, v.x, v.y + 26);
+                }}
             }});
+
+            // AJUSTE 1: SI ESTÁN EN FILA DE ESPERA (DESACTIVADO), APILAR ETIQUETAS EN LISTA SIN SUPERPOSICIÓN
+            if (!isTrackingActive && waitingTrucks.length > 0) {{
+                ctx.font = "bold 10px Arial";
+                ctx.textAlign = "left";
+                waitingTrucks.forEach((v, idx) => {{
+                    ctx.fillStyle = "#0F172A";
+                    let textY = yIda + 24 + (idx * 14); // Lista apilada verticalmente
+                    ctx.fillText("• CAEX " + v.id + " (En Espera - 0T)", xInicio - 140, textY);
+                }});
+            }}
 
             requestAnimationFrame(animate);
         }}
 
         requestAnimationFrame(animate);
 
-        // HOVER COMPLETO PARA TODOS LOS EQUIPOS DE CARGUÍO Y TRANSPORTE
+        // HOVER COMPLETO PARA EQUIPOS
         canvas.addEventListener('mousemove', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
@@ -1622,7 +1655,6 @@ html_gps_canvas = f"""
 
             let hovered = false;
 
-            // 1. HOVER CAMIONES CAEX
             vehicles.forEach(v => {{
                 let dist = Math.hypot(mouseX - v.x, mouseY - v.y);
                 if (dist < 25) {{
@@ -1639,7 +1671,6 @@ html_gps_canvas = f"""
                 }}
             }});
 
-            // 2. HOVER PALAS DE CARGUÍO
             if (!hovered) {{
                 palaHitboxes.forEach(p => {{
                     let dist = Math.hypot(mouseX - p.x, mouseY - p.y);
@@ -1657,7 +1688,6 @@ html_gps_canvas = f"""
                 }});
             }}
 
-            // 3. HOVER CARGADORES FRONTALES
             if (!hovered) {{
                 cfHitboxes.forEach(cf => {{
                     let dist = Math.hypot(mouseX - cf.x, mouseY - cf.y);
