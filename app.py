@@ -474,7 +474,7 @@ if not st.session_state.autenticado:
       st.markdown(
           """
                 <div style="text-align: center; background-color: #1E293B; padding: 20px; border-radius: 15px; border: 2px solid #F59E0B;">
-                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️️ OptiMatch Mine</h1>
+                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️ OptiMatch Mine</h1>
                     <h3 style="color: #F8FAFC; margin-top: 5px;">Control de Flota y Agendamiento Pre-Turno</h3>
                 </div>
             """,
@@ -1220,14 +1220,14 @@ with col_eval2:
     )
 
 # ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL - PALAS Y CARGADORES EN FRENTE DE CARGUÍO
+# MÓDULO DE SEGUIMIENTO ESPACIAL - RETORNO RÁPIDO Y DINÁMICO (30 KM/H)
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
+st.subheader("🗺️️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
 st.markdown(
     "💡 **Control Operativo:** Palas y Cargadores alineados en la Zona de"
-    " Carguío. Haz clic sobre cualquier camión CAEX para **detenerlo por"
-    " falla/mantención** o para **reanudarlo**."
+    " Carguío. **El retorno vacío de los CAEX es más rápido (30 km/h)** para"
+    " reflejar la física real de acarreo."
 )
 
 if "acarreo_iniciado" not in st.session_state:
@@ -1250,7 +1250,7 @@ with col_trig2:
       """
         <div style="padding: 6px 0px;">
             <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
-                📻 <b>AVISO RADIAL OPERADOR PALA - CIRCUITO CONTINUO DE RAJO</b>
+                📻 <b>AVISO RADIAL OPERADOR PALA - CIRCUITO DINÁMICO RAJO (18 vs 30 km/h)</b>
             </span>
         </div>
     """,
@@ -1319,7 +1319,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# LIENZO HTML5 CON FRENTE ÚNICO DE CARGUÍO ARRIBA (PALAS Y CARGADORES JUNTOS)
+# LIENZO HTML5 CON VELOCIDAD PROPORCIONAL DE RETORNO VACÍO A 30 KM/H
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1440,11 +1440,12 @@ html_gps_canvas = f"""
         const imgCF = new Image();
         imgCF.src = "{img_cf_b64 or ''}";
 
+        // PARAMETRIZACIÓN FÍSICA DEL CICLO (23.0 UNIDADES TOTALES)
         const totalCycleUnits = 23.0;
         const timeLoading = 3.0;
-        const timeHaul = 11.67;
-        const timeDumping = 1.33;
-        const timeReturn = 7.0;
+        const timeHaul = 12.5;       // Ida cargado @ 18 km/h
+        const timeDumping = 2.5;     // Acople y volteo en chancado/botadero
+        const timeReturn = 5.0;      // Retorno vacío rápido @ 30 km/h (60% del tiempo de ida)
         const simSpeed = 0.0004;
 
         const totalNumCaex = Math.max(1, caexList.length);
@@ -1455,7 +1456,6 @@ html_gps_canvas = f"""
         const capCarguioTotal = palasList.reduce((a, b) => a + (b.rend || 0), 0) + cfList.reduce((a, b) => a + (b.rend || 0), 0);
         const factorDistancia = (distKm > 0) ? (3.5 / distKm) : 1.0;
 
-        // CONSOLIDACIÓN DE FRENTE ÚNICO DE CARGUÍO (PALAS + CARGADORES EN LA ZONA SUPERIOR)
         let totalEquiposCarguio = palasList.length + cfList.length;
 
         let vehicles = caexList.map((c, idx) => {{
@@ -1576,7 +1576,7 @@ html_gps_canvas = f"""
             ctx.fillStyle = "#DC2626";
             ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ 30 km/h)", xInicio, yRetorno - 22);
 
-            // DIBUJO DE PALAS EN FRENTE DE CARGUÍO (ZONA SUPERIOR)
+            // PALAS DE CARGUÍO
             palasList.forEach((p, idx) => {{
                 let py = yIda - 20 - (idx * 46);
                 let px = xInicio - 65;
@@ -1597,7 +1597,7 @@ html_gps_canvas = f"""
                 ctx.fillText("Pala " + p.id, px - 8, py + 4);
             }});
 
-            // DIBUJO DE CARGADORES FRONTALES AL LADO DE LAS PALAS (FRENTE DE CARGUÍO SUPERIOR)
+            // CARGADORES FRONTALES EN FRENTE DE CARGUÍO
             cfList.forEach((cf, idx) => {{
                 let totalPalas = palasList.length;
                 let py = yIda - 20 - ((totalPalas + idx) * 46);
@@ -1633,7 +1633,7 @@ html_gps_canvas = f"""
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
 
-            // CÁLCULO DE MOVIMIENTO DESDE FRENTE ÚNICO DE CARGUÍO
+            // CÁLCULO DE MOVIMIENTO FÍSICO REAL (IDA 18 KM/H VS RETORNO RÁPIDO 30 KM/H)
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive && !v.stoppedByFault) {{
                     v.prevCycleTime = v.cycleTime;
@@ -1689,6 +1689,7 @@ html_gps_canvas = f"""
                         v.statusText = "En Volteo / Descarga";
                         v.speedKmh = 0;
                     }} else {{
+                        // FASE DE RETORNO RÁPIDO (5 UNIDADES DE TIEMPO)
                         let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
                         v.x = xFin - (progressRatio * trackWidth);
                         v.y = yRetorno;
@@ -2121,7 +2122,7 @@ if not df_hist.empty:
       )
     else:
       st.info(
-          "ℹ️️ No hay agendamientos registrados para el turno del día de hoy."
+          "ℹ️ No hay agendamientos registrados para el turno del día de hoy."
           " Configure su flota en la barra lateral y presione 'CIERRE Y GUARDADO"
           " EN BD'."
       )
