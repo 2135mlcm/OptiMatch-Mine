@@ -292,7 +292,7 @@ if not st.session_state.autenticado:
             st.markdown(
                 """
                 <div style="text-align: center; background-color: #1E293B; padding: 20px; border-radius: 15px; border: 2px solid #F59E0B;">
-                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️ OptiMatch Mine</h1>
+                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️️ OptiMatch Mine</h1>
                     <h3 style="color: #F8FAFC; margin-top: 5px;">Control de Flota y Agendamiento Pre-Turno</h3>
                 </div>
             """,
@@ -512,27 +512,31 @@ if "caex_df" not in st.session_state:
     ])
 
 # ---------------------------------------------------------
-# CABECERA Y TABLAS DINÁMICAS CON LOGO REDUCIDO ALINEADO AL TEXTO
+# CABECERA CENTRADA CON EL LOGO APEGADO AL TEXTO (ALINEADO AL MEDIO / CARGADOR FRONTAL)
 # ---------------------------------------------------------
-c_hdr_icon, c_hdr_txt = st.columns([0.6, 5])
+b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("image_5ea6ba.png") or obtener_base64_img("Logo_OptiMatch.png")
 
-with c_hdr_icon:
-    b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("image_5ea6ba.png")
-    if b64_logo:
-        st.markdown(
-            f"""
-            <div style="display: flex; align-items: center; justify-content: center; height: 100%; padding-top: 5px;">
-                <img src="{b64_logo}" style="max-height: 55px; width: auto; object-fit: contain;">
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown("<h2 style='text-align: center; margin: 0;'>⛏️</h2>", unsafe_allow_html=True)
+if b64_logo:
+    img_tag_logo = f'<img src="{b64_logo}" style="height: 48px; width: auto; vertical-align: middle; margin-right: 12px; display: inline-block;">'
+else:
+    img_tag_logo = '<span style="font-size: 32px; vertical-align: middle; margin-right: 10px;">⛏️</span>'
 
-with c_hdr_txt:
-    st.markdown("<h2 style='margin: 0px; padding: 0px; color: #0F172A; font-size: 24px; font-weight: 800;'>Estado y Agendamiento de Flota Operativa</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #475569; font-weight: 600; margin: 2px 0px 0px 0px; font-size: 13px;'>Selección de disponibilidad mecánica y asignación de equipos para el turno</p>", unsafe_allow_html=True)
+st.markdown(
+    f"""
+    <div style="text-align: center; width: 100%; margin-top: 5px; margin-bottom: 25px;">
+        <div style="display: inline-flex; align-items: center; justify-content: center;">
+            {img_tag_logo}
+            <h2 style="margin: 0; padding: 0; color: #0F172A; font-size: 25px; font-weight: 800; display: inline-block; vertical-align: middle;">
+                Estado y Agendamiento de Flota Operativa
+            </h2>
+        </div>
+        <p style="color: #475569; font-weight: 600; margin: 4px 0px 0px 0px; font-size: 13.5px; text-align: center;">
+            Selección de disponibilidad mecánica y asignación de equipos para el turno
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 opciones_estado = ["🟢 Disponible", "🟡 Mantenimiento / Resguardo", "🔴 Falla Mecánica"]
 
@@ -1319,7 +1323,7 @@ with col_h1:
 
 with col_h2:
     if st.session_state.get("user_id") == "mcepeda":
-        if st.button("🗑️ Borrar Histórico (Admin)", type="primary", use_container_width=True):
+        if st.button("🗑️️ Borrar Histórico (Admin)", type="primary", use_container_width=True):
             borrar_historico_db()
             st.success("Histórico eliminado correctamente.")
             st.rerun()
