@@ -512,22 +512,27 @@ if "caex_df" not in st.session_state:
     ])
 
 # ---------------------------------------------------------
-# CABECERA Y TABLAS DINÁMICAS CON LOGO Y CONTROL (➕ / ➖)
+# CABECERA Y TABLAS DINÁMICAS CON LOGO REDUCIDO ALINEADO AL TEXTO
 # ---------------------------------------------------------
-c_hdr_icon, c_hdr_txt = st.columns([1.5, 5])
+c_hdr_icon, c_hdr_txt = st.columns([0.6, 5])
 
 with c_hdr_icon:
-    # Carga limpia del logo oficial sin iconos verduzcos
-    if os.path.exists(LOGO_PATH):
-        st.image(LOGO_PATH, use_container_width=True)
-    elif os.path.exists("image_5ea6ba.png"):
-        st.image("image_5ea6ba.png", use_container_width=True)
+    b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("image_5ea6ba.png")
+    if b64_logo:
+        st.markdown(
+            f"""
+            <div style="display: flex; align-items: center; justify-content: center; height: 100%; padding-top: 5px;">
+                <img src="{b64_logo}" style="max-height: 55px; width: auto; object-fit: contain;">
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     else:
-        st.markdown("<h1 style='text-align: center; margin: 0;'>⛏️</h1>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center; margin: 0;'>⛏️</h2>", unsafe_allow_html=True)
 
 with c_hdr_txt:
-    st.markdown("<h2 style='margin-top: 10px; color: #0F172A;'>Estado y Agendamiento de Flota Operativa</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #475569; font-weight: 600; margin-top: -10px;'>Selección de disponibilidad mecánica y asignación de equipos para el turno</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin: 0px; padding: 0px; color: #0F172A; font-size: 24px; font-weight: 800;'>Estado y Agendamiento de Flota Operativa</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #475569; font-weight: 600; margin: 2px 0px 0px 0px; font-size: 13px;'>Selección de disponibilidad mecánica y asignación de equipos para el turno</p>", unsafe_allow_html=True)
 
 opciones_estado = ["🟢 Disponible", "🟡 Mantenimiento / Resguardo", "🔴 Falla Mecánica"]
 
@@ -1123,7 +1128,7 @@ html_gps_canvas = f"""
             }});
         }});
 
-        // HOVER CON TOOLTIP EXPONENTENCIAL QUE INCLUYE "(Haz clic para DETENER POR FALLA)" EN TODOS LOS EQUIPOS
+        // HOVER CON TOOLTIP QUE INCLUYE "(Haz clic para DETENER POR FALLA)" EN TODOS LOS EQUIPOS
         canvas.addEventListener('mousemove', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left; const mouseY = e.clientY - rect.top;
