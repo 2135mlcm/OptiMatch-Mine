@@ -673,7 +673,6 @@ with col_t3:
     )
     st.session_state.caex_df = reindexar_flota(ed_caex)
 
-Python
 # ---------------------------------------------------------
 # CÁLCULOS MATEMÁTICOS DE BALANCE Y UNIFICACIÓN DE MODELO
 # ---------------------------------------------------------
@@ -776,7 +775,7 @@ with col_eval2:
 # MÓDULO DE SEGUIMIENTO ESPACIAL - SIMULACIÓN FÍSICA ACOPLADA
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
+st.subheader("🗺️️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
 st.markdown(
     f"💡 **Ciclo Operacional Calculado:** **{fmt_num(t_ciclo_fisico_min, 2)} min** "
     f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h: {fmt_num(t_ida_min, 2)}m | "
