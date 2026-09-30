@@ -672,7 +672,7 @@ with col_t3:
         num_rows="fixed"
     )
     st.session_state.caex_df = reindexar_flota(ed_caex)
-📦 PARTE 2 DE 2: Motor de Balance, Canvas GPS, Reportes y Cierre de Turno
+
 Python
 # ---------------------------------------------------------
 # CÁLCULOS MATEMÁTICOS DE BALANCE Y UNIFICACIÓN DE MODELO
