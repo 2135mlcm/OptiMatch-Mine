@@ -848,185 +848,122 @@ t_ciclo_fisico_min = t_carga_min + t_ida_min + t_descarga_min + t_retorno_min
 
 st.sidebar.markdown("---")
 
+
+
 # ---------------------------------------------------------
-# INICIALIZACIÓN DE FLOTA (AJUSTADA A MEDIANA MINERÍA: 1 PALA, 1 CF Y 6 CAEX)
+# INICIALIZACIÓN DE FLOTA AMPLIADA Y DINÁMICA
 # ---------------------------------------------------------
 if "palas_df" not in st.session_state:
-  st.session_state.palas_df = pd.DataFrame([{
-      "Item": 1,
-      "Agendar": True,
-      "Estado": "🟢 Disponible",
-      "ID": "PA622",
-      "Modelo": "R9200",
-      "Operador": "Carlos Araya",
-      "Rend_TonH": 1424,
-      "Consumo_LtsH": 120.0,
-      "Costo_USDH": 441.44,
-  }])
+    st.session_state.palas_df = pd.DataFrame([
+        {"Item": 1, "Agendar": True,  "Estado": "🟢 Disponible", "ID": "PA622", "Modelo": "Liebherr R9200", "Operador": "Carlos Araya", "Rend_TonH": 1424, "Consumo_LtsH": 120.0, "Costo_USDH": 441.44},
+        {"Item": 2, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "PA623", "Modelo": "CAT 6020B", "Operador": "Sin Asignar", "Rend_TonH": 1350, "Consumo_LtsH": 115.0, "Costo_USDH": 420.00},
+        {"Item": 3, "Agendar": False, "Estado": "🟢 Disponible", "ID": "PA624", "Modelo": "Komatsu PC2000", "Operador": "Hernán Gómez", "Rend_TonH": 1380, "Consumo_LtsH": 118.0, "Costo_USDH": 430.00},
+        {"Item": 4, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "PA625", "Modelo": "Hitachi EX2600", "Operador": "Sin Asignar", "Rend_TonH": 1500, "Consumo_LtsH": 128.0, "Costo_USDH": 460.00},
+    ])
 
 if "cf_df" not in st.session_state:
-  st.session_state.cf_df = pd.DataFrame([{
-      "Item": 1,
-      "Agendar": False,  # Prescripción: CF desactivado para concentrar 6 CAEX en 1 frente
-      "Estado": "🟡 Mantenimiento / Resguardo",
-      "ID": "CF437",
-      "Modelo": "WA900",
-      "Operador": "Sin Asignar",
-      "Rend_TonH": 685,
-      "Consumo_LtsH": 75.0,
-      "Costo_USDH": 342.50,
-  }])
+    st.session_state.cf_df = pd.DataFrame([
+        {"Item": 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "CF437", "Modelo": "Komatsu WA900", "Operador": "Sin Asignar", "Rend_TonH": 685, "Consumo_LtsH": 75.0, "Costo_USDH": 342.50},
+        {"Item": 2, "Agendar": True,  "Estado": "🟢 Disponible", "ID": "CF438", "Modelo": "CAT 993K", "Operador": "Manuel Torres", "Rend_TonH": 720, "Consumo_LtsH": 82.0, "Costo_USDH": 360.00},
+        {"Item": 3, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CF439", "Modelo": "LeTourneau L-1850", "Operador": "Roberto Marín", "Rend_TonH": 810, "Consumo_LtsH": 90.0, "Costo_USDH": 395.00},
+        {"Item": 4, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CF440", "Modelo": "CAT 992K", "Operador": "Sin Asignar", "Rend_TonH": 650, "Consumo_LtsH": 70.0, "Costo_USDH": 325.00},
+    ])
 
 if "caex_df" not in st.session_state:
-  st.session_state.caex_df = pd.DataFrame([
-      {
-          "Item": 1,
-          "Agendar": True,
-          "Estado": "🟢 Disponible",
-          "ID": "CA319",
-          "Modelo": "HD1500-8",
-          "Operador": "Pedro Morales",
-          "Rend_TonH": 604,
-          "Consumo_LtsH": 95.0,
-          "Costo_USDH": 289.92,
-      },
-      {
-          "Item": 2,
-          "Agendar": True,
-          "Estado": "🟢 Disponible",
-          "ID": "CA320",
-          "Modelo": "HD1500-8",
-          "Operador": "Luis Tapia",
-          "Rend_TonH": 604,
-          "Consumo_LtsH": 95.0,
-          "Costo_USDH": 289.92,
-      },
-      {
-          "Item": 3,
-          "Agendar": True,
-          "Estado": "🟢 Disponible",
-          "ID": "CA321",
-          "Modelo": "HD1500-8",
-          "Operador": "Andrés Castro",
-          "Rend_TonH": 604,
-          "Consumo_LtsH": 95.0,
-          "Costo_USDH": 289.92,
-      },
-      {
-          "Item": 4,
-          "Agendar": True,
-          "Estado": "🟢 Disponible",
-          "ID": "CA322",
-          "Modelo": "CAT 789D",
-          "Operador": "Diego Rojas",
-          "Rend_TonH": 710,
-          "Consumo_LtsH": 110.0,
-          "Costo_USDH": 310.00,
-      },
-      {
-          "Item": 5,
-          "Agendar": True,
-          "Estado": "🟢 Disponible",
-          "ID": "CA323",
-          "Modelo": "CAT 789D",
-          "Operador": "Gonzalo Vera",
-          "Rend_TonH": 710,
-          "Consumo_LtsH": 110.0,
-          "Costo_USDH": 310.00,
-      },
-      {
-          "Item": 6,
-          "Agendar": True,
-          "Estado": "🟢 Disponible",
-          "ID": "CA324",
-          "Modelo": "HD1500-8",
-          "Operador": "Felipe Salinas",
-          "Rend_TonH": 604,
-          "Consumo_LtsH": 95.0,
-          "Costo_USDH": 289.92,
-      },
-  ])
+    st.session_state.caex_df = pd.DataFrame([
+        {"Item": 1,  "Agendar": True,  "Estado": "🟢 Disponible", "ID": "CA319", "Modelo": "Komatsu HD1500-8", "Operador": "Pedro Morales", "Rend_TonH": 604, "Consumo_LtsH": 95.0,  "Costo_USDH": 289.92},
+        {"Item": 2,  "Agendar": True,  "Estado": "🟢 Disponible", "ID": "CA320", "Modelo": "Komatsu HD1500-8", "Operador": "Luis Tapia", "Rend_TonH": 604, "Consumo_LtsH": 95.0,  "Costo_USDH": 289.92},
+        {"Item": 3,  "Agendar": True,  "Estado": "🟢 Disponible", "ID": "CA321", "Modelo": "Komatsu HD1500-8", "Operador": "Andrés Castro", "Rend_TonH": 604, "Consumo_LtsH": 95.0,  "Costo_USDH": 289.92},
+        {"Item": 4,  "Agendar": True,  "Estado": "🟢 Disponible", "ID": "CA322", "Modelo": "CAT 789D", "Operador": "Diego Rojas", "Rend_TonH": 710, "Consumo_LtsH": 110.0, "Costo_USDH": 310.00},
+        {"Item": 5,  "Agendar": True,  "Estado": "🟢 Disponible", "ID": "CA323", "Modelo": "CAT 789D", "Operador": "Gonzalo Vera", "Rend_TonH": 710, "Consumo_LtsH": 110.0, "Costo_USDH": 310.00},
+        {"Item": 6,  "Agendar": True,  "Estado": "🟢 Disponible", "ID": "CA324", "Modelo": "Komatsu HD1500-8", "Operador": "Felipe Salinas", "Rend_TonH": 604, "Consumo_LtsH": 95.0,  "Costo_USDH": 289.92},
+        {"Item": 7,  "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "CA325", "Modelo": "Komatsu HD785-7", "Operador": "Sin Asignar", "Rend_TonH": 480, "Consumo_LtsH": 80.0,  "Costo_USDH": 240.00},
+        {"Item": 8,  "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "CA326", "Modelo": "Komatsu HD785-7", "Operador": "Sin Asignar", "Rend_TonH": 480, "Consumo_LtsH": 80.0,  "Costo_USDH": 240.00},
+        {"Item": 9,  "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA327", "Modelo": "CAT 777G", "Operador": "Javier Fuentes", "Rend_TonH": 520, "Consumo_LtsH": 85.0,  "Costo_USDH": 255.00},
+        {"Item": 10, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA328", "Modelo": "CAT 777G", "Operador": "Cristian Muñoz", "Rend_TonH": 520, "Consumo_LtsH": 85.0,  "Costo_USDH": 255.00},
+        {"Item": 11, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA329", "Modelo": "Hitachi EH3500", "Operador": "Sin Asignar", "Rend_TonH": 680, "Consumo_LtsH": 105.0, "Costo_USDH": 300.00},
+        {"Item": 12, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA330", "Modelo": "Hitachi EH3500", "Operador": "Sin Asignar", "Rend_TonH": 680, "Consumo_LtsH": 105.0, "Costo_USDH": 300.00},
+    ])
 
 # ---------------------------------------------------------
-# TABLAS DINÁMICAS DE FLOTA
+# TABLAS DINÁMICAS DE FLOTA (CON RENUMERACIÓN AUTOMÁTICA)
 # ---------------------------------------------------------
-st.markdown(
-    "<h2 class='centered-title'>🚜 Estado y Agendamiento de Flota"
-    " Operativa</h2>",
-    unsafe_allow_html=True,
-)
+st.markdown("<h2 class='centered-title'>🚜 Estado y Agendamiento de Flota Operativa</h2>", unsafe_allow_html=True)
 
 col_t1, col_t2, col_t3 = st.columns(3)
-opciones_estado = [
-    "🟢 Disponible",
-    "🟡 Mantenimiento / Resguardo",
-    "🔴 Falla Mecánica",
-]
+opciones_estado = ["🟢 Disponible", "🟡 Mantenimiento / Resguardo", "🔴 Falla Mecánica"]
+
+# Función para reordenar la columna Item numéricamente
+def reindexar_flota(df):
+    if not df.empty:
+        df = df.reset_index(drop=True)
+        df["Item"] = df.index + 1
+    return df
 
 with col_t1:
-  c_img, c_txt = st.columns([1, 2])
-  with c_img:
-    if os.path.exists("Gif Pala.jpg"):
-      st.image("Gif Pala.jpg", width=80)
-  with c_txt:
-    st.markdown("### Pala de Carguío")
-
-  ed_palas = st.data_editor(
-      st.session_state.palas_df,
-      column_config={
-          "Item": st.column_config.NumberColumn("N° Item", disabled=True),
-          "Estado": st.column_config.SelectboxColumn(
-              "Estado Mecánico", options=opciones_estado
-          ),
-      },
-      hide_index=True,
-      key="editor_palas",
-      num_rows="dynamic",
-  )
+    c_img, c_txt = st.columns([1, 2])
+    with c_img:
+        if os.path.exists("Gif Pala.jpg"):
+            st.image("Gif Pala.jpg", width=80)
+    with c_txt:
+        st.markdown("### Pala de Carguío")
+    
+    ed_palas = st.data_editor(
+        st.session_state.palas_df,
+        column_config={
+            "Item": st.column_config.NumberColumn("N° Item", disabled=True),
+            "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
+        },
+        hide_index=True,
+        key="editor_palas",
+        num_rows="dynamic"
+    )
+    ed_palas = reindexar_flota(ed_palas)
+    st.session_state.palas_df = ed_palas
 
 with col_t2:
-  c_img, c_txt = st.columns([1, 2])
-  with c_img:
-    if os.path.exists("Gif Cargador Frontal.jpg"):
-      st.image("Gif Cargador Frontal.jpg", width=80)
-  with c_txt:
-    st.markdown("### Cargador Frontal")
-
-  ed_cf = st.data_editor(
-      st.session_state.cf_df,
-      column_config={
-          "Item": st.column_config.NumberColumn("N° Item", disabled=True),
-          "Estado": st.column_config.SelectboxColumn(
-              "Estado Mecánico", options=opciones_estado
-          ),
-      },
-      hide_index=True,
-      key="editor_cf",
-      num_rows="dynamic",
-  )
+    c_img, c_txt = st.columns([1, 2])
+    with c_img:
+        if os.path.exists("Gif Cargador Frontal.jpg"):
+            st.image("Gif Cargador Frontal.jpg", width=80)
+    with c_txt:
+        st.markdown("### Cargador Frontal")
+    
+    ed_cf = st.data_editor(
+        st.session_state.cf_df,
+        column_config={
+            "Item": st.column_config.NumberColumn("N° Item", disabled=True),
+            "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
+        },
+        hide_index=True,
+        key="editor_cf",
+        num_rows="dynamic"
+    )
+    ed_cf = reindexar_flota(ed_cf)
+    st.session_state.cf_df = ed_cf
 
 with col_t3:
-  c_img, c_txt = st.columns([1, 2])
-  with c_img:
-    if os.path.exists("Camión CAEX Vacío.png"):
-      st.image("Camión CAEX Vacío.png", width=80)
-    elif os.path.exists("Gif Camión Minero.jpg"):
-      st.image("Gif Camión Minero.jpg", width=80)
-  with c_txt:
-    st.markdown("### Camión CAEX")
-
-  ed_caex = st.data_editor(
-      st.session_state.caex_df,
-      column_config={
-          "Item": st.column_config.NumberColumn("N° Item", disabled=True),
-          "Estado": st.column_config.SelectboxColumn(
-              "Estado Mecánico", options=opciones_estado
-          ),
-      },
-      hide_index=True,
-      key="editor_caex",
-      num_rows="dynamic",
-  )
+    c_img, c_txt = st.columns([1, 2])
+    with c_img:
+        if os.path.exists("Camión CAEX Vacío.png"):
+            st.image("Camión CAEX Vacío.png", width=80)
+        elif os.path.exists("Gif Camión Minero.jpg"):
+            st.image("Gif Camión Minero.jpg", width=80)
+    with c_txt:
+        st.markdown("### Camión CAEX")
+    
+    ed_caex = st.data_editor(
+        st.session_state.caex_df,
+        column_config={
+            "Item": st.column_config.NumberColumn("N° Item", disabled=True),
+            "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
+        },
+        hide_index=True,
+        key="editor_caex",
+        num_rows="dynamic"
+    )
+    ed_caex = reindexar_flota(ed_caex)
+    st.session_state.caex_df = ed_caex
 
 # ---------------------------------------------------------
 # CÁLCULOS MATEMÁTICOS DE BALANCE Y UNIFICACIÓN DE MODELO
