@@ -512,16 +512,18 @@ if "caex_df" not in st.session_state:
     ])
 
 # ---------------------------------------------------------
-# CABECERA Y TABLAS DINÁMICAS CON CONTROL (➕ / ➖) E IMAGEN
+# CABECERA Y TABLAS DINÁMICAS CON LOGO Y CONTROL (➕ / ➖)
 # ---------------------------------------------------------
 c_hdr_icon, c_hdr_txt = st.columns([1.5, 5])
 
 with c_hdr_icon:
-    ruta_imagen = "image_5ea6ba.png"
-    if os.path.exists(ruta_imagen):
-        st.image(ruta_imagen, use_container_width=True)
+    # Carga limpia del logo oficial sin iconos verduzcos
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, use_container_width=True)
+    elif os.path.exists("image_5ea6ba.png"):
+        st.image("image_5ea6ba.png", use_container_width=True)
     else:
-        st.markdown("<h1 style='text-align: center; margin: 0;'>🚜</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center; margin: 0;'>⛏️</h1>", unsafe_allow_html=True)
 
 with c_hdr_txt:
     st.markdown("<h2 style='margin-top: 10px; color: #0F172A;'>Estado y Agendamiento de Flota Operativa</h2>", unsafe_allow_html=True)
@@ -775,7 +777,7 @@ with col_eval2:
 # MÓDULO DE SEGUIMIENTO ESPACIAL - SIMULACIÓN FÍSICA ACOPLADA
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader("🗺️️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
+st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
 st.markdown(
     f"💡 **Ciclo Operacional Calculado:** **{fmt_num(t_ciclo_fisico_min, 2)} min** "
     f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h: {fmt_num(t_ida_min, 2)}m | "
@@ -894,8 +896,8 @@ html_gps_canvas = f"""
         resizeCanvas();
 
         const caexList = {caex_json_str};
-        const palasList = {palas_json_str};
-        const cfList = {cf_json_str};
+        const palasListRaw = {palas_json_str};
+        const cfListRaw = {cf_json_str};
         const isTrackingActive = {acarreo_activo_bool};
 
         const distKm = {distancia_acarreo_km};
@@ -918,11 +920,13 @@ html_gps_canvas = f"""
         const staggerInterval = totalCycleUnits / totalNumCaex;
 
         let totalVueltasCompletadas = 0;
-        let totalEquiposCarguio = Math.max(1, palasList.length + cfList.length);
+
+        let palasList = palasListRaw.map(p => ({{ ...p, stoppedByFault: false }}));
+        let cfList = cfListRaw.map(cf => ({{ ...cf, stoppedByFault: false }}));
 
         let vehicles = caexList.map((c, idx) => {{
             let offset = idx * staggerInterval;
-            let assignedEq = idx % totalEquiposCarguio;
+            let assignedEq = idx % Math.max(1, (palasList.length + cfList.length));
             return {{
                 id: c.id, modelo: c.modelo, operador: c.operador, rend: c.rend,
                 cycleTime: offset, prevCycleTime: offset, vueltas: 0, x: 0, y: 0,
@@ -936,7 +940,11 @@ html_gps_canvas = f"""
 
         function recalculateDynamicMF() {{
             let activeCaex = vehicles.filter(v => !v.stoppedByFault);
-            let mfDinamico = (activeCaex.length * timeLoading) / (totalEquiposCarguio * totalCycleUnits);
+            let activePalas = palasList.filter(p => !p.stoppedByFault).length;
+            let activeCF = cfList.filter(cf => !cf.stoppedByFault).length;
+            let activeLoadingEq = Math.max(1, activePalas + activeCF);
+
+            let mfDinamico = (activeCaex.length * timeLoading) / (activeLoadingEq * totalCycleUnits);
             
             document.getElementById('kpiMF').innerText = mfDinamico.toFixed(2);
             document.getElementById('kpiFlota').innerText = activeCaex.length + "/" + vehicles.length;
@@ -989,23 +997,37 @@ html_gps_canvas = f"""
             ctx.fillStyle = "#DC2626";
             ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ " + speedEmptyKmh + " km/h)", xInicio, yRetorno - 22);
 
+            // PALAS DE CARGUÍO
             palasList.forEach((p, idx) => {{
                 let py = yIda - 20 - (idx * 46); let px = xInicio - 65; let size = 48;
-                if (imgPala.complete && imgPala.naturalWidth > 0) {{ ctx.drawImage(imgPala, px, py - (size / 2), size, size); }}
-                else {{ ctx.fillStyle = "#F59E0B"; ctx.fillRect(px, py - 20, 38, 38); }}
-                palaHitboxes.push({{ x: px + (size / 2), y: py, radius: 25, data: p }});
-                ctx.fillStyle = "#0F172A"; ctx.font = "bold 11px Arial"; ctx.textAlign = "right";
-                ctx.fillText("Pala " + p.id, px - 8, py + 4);
+                if (imgPala.complete && imgPala.naturalWidth > 0 && !p.stoppedByFault) {{
+                    ctx.drawImage(imgPala, px, py - (size / 2), size, size);
+                }} else {{
+                    ctx.fillStyle = p.stoppedByFault ? "#EF4444" : "#F59E0B";
+                    ctx.fillRect(px, py - 20, 38, 38);
+                }}
+                palaHitboxes.push({{ x: px + (size / 2), y: py, radius: 25, index: idx, data: p }});
+                ctx.fillStyle = p.stoppedByFault ? "#DC2626" : "#0F172A";
+                ctx.font = "bold 11px Arial"; ctx.textAlign = "right";
+                let statusTag = p.stoppedByFault ? " (FALLA)" : "";
+                ctx.fillText("Pala " + p.id + statusTag, px - 8, py + 4);
             }});
 
+            // CARGADORES FRONTALES
             cfList.forEach((cf, idx) => {{
                 let totalPalas = palasList.length;
                 let py = yIda - 20 - ((totalPalas + idx) * 46); let px = xInicio - 65; let size = 38;
-                if (imgCF.complete && imgCF.naturalWidth > 0) {{ ctx.drawImage(imgCF, px, py - (size / 2), size, size); }}
-                else {{ ctx.fillStyle = "#F59E0B"; ctx.fillRect(px, py - 15, 30, 30); }}
-                cfHitboxes.push({{ x: px + (size / 2), y: py, radius: 22, data: cf }});
-                ctx.fillStyle = "#0F172A"; ctx.font = "bold 11px Arial"; ctx.textAlign = "right";
-                ctx.fillText("CF " + cf.id, px - 8, py + 4);
+                if (imgCF.complete && imgCF.naturalWidth > 0 && !cf.stoppedByFault) {{
+                    ctx.drawImage(imgCF, px, py - (size / 2), size, size);
+                }} else {{
+                    ctx.fillStyle = cf.stoppedByFault ? "#EF4444" : "#F59E0B";
+                    ctx.fillRect(px, py - 15, 30, 30);
+                }}
+                cfHitboxes.push({{ x: px + (size / 2), y: py, radius: 22, index: idx, data: cf }});
+                ctx.fillStyle = cf.stoppedByFault ? "#DC2626" : "#0F172A";
+                ctx.font = "bold 11px Arial"; ctx.textAlign = "right";
+                let statusTag = cf.stoppedByFault ? " (FALLA)" : "";
+                ctx.fillText("CF " + cf.id + statusTag, px - 8, py + 4);
             }});
 
             ctx.fillStyle = "#DC2626"; ctx.beginPath();
@@ -1016,6 +1038,8 @@ html_gps_canvas = f"""
             ctx.fillText("• BOTADERO", xFin + 45, yCentro - 14);
             ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
             ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
+
+            let totalEquiposCarguio = Math.max(1, palasList.length + cfList.length);
 
             vehicles.forEach((v, idx) => {{
                 if (isTrackingActive && !v.stoppedByFault) {{
@@ -1078,15 +1102,28 @@ html_gps_canvas = f"""
 
         requestAnimationFrame(animate);
 
+        // CLIC INTERACTIVO PARA DETENER/REANUDAR CAEX, PALAS Y CARGADORES
         canvas.addEventListener('click', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const clickX = e.clientX - rect.left; const clickY = e.clientY - rect.top;
+
             vehicles.forEach(v => {{
                 let dist = Math.hypot(clickX - v.x, clickY - v.y);
                 if (dist < 28) {{ v.stoppedByFault = !v.stoppedByFault; }}
             }});
+
+            palaHitboxes.forEach(p => {{
+                let dist = Math.hypot(clickX - p.x, clickY - p.y);
+                if (dist < p.radius) {{ palasList[p.index].stoppedByFault = !palasList[p.index].stoppedByFault; }}
+            }});
+
+            cfHitboxes.forEach(cf => {{
+                let dist = Math.hypot(clickX - cf.x, clickY - cf.y);
+                if (dist < cf.radius) {{ cfList[cf.index].stoppedByFault = !cfList[cf.index].stoppedByFault; }}
+            }});
         }});
 
+        // HOVER CON TOOLTIP EXPONENTENCIAL QUE INCLUYE "(Haz clic para DETENER POR FALLA)" EN TODOS LOS EQUIPOS
         canvas.addEventListener('mousemove', function(e) {{
             const rect = canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left; const mouseY = e.clientY - rect.top;
@@ -1115,10 +1152,14 @@ html_gps_canvas = f"""
                     if (dist < p.radius) {{
                         hovered = true; tooltip.style.display = 'block';
                         tooltip.style.left = (p.x + 20) + 'px'; tooltip.style.top = (p.y - 35) + 'px';
-                        tooltip.innerHTML = '<b>🏗️ PALA DE CARGUÍO ' + p.data.id + '</b><br>' +
-                                            '• Operador(a): <b>' + (p.data.operador || "Sin Asignar") + '</b><br>' +
-                                            '• Modelo: ' + (p.data.modelo || "R9200") + '<br>' +
-                                            '• Rendimiento: ' + p.data.rend + ' Ton/h';
+                        let pData = palasList[p.index];
+                        let toggleMsg = pData.stoppedByFault ? "<span style='color:#10B981;'><b>(Haz clic para REANUDAR)</b></span>" : "<span style='color:#EF4444;'><b>(Haz clic para DETENER POR FALLA)</b></span>";
+                        let statusText = pData.stoppedByFault ? "🔴 DETENIDA POR FALLA" : "🟢 Operando Normal";
+                        tooltip.innerHTML = '<b>🏗️ PALA DE CARGUÍO ' + pData.id + '</b><br>' +
+                                            '• Operador(a): <b>' + (pData.operador || "Sin Asignar") + '</b><br>' +
+                                            '• Modelo: ' + (pData.modelo || "R9200") + '<br>' +
+                                            '• Rendimiento: ' + pData.rend + ' Ton/h<br>' +
+                                            '• Estado: ' + statusText + '<br>' + toggleMsg;
                     }}
                 }});
             }}
@@ -1129,10 +1170,14 @@ html_gps_canvas = f"""
                     if (dist < cf.radius) {{
                         hovered = true; tooltip.style.display = 'block';
                         tooltip.style.left = (cf.x + 20) + 'px'; tooltip.style.top = (cf.y - 35) + 'px';
-                        tooltip.innerHTML = '<b>🚜 CARGADOR FRONTAL ' + cf.data.id + '</b><br>' +
-                                            '• Operador(a): <b>' + (cf.data.operador || "Sin Asignar") + '</b><br>' +
-                                            '• Modelo: ' + (cf.data.modelo || "WA900") + '<br>' +
-                                            '• Rendimiento: ' + cf.data.rend + ' Ton/h';
+                        let cfData = cfList[cf.index];
+                        let toggleMsg = cfData.stoppedByFault ? "<span style='color:#10B981;'><b>(Haz clic para REANUDAR)</b></span>" : "<span style='color:#EF4444;'><b>(Haz clic para DETENER POR FALLA)</b></span>";
+                        let statusText = cfData.stoppedByFault ? "🔴 DETENIDO POR FALLA" : "🟢 Operando Normal";
+                        tooltip.innerHTML = '<b>🚜 CARGADOR FRONTAL ' + cfData.id + '</b><br>' +
+                                            '• Operador(a): <b>' + (cfData.operador || "Sin Asignar") + '</b><br>' +
+                                            '• Modelo: ' + (cfData.modelo || "WA900") + '<br>' +
+                                            '• Rendimiento: ' + cfData.rend + ' Ton/h<br>' +
+                                            '• Estado: ' + statusText + '<br>' + toggleMsg;
                     }}
                 }});
             }}
