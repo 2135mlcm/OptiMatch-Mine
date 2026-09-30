@@ -886,20 +886,40 @@ if "caex_df" not in st.session_state:
     ])
 
 # ---------------------------------------------------------
-# TABLAS DINÁMICAS DE FLOTA (CON RENUMERACIÓN AUTOMÁTICA)
+# TABLAS DINÁMICAS DE FLOTA (CON BOTONES Y NUEVO ÍCONO)
 # ---------------------------------------------------------
-st.markdown("<h2 class='centered-title'>🚜 Estado y Agendamiento de Flota Operativa</h2>", unsafe_allow_html=True)
 
-col_t1, col_t2, col_t3 = st.columns(3)
+# Reemplazo del icono del título por la imagen guardada (o fallback si no existe)
+c_hdr_icon, c_hdr_txt = st.columns([1, 5])
+with c_hdr_icon:
+    posibles_iconos = ["image_5ea6ba.png", "Flota_Icono.png", "icono_flota.png"]
+    icono_encontrado = None
+    for img_p in posibles_iconos:
+        if os.path.exists(img_p):
+            icono_encontrado = img_p
+            break
+    if icono_encontrado:
+        st.image(icono_encontrado, width=110)
+    else:
+        st.markdown("<h1 style='text-align: center;'>🚜</h1>", unsafe_allow_html=True)
+
+with c_hdr_txt:
+    st.markdown("<h2 style='margin-top: 15px;'>Estado y Agendamiento de Flota Operativa</h2>", unsafe_allow_html=True)
+
 opciones_estado = ["🟢 Disponible", "🟡 Mantenimiento / Resguardo", "🔴 Falla Mecánica"]
 
-# Función para reordenar la columna Item numéricamente
+# Función auxiliar para reindexar items secuencialmente
 def reindexar_flota(df):
     if not df.empty:
         df = df.reset_index(drop=True)
         df["Item"] = df.index + 1
     return df
 
+col_t1, col_t2, col_t3 = st.columns(3)
+
+# ---------------------------------------------------------
+# COLUMNA 1: PALAS DE CARGUÍO
+# ---------------------------------------------------------
 with col_t1:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
@@ -908,6 +928,30 @@ with col_t1:
     with c_txt:
         st.markdown("### Pala de Carguío")
     
+    # Botones de control bajo encabezados
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        if st.button("➖ Eliminar Último", key="del_pala", use_container_width=True):
+            if len(st.session_state.palas_df) > 0:
+                st.session_state.palas_df = st.session_state.palas_df.iloc[:-1]
+                st.session_state.palas_df = reindexar_flota(st.session_state.palas_df)
+                st.rerun()
+    with btn_col2:
+        if st.button("➕ Agregar Equipo", key="add_pala", use_container_width=True):
+            nueva_pala = {
+                "Item": len(st.session_state.palas_df) + 1,
+                "Agendar": False,
+                "Estado": "🟡 Mantenimiento / Resguardo",
+                "ID": f"PA{620 + len(st.session_state.palas_df) + 1}",
+                "Modelo": "Liebherr R9200",
+                "Operador": "Sin Asignar",
+                "Rend_TonH": 1350,
+                "Consumo_LtsH": 115.0,
+                "Costo_USDH": 420.00
+            }
+            st.session_state.palas_df = pd.concat([st.session_state.palas_df, pd.DataFrame([nueva_pala])], ignore_index=True)
+            st.rerun()
+
     ed_palas = st.data_editor(
         st.session_state.palas_df,
         column_config={
@@ -916,11 +960,13 @@ with col_t1:
         },
         hide_index=True,
         key="editor_palas",
-        num_rows="dynamic"
+        num_rows="fixed"
     )
-    ed_palas = reindexar_flota(ed_palas)
-    st.session_state.palas_df = ed_palas
+    st.session_state.palas_df = reindexar_flota(ed_palas)
 
+# ---------------------------------------------------------
+# COLUMNA 2: CARGADOR FRONTAL
+# ---------------------------------------------------------
 with col_t2:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
@@ -929,6 +975,30 @@ with col_t2:
     with c_txt:
         st.markdown("### Cargador Frontal")
     
+    # Botones de control bajo encabezados
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        if st.button("➖ Eliminar Último", key="del_cf", use_container_width=True):
+            if len(st.session_state.cf_df) > 0:
+                st.session_state.cf_df = st.session_state.cf_df.iloc[:-1]
+                st.session_state.cf_df = reindexar_flota(st.session_state.cf_df)
+                st.rerun()
+    with btn_col2:
+        if st.button("➕ Agregar Equipo", key="add_cf", use_container_width=True):
+            nuevo_cf = {
+                "Item": len(st.session_state.cf_df) + 1,
+                "Agendar": False,
+                "Estado": "🟡 Mantenimiento / Resguardo",
+                "ID": f"CF{435 + len(st.session_state.cf_df) + 1}",
+                "Modelo": "CAT 993K",
+                "Operador": "Sin Asignar",
+                "Rend_TonH": 700,
+                "Consumo_LtsH": 80.0,
+                "Costo_USDH": 350.00
+            }
+            st.session_state.cf_df = pd.concat([st.session_state.cf_df, pd.DataFrame([nuevo_cf])], ignore_index=True)
+            st.rerun()
+
     ed_cf = st.data_editor(
         st.session_state.cf_df,
         column_config={
@@ -937,11 +1007,13 @@ with col_t2:
         },
         hide_index=True,
         key="editor_cf",
-        num_rows="dynamic"
+        num_rows="fixed"
     )
-    ed_cf = reindexar_flota(ed_cf)
-    st.session_state.cf_df = ed_cf
+    st.session_state.cf_df = reindexar_flota(ed_cf)
 
+# ---------------------------------------------------------
+# COLUMNA 3: CAMIÓN CAEX
+# ---------------------------------------------------------
 with col_t3:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
@@ -952,6 +1024,30 @@ with col_t3:
     with c_txt:
         st.markdown("### Camión CAEX")
     
+    # Botones de control bajo encabezados
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        if st.button("➖ Eliminar Último", key="del_caex", use_container_width=True):
+            if len(st.session_state.caex_df) > 0:
+                st.session_state.caex_df = st.session_state.caex_df.iloc[:-1]
+                st.session_state.caex_df = reindexar_flota(st.session_state.caex_df)
+                st.rerun()
+    with btn_col2:
+        if st.button("➕ Agregar Equipo", key="add_caex", use_container_width=True):
+            nuevo_caex = {
+                "Item": len(st.session_state.caex_df) + 1,
+                "Agendar": False,
+                "Estado": "🟡 Mantenimiento / Resguardo",
+                "ID": f"CA{318 + len(st.session_state.caex_df) + 1}",
+                "Modelo": "Komatsu HD1500-8",
+                "Operador": "Sin Asignar",
+                "Rend_TonH": 604,
+                "Consumo_LtsH": 95.0,
+                "Costo_USDH": 289.92
+            }
+            st.session_state.caex_df = pd.concat([st.session_state.caex_df, pd.DataFrame([nuevo_caex])], ignore_index=True)
+            st.rerun()
+
     ed_caex = st.data_editor(
         st.session_state.caex_df,
         column_config={
@@ -960,10 +1056,9 @@ with col_t3:
         },
         hide_index=True,
         key="editor_caex",
-        num_rows="dynamic"
+        num_rows="fixed"
     )
-    ed_caex = reindexar_flota(ed_caex)
-    st.session_state.caex_df = ed_caex
+    st.session_state.caex_df = reindexar_flota(ed_caex)
 
 # ---------------------------------------------------------
 # CÁLCULOS MATEMÁTICOS DE BALANCE Y UNIFICACIÓN DE MODELO
