@@ -292,7 +292,7 @@ if not st.session_state.autenticado:
             st.markdown(
                 """
                 <div style="text-align: center; background-color: #1E293B; padding: 20px; border-radius: 15px; border: 2px solid #F59E0B;">
-                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️️ OptiMatch Mine</h1>
+                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️ OptiMatch Mine</h1>
                     <h3 style="color: #F8FAFC; margin-top: 5px;">Control de Flota y Agendamiento Pre-Turno</h3>
                 </div>
             """,
@@ -491,7 +491,7 @@ if "cf_df" not in st.session_state:
     st.session_state.cf_df = pd.DataFrame([
         {"Item": 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "CF437", "Modelo": "Komatsu WA900", "Operador": "Sin Asignar", "Rend_TonH": 685, "Consumo_LtsH": 75.0, "Costo_USDH": 342.50},
         {"Item": 2, "Agendar": True,  "Estado": "🟢 Disponible", "ID": "CF438", "Modelo": "CAT 993K", "Operador": "Manuel Torres", "Rend_TonH": 720, "Consumo_LtsH": 82.0, "Costo_USDH": 360.00},
-        {"Item": 3, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CF439", "Modelo": "LeTourneau L-1850", "Operador": "Roberto Marín", "Rend_TonH": 810, "Consumo_LtsH": 90.0, "Costo_USDH": 395.00},
+        {"Item": 3, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CF439", "Modelo": "LeTourneau L-1850", "Operador": "Roberto Marín", "Rend_TonH": 900, "Consumo_LtsH": 90.0, "Costo_USDH": 395.00},
         {"Item": 4, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CF440", "Modelo": "CAT 992K", "Operador": "Sin Asignar", "Rend_TonH": 650, "Consumo_LtsH": 70.0, "Costo_USDH": 325.00},
     ])
 
@@ -512,25 +512,25 @@ if "caex_df" not in st.session_state:
     ])
 
 # ---------------------------------------------------------
-# CABECERA CENTRADA CON EL LOGO APEGADO AL TEXTO (ALINEADO AL MEDIO / CARGADOR FRONTAL)
+# CABECERA CENTRADA UNIFICADA COMPACTA (ALINEADA AL CARGADOR FRONTAL)
 # ---------------------------------------------------------
 b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("image_5ea6ba.png") or obtener_base64_img("Logo_OptiMatch.png")
 
 if b64_logo:
-    img_tag_logo = f'<img src="{b64_logo}" style="height: 48px; width: auto; vertical-align: middle; margin-right: 12px; display: inline-block;">'
+    img_tag_logo = f'<img src="{b64_logo}" style="height: 38px; width: auto; vertical-align: middle; margin-right: 8px;">'
 else:
-    img_tag_logo = '<span style="font-size: 32px; vertical-align: middle; margin-right: 10px;">⛏️</span>'
+    img_tag_logo = '<span style="font-size: 26px; vertical-align: middle; margin-right: 8px;">⛏️</span>'
 
 st.markdown(
     f"""
-    <div style="text-align: center; width: 100%; margin-top: 5px; margin-bottom: 25px;">
-        <div style="display: inline-flex; align-items: center; justify-content: center;">
+    <div style="text-align: center; width: 100%; margin-top: 0px; margin-bottom: 15px; padding: 0px;">
+        <div style="display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
             {img_tag_logo}
-            <h2 style="margin: 0; padding: 0; color: #0F172A; font-size: 25px; font-weight: 800; display: inline-block; vertical-align: middle;">
+            <h2 style="margin: 0; padding: 0; color: #0F172A; font-size: 23px; font-weight: 800; line-height: 1.1;">
                 Estado y Agendamiento de Flota Operativa
             </h2>
         </div>
-        <p style="color: #475569; font-weight: 600; margin: 4px 0px 0px 0px; font-size: 13.5px; text-align: center;">
+        <p style="color: #475569; font-weight: 600; margin: 2px 0px 0px 0px; font-size: 13px; text-align: center; line-height: 1.2;">
             Selección de disponibilidad mecánica y asignación de equipos para el turno
         </p>
     </div>
@@ -786,7 +786,7 @@ with col_eval2:
 # MÓDULO DE SEGUIMIENTO ESPACIAL - SIMULACIÓN FÍSICA ACOPLADA
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
+st.subheader("🗺️️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
 st.markdown(
     f"💡 **Ciclo Operacional Calculado:** **{fmt_num(t_ciclo_fisico_min, 2)} min** "
     f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h: {fmt_num(t_ida_min, 2)}m | "
@@ -1323,7 +1323,7 @@ with col_h1:
 
 with col_h2:
     if st.session_state.get("user_id") == "mcepeda":
-        if st.button("🗑️️ Borrar Histórico (Admin)", type="primary", use_container_width=True):
+        if st.button("🗑 Borrar Histórico (Admin)", type="primary", use_container_width=True):
             borrar_historico_db()
             st.success("Histórico eliminado correctamente.")
             st.rerun()
