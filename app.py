@@ -746,21 +746,21 @@ if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
 st.markdown("---")
 st.header(f"📈 Resumen de Agendamiento Pre-Turno: {num_agendamiento}")
 
-b64_logo_atacama = obtener_base64_img(LOGO_ATACAMA_PATH) or obtener_base64_img("image_6b6213.png") or obtener_base64_img("logo_atacama_norte.png")
+b64_logo_atacama = obtener_base64_img(LOGO_ATACAMA_PATH)
 
 if b64_logo_atacama:
     faena_header_html = f"""
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-            <img src="{b64_logo_atacama}" style="height: 32px; width: auto; vertical-align: middle; object-fit: contain;">
-            <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 19px; font-weight: 700; display: inline-block;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
+            <img src="{b64_logo_atacama}" style="height: 45px; width: auto; vertical-align: middle; object-fit: contain;">
+            <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 20px; font-weight: 800; display: inline-block;">
                 Faena: {nombre_mina} | Fecha y Hora: {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})
             </h3>
         </div>
     """
 else:
     faena_header_html = f"""
-        <h3 style="margin: 0 0 12px 0; padding: 0; color: #0F172A; font-size: 19px; font-weight: 700;">
-            🏢 Faena: {nombre_mina} | Fecha y Hora: {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})
+        <h3 style="margin: 0 0 15px 0; padding: 0; color: #0F172A; font-size: 20px; font-weight: 800;">
+            Faena: {nombre_mina} | Fecha y Hora: {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})
         </h3>
     """
 
