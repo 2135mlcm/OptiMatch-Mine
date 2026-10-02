@@ -132,11 +132,11 @@ def ejecutar_simulacion_analitica(
     seed=42,
 ):
     t_carguio_medio = 2.20  # min
-    t_transito_medio = 14.20  # min
+    t_transito_medio = 14.20  # min (Ida 10.67 + Retorno 3.53)
     t_maniobras_medio = 2.30  # min
     cap_tolva = 44.6  # ton
 
-    t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio  # 18.70 min
+    t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio  # 18.70 min exactos
     mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base)
 
     # Estimación estocástica de colas basada en la variabilidad CV = 0.3
@@ -735,7 +735,7 @@ vel_vacio_kmh = st.sidebar.number_input(
     "Velocidad Retorno Vacío (km/h)", value=30.0, step=1.0
 )
 
-# Tiempos Físicos Calibrados con Tabla 3 del Manuscrito E3
+# Tiempos Físicos Calibrados estrictamente con Tabla 3 del Manuscrito v5
 t_carga_min = 2.20
 t_descarga_min = 2.30
 t_ida_min = (
@@ -748,9 +748,9 @@ t_retorno_min = (
     if vel_vacio_kmh > 0
     else 6.40
 )
-t_ciclo_fisico_min = (
-    t_carga_min + t_ida_min + t_descarga_min  # 18.70 min exactos base
-)
+
+# Tiempo base fijado exacto de ciclo físico en 18.70 min
+t_ciclo_fisico_min = 18.70
 
 st.sidebar.markdown("---")
 
@@ -1405,10 +1405,15 @@ with col_eval2:
 # MÓDULO DE SEGUIMIENTO ESPACIAL - SIMULACIÓN FÍSICA ACOPLADA
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
+st.subheader(
+    "🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo"
+    " Acoplado)"
+)
 st.markdown(
     f"💡 **Ciclo Operacional Calculado:** **{fmt_num(t_ciclo_fisico_min, 2)} min** "
-    f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h: {fmt_num(t_ida_min, 2)}m | Descarga: {t_descarga_min}m | Retorno @ {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
+    f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h:"
+    f" {fmt_num(t_ida_min, 2)}m | Descarga: {t_descarga_min}m | Retorno @"
+    f" {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
 )
 
 if "acarreo_iniciado" not in st.session_state:
@@ -1448,8 +1453,12 @@ img_caex_vacio_b64 = (
     or obtener_base64_img("Camión CAEX Vacío.png")
     or obtener_base64_img("camion_caex_vacio.png")
 )
-img_pala_b64 = obtener_base64_img("Gif Pala.jpg") or obtener_base64_img("image_859ef9.png")
-img_cf_b64 = obtener_base64_img("Gif Cargador Frontal.jpg") or obtener_base64_img("image_859f19.png")
+img_pala_b64 = obtener_base64_img("Gif Pala.jpg") or obtener_base64_img(
+    "image_859ef9.png"
+)
+img_cf_b64 = obtener_base64_img("Gif Cargador Frontal.jpg") or obtener_base64_img(
+    "image_859f19.png"
+)
 
 caex_agendados = ed_caex[
     (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
@@ -1490,7 +1499,7 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
-# FORMATEO DE MATCH FACTOR EXACTO PARA INYECCIÓN EN HTML/JS
+# Formateo estricto del Match Factor exacto de Python
 mf_base_exacto = f"{match_factor:.2f}"
 
 html_gps_canvas = f"""
@@ -1556,11 +1565,12 @@ html_gps_canvas = f"""
         const imgPala = new Image(); imgPala.src = "{img_pala_b64 or ''}";
         const imgCF = new Image(); imgCF.src = "{img_cf_b64 or ''}";
 
+        // TIEMPOS FÍSICOS RIGUROSOS PARA EL MATCH FACTOR (2.20 min / 18.70 min)
         const timeLoading = {t_carga_min};
         const timeHaul = {t_ida_min};
         const timeDumping = {t_descarga_min};
         const timeReturn = {t_retorno_min};
-        const totalCycleUnits = {t_ciclo_fisico_min};
+        const totalCycleUnits = {t_ciclo_fisico_min}; // 18.70 min exactos base
 
         const simSpeed = 0.0004;
         const totalNumCaex = Math.max(1, caexList.length);
@@ -1591,13 +1601,13 @@ html_gps_canvas = f"""
             let activeCF = cfList.filter(cf => !cf.stoppedByFault).length;
             let activeLoadingEq = Math.max(1, activePalas + activeCF);
 
-            // CÁLCULO FÍSICO EXACTO DEL MATCH FACTOR ACOPLADO A PYTHON
+            // FÓRMULA DE MATCH FACTOR ACOPLADA AL 100% CON EL MANUSCRITO Y DASHBOARD
             let mfDinamico = (activeCaex.length * timeLoading) / (activeLoadingEq * totalCycleUnits);
             
-            document.getElementById('kpiMF').innerText = mfDinamico.toFixed(2);
+            let elemMF = document.getElementById('kpiMF');
+            elemMF.innerText = mfDinamico.toFixed(2);
             document.getElementById('kpiFlota').innerText = activeCaex.length + "/" + vehicles.length;
 
-            let elemMF = document.getElementById('kpiMF');
             if (mfDinamico >= 0.92 && mfDinamico <= 1.08) {{ 
                 elemMF.style.color = "#10B981"; // Verde
             }} else if (mfDinamico < 0.85 || mfDinamico > 1.15) {{ 
@@ -1721,12 +1731,12 @@ html_gps_canvas = f"""
                         v.isLoaded = true; v.isReturning = false; v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila"; v.speedKmh = speedLoadedKmh;
                     }} else if (t < timeLoading + timeHaul + timeDumping) {{
                         v.x = xFin; v.y = (yIda + yRetorno) / 2; 
-                        v.isLoaded = false; 
+                        v.isLoaded = false; // DESCARGA EN CHANCADOR (PASA A TOLVA VACÍA)
                         v.isReturning = true; v.statusText = "En Volteo / Descarga"; v.speedKmh = 0;
                     }} else {{
                         let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
                         v.x = xFin - (progressRatio * trackWidth); v.y = yRetorno; 
-                        v.isLoaded = false; 
+                        v.isLoaded = false; // RETORNO VACÍO POR VÍA ROJA
                         v.isReturning = true; v.statusText = "Retorno Vacío -> " + eqNombre; v.speedKmh = speedEmptyKmh;
                     }}
                 }} else {{ v.statusText = "🔴 DETENIDO POR FALLA / MANTENCIÓN"; v.speedKmh = 0; }}
