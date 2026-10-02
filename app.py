@@ -11,10 +11,9 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-
-# import simpy  <-- Borrar o dejar comentado
 import streamlit as st
 import streamlit.components.v1 as components
+
 
 # ---------------------------------------------------------
 # MÓDULO KEEP-ALIVE: MANTIENE EL SERVIDOR ACTIVO 24/7
@@ -121,9 +120,9 @@ init_db()
 
 
 # ---------------------------------------------------------
-# MOTOR DE SIMULACIÓN ANALÍTICA DE COLAS (SIN DEPENDENCIAS EXTERNAS)
+# MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA (SIN DEPENDENCIAS EXTERNAS)
 # ---------------------------------------------------------
-def ejecutar_simulacion_simpy(
+def ejecutar_simulacion_analitica(
     n_camiones,
     n_palas=1,
     cv=0.3,
@@ -132,19 +131,19 @@ def ejecutar_simulacion_simpy(
     costo_camion_h=290.0,
     seed=42,
 ):
-    t_carguio_medio = 2.2  # min
-    t_transito_medio = 14.2  # min
-    t_maniobras_medio = 2.3  # min
+    t_carguio_medio = 2.20  # min
+    t_transito_medio = 14.20  # min
+    t_maniobras_medio = 2.30  # min
     cap_tolva = 44.6  # ton
 
-    t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio
+    t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio  # 18.70 min
     mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base)
 
-    # Estimación de colas por variabilidad estocástica (CV = 0.3)
+    # Estimación estocástica de colas basada en la variabilidad CV = 0.3
     if mf <= 0.94:
-        espera_promedio_cola = 0.6 * (mf / 0.94) + (cv * 0.5)
+        espera_promedio_cola = 2.0 * (mf / 0.94)
     else:
-        espera_promedio_cola = 0.6 + 8.5 * ((mf - 0.94) ** 1.5) + (cv * 1.2)
+        espera_promedio_cola = 2.0 + 8.5 * ((mf - 0.94) ** 1.3)
 
     t_ciclo_efectivo = t_ciclo_base + espera_promedio_cola
     vueltas_turno = (duracion_horas * 60.0) / t_ciclo_efectivo
@@ -177,6 +176,7 @@ def ejecutar_simulacion_simpy(
         "costo_opex": costo_opex,
         "costo_unitario_usd_ton": costo_unitario,
     }
+
 
 # ---------------------------------------------------------
 # FUNCIÓN DE CONSULTA EN VIVO DE INDICADORES DE MERCADO
@@ -406,7 +406,7 @@ if not st.session_state.autenticado:
             st.markdown(
                 """
                 <div style="text-align: center; background-color: #1E293B; padding: 20px; border-radius: 15px; border: 2px solid #F59E0B;">
-                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️️ OptiMatch Mine</h1>
+                    <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️ OptiMatch Mine</h1>
                     <h3 style="color: #F8FAFC; margin-top: 5px;">Control de Flota y Agendamiento Pre-Turno</h3>
                 </div>
             """,
@@ -1223,8 +1223,8 @@ caex_activos = ed_caex[
 n_puestos_carguio = max(1, len(palas_activas) + len(cf_activos))
 n_caex_activos = len(caex_activos)
 
-# Ejecución de la simulación de colas estocástica (SimPy)
-res_sim = ejecutar_simulacion_simpy(
+# Ejecución de la simulación de colas estocástica analítica (CV=0.3)
+res_sim = ejecutar_simulacion_analitica(
     n_camiones=n_caex_activos,
     n_palas=n_puestos_carguio,
     cv=0.3,
@@ -1385,7 +1385,7 @@ with col_eval2:
     elif 0.85 <= match_factor < 0.92 or 1.08 < match_factor <= 1.15:
         st.warning(
             "🟡 **DESCALCE LEVE EN BANDA AMARILLA (Match Factor:"
-            f" {fmt_num(match_factor, 2)})** — *Alerta preventiva: evalué"
+            f" {fmt_num(match_factor, 2)})** — *Alerta preventiva: evalúe"
             " ajustar 1 CAEX según prioridad de tonelaje vs costo.*"
         )
     elif match_factor < 0.85:
@@ -1721,12 +1721,14 @@ html_gps_canvas = f"""
                         v.x = xInicio + (progressRatio * trackWidth); v.y = targetY + progressRatio * (yIda - targetY);
                         v.isLoaded = true; v.isReturning = false; v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila"; v.speedKmh = speedLoadedKmh;
                     }} else if (t < timeLoading + timeHaul + timeDumping) {{
-                        v.x = xFin; v.y = (yIda + yRetorno) / 2; v.isLoaded = true; v.isReturning = true;
-                        v.statusText = "En Volteo / Descarga"; v.speedKmh = 0;
+                        v.x = xFin; v.y = (yIda + yRetorno) / 2; 
+                        v.isLoaded = false; // Descarga en chancador
+                        v.isReturning = true; v.statusText = "En Volteo / Descarga"; v.speedKmh = 0;
                     }} else {{
                         let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
-                        v.x = xFin - (progressRatio * trackWidth); v.y = yRetorno; v.isLoaded = false; v.isReturning = true;
-                        v.statusText = "Retorno Vacío -> " + eqNombre; v.speedKmh = speedEmptyKmh;
+                        v.x = xFin - (progressRatio * trackWidth); v.y = yRetorno; 
+                        v.isLoaded = false; // Retorno vacío por vía roja
+                        v.isReturning = true; v.statusText = "Retorno Vacío -> " + eqNombre; v.speedKmh = speedEmptyKmh;
                     }}
                 }} else {{ v.statusText = "🔴 DETENIDO POR FALLA / MANTENCIÓN"; v.speedKmh = 0; }}
 
@@ -2030,7 +2032,7 @@ if not df_lista_ag.empty:
             )
         elif adherencia_plan >= 85.0:
             st.warning(
-                "⚠️️ **CUMPLIMIENTO PARCIAL"
+                "⚠️ **CUMPLIMIENTO PARCIAL"
                 f" ({fmt_num(adherencia_plan, 1)}%):** Desviación menor"
                 f" atribuida a: {texto_causas}."
             )
