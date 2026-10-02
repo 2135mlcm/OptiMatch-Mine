@@ -1405,15 +1405,10 @@ with col_eval2:
 # MÓDULO DE SEGUIMIENTO ESPACIAL - SIMULACIÓN FÍSICA ACOPLADA
 # ---------------------------------------------------------
 st.markdown("---")
-st.subheader(
-    "🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo"
-    " Acoplado)"
-)
+st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
 st.markdown(
     f"💡 **Ciclo Operacional Calculado:** **{fmt_num(t_ciclo_fisico_min, 2)} min** "
-    f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h:"
-    f" {fmt_num(t_ida_min, 2)}m | Descarga: {t_descarga_min}m | Retorno @"
-    f" {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
+    f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h: {fmt_num(t_ida_min, 2)}m | Descarga: {t_descarga_min}m | Retorno @ {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
 )
 
 if "acarreo_iniciado" not in st.session_state:
@@ -1453,12 +1448,8 @@ img_caex_vacio_b64 = (
     or obtener_base64_img("Camión CAEX Vacío.png")
     or obtener_base64_img("camion_caex_vacio.png")
 )
-img_pala_b64 = obtener_base64_img("Gif Pala.jpg") or obtener_base64_img(
-    "image_859ef9.png"
-)
-img_cf_b64 = obtener_base64_img("Gif Cargador Frontal.jpg") or obtener_base64_img(
-    "image_859f19.png"
-)
+img_pala_b64 = obtener_base64_img("Gif Pala.jpg") or obtener_base64_img("image_859ef9.png")
+img_cf_b64 = obtener_base64_img("Gif Cargador Frontal.jpg") or obtener_base64_img("image_859f19.png")
 
 caex_agendados = ed_caex[
     (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
@@ -1499,6 +1490,9 @@ palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
 
+# FORMATEO DE MATCH FACTOR EXACTO PARA INYECCIÓN EN HTML/JS
+mf_base_exacto = f"{match_factor:.2f}"
+
 html_gps_canvas = f"""
 <!DOCTYPE html>
 <html>
@@ -1532,7 +1526,7 @@ html_gps_canvas = f"""
             <div class="kpi-grid">
                 <div><span>META VTS</span><div class="kpi-val" id="kpiMeta">{vueltas_totales_meta}</div></div>
                 <div><span>ACTUAL</span><div class="kpi-val" style="color:#10B981;" id="kpiActual">0</div></div>
-                <div><span>M. FACTOR</span><div class="kpi-val" style="color:#F59E0B;" id="kpiMF">{match_factor:.2f}</div></div>
+                <div><span>M. FACTOR</span><div class="kpi-val" style="color:#10B981;" id="kpiMF">{mf_base_exacto}</div></div>
                 <div><span>FLOTA ACT.</span><div class="kpi-val" style="color:#E2E8F0;" id="kpiFlota">{len(lista_caex_js)}/{len(lista_caex_js)}</div></div>
             </div>
         </div>
@@ -1597,15 +1591,20 @@ html_gps_canvas = f"""
             let activeCF = cfList.filter(cf => !cf.stoppedByFault).length;
             let activeLoadingEq = Math.max(1, activePalas + activeCF);
 
+            // CÁLCULO FÍSICO EXACTO DEL MATCH FACTOR ACOPLADO A PYTHON
             let mfDinamico = (activeCaex.length * timeLoading) / (activeLoadingEq * totalCycleUnits);
             
             document.getElementById('kpiMF').innerText = mfDinamico.toFixed(2);
             document.getElementById('kpiFlota').innerText = activeCaex.length + "/" + vehicles.length;
 
             let elemMF = document.getElementById('kpiMF');
-            if (mfDinamico >= 0.92 && mfDinamico <= 1.08) {{ elemMF.style.color = "#10B981"; }}
-            else if (mfDinamico < 0.85 || mfDinamico > 1.15) {{ elemMF.style.color = "#EF4444"; }}
-            else {{ elemMF.style.color = "#F59E0B"; }}
+            if (mfDinamico >= 0.92 && mfDinamico <= 1.08) {{ 
+                elemMF.style.color = "#10B981"; // Verde
+            }} else if (mfDinamico < 0.85 || mfDinamico > 1.15) {{ 
+                elemMF.style.color = "#EF4444"; // Rojo
+            }} else {{ 
+                elemMF.style.color = "#F59E0B"; // Amarillo
+            }}
         }}
 
         function drawCaexTruck(x, y, isLoaded, isReturning, isStopped) {{
@@ -1722,12 +1721,12 @@ html_gps_canvas = f"""
                         v.isLoaded = true; v.isReturning = false; v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila"; v.speedKmh = speedLoadedKmh;
                     }} else if (t < timeLoading + timeHaul + timeDumping) {{
                         v.x = xFin; v.y = (yIda + yRetorno) / 2; 
-                        v.isLoaded = false; // Descarga en chancador
+                        v.isLoaded = false; 
                         v.isReturning = true; v.statusText = "En Volteo / Descarga"; v.speedKmh = 0;
                     }} else {{
                         let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
                         v.x = xFin - (progressRatio * trackWidth); v.y = yRetorno; 
-                        v.isLoaded = false; // Retorno vacío por vía roja
+                        v.isLoaded = false; 
                         v.isReturning = true; v.statusText = "Retorno Vacío -> " + eqNombre; v.speedKmh = speedEmptyKmh;
                     }}
                 }} else {{ v.statusText = "🔴 DETENIDO POR FALLA / MANTENCIÓN"; v.speedKmh = 0; }}
