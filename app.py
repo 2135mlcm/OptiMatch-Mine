@@ -11,10 +11,10 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import simpy
+
+# import simpy  <-- Borrar o dejar comentado
 import streamlit as st
 import streamlit.components.v1 as components
-
 
 # ---------------------------------------------------------
 # MÓDULO KEEP-ALIVE: MANTIENE EL SERVIDOR ACTIVO 24/7
