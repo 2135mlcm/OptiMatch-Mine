@@ -121,7 +121,7 @@ init_db()
 
 
 # ---------------------------------------------------------
-# MOTOR DE SIMULACIÓN ESTOCÁSTICA DE COLAS (SIMPY INTEGRADO)
+# MOTOR DE SIMULACIÓN ANALÍTICA DE COLAS (SIN DEPENDENCIAS EXTERNAS)
 # ---------------------------------------------------------
 def ejecutar_simulacion_simpy(
     n_camiones,
@@ -132,77 +132,41 @@ def ejecutar_simulacion_simpy(
     costo_camion_h=290.0,
     seed=42,
 ):
-    random.seed(seed)
-    np.random.seed(seed)
-
     t_carguio_medio = 2.2  # min
     t_transito_medio = 14.2  # min
     t_maniobras_medio = 2.3  # min
     cap_tolva = 44.6  # ton
 
-    consumo_transito_h = 45.0  # L/h
-    consumo_ralenti_h = 28.0  # L/h
+    t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio
+    mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base)
 
-    tiempos_espera_cola = []
-    toneladas_totales = 0.0
-    tiempo_transito_total_h = 0.0
-    tiempo_cola_total_h = 0.0
+    # Estimación de colas por variabilidad estocástica (CV = 0.3)
+    if mf <= 0.94:
+        espera_promedio_cola = 0.6 * (mf / 0.94) + (cv * 0.5)
+    else:
+        espera_promedio_cola = 0.6 + 8.5 * ((mf - 0.94) ** 1.5) + (cv * 1.2)
 
-    env = simpy.Environment()
-    pala = simpy.Resource(env, capacity=max(1, n_palas))
+    t_ciclo_efectivo = t_ciclo_base + espera_promedio_cola
+    vueltas_turno = (duracion_horas * 60.0) / t_ciclo_efectivo
+    toneladas_totales = n_camiones * vueltas_turno * cap_tolva
 
-    def proceso_camion(env_sim, id_camion):
-        nonlocal toneladas_totales, tiempo_transito_total_h, tiempo_cola_total_h
-
-        while True:
-            t_tr_media = t_transito_medio + t_maniobras_medio
-            shape_tr = 1.0 / (cv**2)
-            scale_tr = t_tr_media * (cv**2)
-            t_tr_actual = random.gammavariate(shape_tr, scale_tr)
-
-            yield env_sim.timeout(t_tr_actual)
-            tiempo_transito_total_h += t_tr_actual / 60.0
-
-            t_llegada_cola = env_sim.now
-            with pala.request() as req:
-                yield req
-
-                t_espera = env_sim.now - t_llegada_cola
-                tiempos_espera_cola.append(t_espera)
-                tiempo_cola_total_h += t_espera / 60.0
-
-                shape_cg = 1.0 / (cv**2)
-                scale_cg = t_carguio_medio * (cv**2)
-                t_cg_actual = random.gammavariate(shape_cg, scale_cg)
-
-                yield env_sim.timeout(t_cg_actual)
-                toneladas_totales += cap_tolva
-
-    for i in range(max(1, n_camiones)):
-        env.process(proceso_camion(env, i))
-
-    env.run(until=duracion_horas * 60.0)
-
-    espera_promedio_cola = (
-        float(np.mean(tiempos_espera_cola)) if tiempos_espera_cola else 0.0
+    # Balance de Combustible (Litros en Tránsito vs Ralentí)
+    horas_transito = (vueltas_turno * t_ciclo_base) / 60.0
+    horas_ralenti = (vueltas_turno * espera_promedio_cola) / 60.0
+    litros_totales = (n_camiones * horas_transito * 45.0) + (
+        n_camiones * horas_ralenti * 28.0
     )
-
-    litros_transito = tiempo_transito_total_h * consumo_transito_h
-    litros_ralenti = tiempo_cola_total_h * consumo_ralenti_h
-    litros_totales = litros_transito + litros_ralenti
     consumo_especifico = (
         litros_totales / toneladas_totales if toneladas_totales > 0 else 0.0
     )
 
+    # Estructura de Costos OPEX
     costo_flota = n_camiones * costo_camion_h * duracion_horas
     costo_pala_tot = n_palas * costo_pala_h * duracion_horas
     costo_opex = costo_flota + costo_pala_tot
     costo_unitario = (
         costo_opex / toneladas_totales if toneladas_totales > 0 else 0.0
     )
-
-    t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio
-    mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base)
 
     return {
         "MF": mf,
@@ -213,7 +177,6 @@ def ejecutar_simulacion_simpy(
         "costo_opex": costo_opex,
         "costo_unitario_usd_ton": costo_unitario,
     }
-
 
 # ---------------------------------------------------------
 # FUNCIÓN DE CONSULTA EN VIVO DE INDICADORES DE MERCADO
