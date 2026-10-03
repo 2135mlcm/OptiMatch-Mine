@@ -1,5 +1,5 @@
 # ==============================================================================
-# 1. IMPORTS Y LIBRERÍAS ESTÁNDAR / TERCEROS
+# 1. IMPORTS Y LIBRERÍAS ESTÁNDAR / TERCEROS (PEP 8)
 # ==============================================================================
 import base64
 from datetime import datetime
@@ -135,10 +135,9 @@ def ejecutar_simulacion_analitica(
     t_maniobras_medio = 2.30  # min
     cap_tolva_base = 44.6  # ton nominal
     
-    # Ajuste por Factor de Llenado (FL)
     cap_tolva = cap_tolva_base * (fl_factor / 0.88)
 
-    t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio  # 18.70 min exactos
+    t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio  # 18.70 min
     mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base) if (n_palas * t_ciclo_base) > 0 else 0.0
 
     if mf <= 0.94:
@@ -253,7 +252,7 @@ def obtener_base64_img(nombre_archivo):
     return None
 
 # ==============================================================================
-# 7. CSS PERSONALIZADO Y ESTILOS DE INTERFAZ
+# 7. CSS PERSONALIZADO Y BORDES EN TARJETAS KPI
 # ==============================================================================
 st.markdown("""
     <style>
@@ -304,9 +303,29 @@ st.markdown("""
         background-color: #F8FAFC; padding: 20px 40px; border-radius: 12px; border: 2px solid #D97706;
         box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.08); text-align: center; width: fit-content; margin: 10px auto 25px auto;
     }
-    .centered-title { text-align: center !important; width: 100% !important; margin-top: 20px !important; margin-bottom: 15px !important; }
     div[data-testid="stDataFrame"] { background-color: #F1F5F9 !important; border: 2px solid #CBD5E1 !important; border-radius: 10px; }
-    div[data-testid="stMetricValue"] { color: #0284C7 !important; font-size: 20px !important; font-weight: bold !important; white-space: nowrap !important; }
+    
+    /* ENCUADRES DE COLOR PARA LAS TARJETAS DE MÉTRICAS (KPI CARDS) */
+    div[data-testid="stMetric"] {
+        background-color: #1E293B !important;
+        border: 2px solid #F59E0B !important;
+        border-radius: 10px !important;
+        padding: 12px 16px !important;
+        box-shadow: 0px 4px 10px rgba(245, 158, 11, 0.2) !important;
+        text-align: center !important;
+    }
+    div[data-testid="stMetricLabel"] p {
+        color: #CBD5E1 !important;
+        font-weight: 800 !important;
+        font-size: 13px !important;
+    }
+    div[data-testid="stMetricValue"] {
+        color: #38BDF8 !important;
+        font-size: 22px !important;
+        font-weight: 900 !important;
+        white-space: nowrap !important;
+    }
+
     .mf-label { font-size: 22px !important; font-weight: 800 !important; color: #0F172A !important; margin-bottom: 4px !important; }
     .mf-value { font-size: 36px !important; font-weight: 900 !important; color: #0284C7 !important; margin-top: 0px !important; }
     .highlight-red-large { color: #DC2626 !important; font-size: 19px !important; font-weight: 800 !important; margin-bottom: 8px !important; }
@@ -545,7 +564,7 @@ if "caex_df" not in st.session_state:
     st.session_state.caex_df = pd.DataFrame([
         {"Item": 1, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA319", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 12450.0, "Operador": "Pedro Morales", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
         {"Item": 2, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA320", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 11200.5, "Operador": "Luis Tapia", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 3, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA321", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 9800.0, "Operador": "Andrés Castro", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 3, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA321", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 12241.5, "Operador": "Andrés Castro", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
         {"Item": 4, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA322", "Modelo": "CAT 789D", "Horómetro Entrada": 15300.2, "Operador": "Diego Rojas", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
         {"Item": 5, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA323", "Modelo": "CAT 789D", "Horómetro Entrada": 8400.0, "Operador": "Gonzalo Vera", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
         {"Item": 6, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA324", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 10120.0, "Operador": "Felipe Salinas", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
@@ -558,7 +577,7 @@ if "caex_df" not in st.session_state:
     ])
 
 # ==============================================================================
-# 11. TABLAS DE GESTIÓN Y CÁLCULO DE DISPONIBILIDAD FÍSICA (DF%)
+# 11. TABLAS DE GESTIÓN, ALERTAS PM Y DISPONIBILIDAD FÍSICA (DF%)
 # ==============================================================================
 b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("image_5ea6ba.png") or obtener_base64_img("Logo_OptiMatch.png")
 img_tag_logo = f'<img src="{b64_logo}" style="height: 38px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 26px; vertical-align: middle; margin-right: 8px;">⛏️</span>'
@@ -705,6 +724,83 @@ total_caex = len(ed_caex)
 caex_disponibles = len(ed_caex[ed_caex["Estado"] == "🟢 Disponible"])
 disponibilidad_fisica_val = (caex_disponibles / total_caex * 100.0) if total_caex > 0 else 0.0
 
+# --- SECCIÓN DE MANTENIMIENTO PREVENTIVO (PM) Y ALERTAS INDIVIDUALES ---
+MATRIZ_TALLER_MP = {
+    "CAEX": {"horas_min": 48.0, "horas_max": 68.0, "perdida_df_min": 2.4, "perdida_df_max": 3.4},
+    "Pala": {"horas_min": 72.0, "horas_max": 96.0, "perdida_df_min": 3.6, "perdida_df_max": 4.8},
+    "Cargador": {"horas_min": 48.0, "horas_max": 59.0, "perdida_df_min": 2.4, "perdida_df_max": 2.9},
+}
+
+def evaluar_alerta_equipo(id_equipo, horometro_actual, tipo_equipo="CAEX"):
+    intervalo_base = 250.0
+    horas_para_pm = intervalo_base - (horometro_actual % intervalo_base)
+    proximo_horometro = horometro_actual + horas_para_pm
+    
+    if proximo_horometro % 2000 == 0:
+        tipo_pm = "PM 2.000 hrs (Overhaul / Componentes Mayores)"
+    elif proximo_horometro % 1000 == 0:
+        tipo_pm = "PM 1.000 hrs (Tren Potencia / Mando Final)"
+    elif proximo_horometro % 500 == 0:
+        tipo_pm = "PM 500 hrs (Aceites / Filtros Motor)"
+    else:
+        tipo_pm = "PM 250 hrs (Engrase / Inspección Básico)"
+        
+    if horas_para_pm <= 0:
+        estado_alerta = "🔴 PAUTA VENCIDA"
+    elif horas_para_pm <= 20.0:
+        estado_alerta = f"⚠️ PM CERCANO ({horas_para_pm:.1f}h)"
+    else:
+        estado_alerta = "🟢 En Regla"
+        
+    return {
+        "ID Equipo": id_equipo,
+        "Horómetro Actual (h)": horometro_actual,
+        "Faltan (h)": round(horas_para_pm, 1),
+        "Próxima Pauta": tipo_pm,
+        "Estado PM": estado_alerta
+    }
+
+st.markdown("---")
+st.subheader("🛠️ Monitoreo Individual de Mantenimiento y Alertas de Taller")
+
+tab_maint1, tab_maint2 = st.tabs(["📋 Estado de Pautas por Equipo", "📊 Impacto en Disponibilidad Física (DF)"])
+
+with tab_maint1:
+    alertas_caex_lista = []
+    equipos_criticos = []
+
+    for idx, row in ed_caex.iterrows():
+        if row["Estado"] == "🟢 Disponible":
+            eval_eq = evaluar_alerta_equipo(row["ID"], row["Horómetro Entrada"], tipo_equipo="CAEX")
+            alertas_caex_lista.append(eval_eq)
+            if "⚠️" in eval_eq["Estado PM"] or "🔴" in eval_eq["Estado PM"]:
+                equipos_criticos.append(eval_eq)
+
+    if equipos_criticos:
+        for eq in equipos_criticos:
+            st.warning(
+                f"⚠️ **ALERTA PREVENTIVA DE TALLER:** El equipo **{eq['ID Equipo']}** se encuentra a "
+                f"**{eq['Faltan (h)']} hrs** de cumplir su **{eq['Próxima Pauta']}** "
+                f"(Horómetro actual: {eq['Horómetro Actual (h)']} hrs). Planifique su relevo en taller."
+            )
+
+    st.markdown("#### 📋 Control de Pautas de Mantención por Equipo Operativo")
+    st.dataframe(pd.DataFrame(alertas_caex_lista), use_container_width=True, hide_index=True)
+
+with tab_maint2:
+    st.markdown("#### 📊 Balance de Disponibilidad Física (Pérdidas MP vs. Regla 80/20)")
+    col_m1, col_m2, col_m3 = st.columns(3)
+
+    horas_mp_caex_prom = (MATRIZ_TALLER_MP["CAEX"]["horas_min"] + MATRIZ_TALLER_MP["CAEX"]["horas_max"]) / 2.0
+    perdida_mp_prom = (MATRIZ_TALLER_MP["CAEX"]["perdida_df_min"] + MATRIZ_TALLER_MP["CAEX"]["perdida_df_max"]) / 2.0
+    df_maxima_teorica = 100.0 - perdida_mp_prom
+
+    col_m1.metric("Pérdida Directa MP (Taller)", f"{perdida_mp_prom:.1f}%", delta=f"{horas_mp_caex_prom:.0f} hrs en taller / 2.000h")
+    col_m2.metric("DF Máxima Teórica (Solo MP)", f"{df_maxima_teorica:.1f}%", delta="Escenario Ideal Taller")
+    col_m3.metric("DF Real Operativa Terreno", f"{disponibilidad_fisica_val:.1f}%", delta=f"Impacto MC / LOTO: {max(0.0, df_maxima_teorica - disponibilidad_fisica_val):.1f}%", delta_color="normal" if disponibilidad_fisica_val >= 83 else "inverse")
+
+    st.info("💡 **Nota de Gestión de Activos:** La diferencia entre la Disponibilidad Máxima Teórica (96,6% – 97,6%) y la DF Real de Terreno (83% – 88%) se debe al **Mantenimiento Correctivo (MC)** imprevisto y a **demoras operacionales en taller** (lavado, traslado, repuestos y tarjeteo de seguridad LOTO).")
+
 # ==============================================================================
 # 12. EJECUCIÓN DEL MOTOR DE SIMULACIÓN Y CÁLCULOS UNIFICADOS
 # ==============================================================================
@@ -782,7 +878,6 @@ else:
 
 st.markdown(faena_header_html, unsafe_allow_html=True)
 
-# --- TARJETAS KPI CARDS UNIFICADAS ---
 k1, k2, k3, k4, k5, k6 = st.columns(6)
 k1.metric("Disp. Física (DF)", f"{disponibilidad_fisica_val:.1f}%", delta=f"{caex_disponibles}/{total_caex} CAEX Activos")
 k2.metric("Match Factor (MF)", f"{fmt_num(match_factor, 2)}", delta="Banda Lean OK" if 0.92 <= match_factor <= 1.08 else "Fuera de Rango")
