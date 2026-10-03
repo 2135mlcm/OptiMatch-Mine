@@ -252,7 +252,7 @@ def obtener_base64_img(nombre_archivo):
     return None
 
 # ==============================================================================
-# 7. CSS PERSONALIZADO (Ajuste de Lectura en Tarjetas KPI)
+# 7. CSS PERSONALIZADO (Tarjetas KPI Estilizadas)
 # ==============================================================================
 st.markdown("""
     <style>
@@ -305,7 +305,6 @@ st.markdown("""
     }
     div[data-testid="stDataFrame"] { background-color: #F1F5F9 !important; border: 2px solid #CBD5E1 !important; border-radius: 10px; }
     
-    /* ENCUADRES Y LECTURA CORREGIDA EN TARJETAS DE MÉTRICAS (KPI CARDS) */
     div[data-testid="stMetric"] {
         background-color: #FFFFFF !important;
         border: 2px solid #F59E0B !important;
@@ -470,7 +469,7 @@ st.sidebar.markdown("</div>", unsafe_allow_html=True)
 horas_turno = st.sidebar.number_input("Horas Efectivas Turno", value=10.0, step=0.5)
 
 st.sidebar.markdown("---")
-st.sidebar.header("⚙️ Presets de Terreno (Pre-turno)")
+st.sidebar.header("⚙️️ Presets de Terreno (Pre-turno)")
 preset_fl = st.sidebar.select_slider(
     "Factor de Llenado Balde/Tolva (FL)",
     options=["Roca Gruesa (80%)", "Estándar (88%)", "Fino / Seco (92%)"],
@@ -917,11 +916,27 @@ with col_eval2:
         st.error(f"🔴 **DESCALCE SEVERO POR SOBREDIMENSIONAMIENTO (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: exceso de camiones generando colas e ineficiencia OPEX.*")
 
 # ==============================================================================
-# 14. MÓDULO DE SEGUIMIENTO ESPACIAL (MAPA MINERO TOPOGRÁFICO Y CONTROL RADIAL)
+# 14. MÓDULO DE SEGUIMIENTO ESPACIAL (PLANO DE MINA CON CONDICIONAL DE IMAGEN)
 # ==============================================================================
 st.markdown("---")
-# CAMBIO DE ÍCONO: MAPA MINERO TOPOGRÁFICO
-st.subheader("🗺️ 🏔️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
+
+# BÚSQUEDA CONDICIONAL DE IMAGEN TIPO PLANO DE MINA
+img_plano_b64 = obtener_base64_img("Plano_Mina.png") or obtener_base64_img("mapa_mina.png") or obtener_base64_img("plano_mina.png")
+
+if img_plano_b64:
+    header_monitoreo_html = f"""
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="{img_plano_b64}" style="height: 32px; width: auto; vertical-align: middle;">
+            <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 22px; font-weight: 800;">
+                Monitoreo Espacial del Circuito y Control de Fallas en Vivo
+            </h3>
+        </div>
+    """
+    st.markdown(header_monitoreo_html, unsafe_allow_html=True)
+else:
+    # SIN ICONO SI NO HAY PLANO
+    st.subheader("Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
+
 st.markdown(
     f"💡 **Ciclo Operacional Calculado:** **{fmt_num(t_ciclo_fisico_min, 2)} min** "
     f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h: {fmt_num(t_ida_min, 2)}m | "
@@ -1331,7 +1346,7 @@ html_gps_canvas = f"""
 components.html(html_gps_canvas, height=400)
 
 # ==============================================================================
-# 15. REPORTE, CONCILIACIÓN Y AUDITORÍA HISTÓRICA GERENCIAL
+# 15. REPORTE, CONCILIACIÓN Y TASA DE ADOPCIÓN PRESCRIPTIVA COMPACTA
 # ==============================================================================
 st.markdown("---")
 col_exp1, col_exp2 = st.columns([2, 1])
@@ -1369,7 +1384,7 @@ st.subheader("🔄 Conciliación y Cierre de Turno (Plan vs. Actual)")
 
 conn_conc = sqlite3.connect(DB_FILE)
 df_lista_ag = pd.read_sql_query(
-    "SELECT num_agendamiento, fecha_registro, turno, jefe_turno, ton_movidas, consumo_diesel_lts, opex_total_usd, match_factor FROM historico_agendamientos ORDER BY id DESC",
+    "SELECT num_agendamiento, fecha_registro, turno, jefe_turno, ton_movidas, consumo_diesel_lts, opex_total_usd, match_factor, prescripcion_aceptada FROM historico_agendamientos ORDER BY id DESC",
     conn_conc,
 )
 conn_conc.close()
@@ -1414,6 +1429,14 @@ if not df_lista_ag.empty:
             st.markdown(f'<p class="adh-red-large">Adherencia al Plan de Mina: {fmt_num(adherencia_plan, 1)}%</p>', unsafe_allow_html=True)
 
         st.progress(min(adherencia_plan / 100.0, 1.0))
+        
+        # CÁLCULO Y MUESTRA COMPACTA DE LA TASA DE ADOPCIÓN PRESCRIPTIVA DEBAJO DE LA ADHERENCIA
+        if "prescripcion_aceptada" in df_lista_ag.columns:
+            tasa_adopcion_val = df_lista_ag["prescripcion_aceptada"].mean() * 100
+            col_adop1, col_adop2 = st.columns([1.5, 1])
+            with col_adop1:
+                st.metric("Tasa de Adopción Prescriptiva (Lean Mining)", f"{tasa_adopcion_val:.1f}%", delta="Banda de Eficiencia Lean")
+
         texto_causas = ", ".join(causas_seleccionadas) if causas_seleccionadas else "Sin imprevistos registrados"
 
         if adherencia_plan >= 98.0:
@@ -1422,15 +1445,16 @@ if not df_lista_ag.empty:
             st.warning(f"⚠️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
         else:
             st.error(f"🚨 **DESVIACIÓN CRÍTICA ({fmt_num(adherencia_plan, 1)}%):** Impacto severo por eventos múltiples ({texto_causas}). Costo Real: ${fmt_num(costo_real_ton, 2)} USD/Ton.")
+else:
+    st.info("Aún no hay agendamientos guardados en la base de datos para conciliar.")
 
 # ==============================================================================
-# 16. HISTÓRICO DE AGENDAMIENTOS Y AUDITORÍA GERENCIAL (SIN ÍCONO NI CAJA)
+# 16. HISTÓRICO DE AGENDAMIENTOS Y AUDITORÍA GERENCIAL DIRECTA
 # ==============================================================================
 st.markdown("---")
 col_h1, col_h2 = st.columns([3, 1])
 
 with col_h1:
-    # SE REMOVIÓ EL ÍCONO DEL TITULO
     st.subheader("Histórico de Agendamientos y Auditoría")
 
 with col_h2:
@@ -1463,10 +1487,6 @@ if not df_hist.empty:
             df_gerencia = df_gerencia[df_gerencia["jefe_turno"] == sup_filtro]
 
         st.dataframe(df_gerencia, use_container_width=True)
-
-        if "prescripcion_aceptada" in df_gerencia.columns:
-            tasa_adopcion = df_gerencia["prescripcion_aceptada"].mean() * 100
-            st.metric("Tasa de Adopción Prescriptiva (Lean Mining)", f"{fmt_num(tasa_adopcion, 1)}%")
 
         with st.expander(f"📈 Evaluación de Rendimiento Gerencial ({periodo_filtro}) — Supervisor: {sup_filtro}", expanded=True):
             if periodo_filtro == "Semanal (Ciclo 7x7)":
@@ -1540,4 +1560,3 @@ if not df_hist.empty:
         if not df_turno_hoy.empty:
             st.dataframe(df_turno_hoy, use_container_width=True)
             st.success("📌 Mostrando únicamente el agendamiento activo de la jornada actual.")
-        # SE REMOVIÓ LA CAJA DE TEXTO INFORMATIVA INFERIOR SI NO HAY REGISTROS
