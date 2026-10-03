@@ -19,7 +19,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 # ==============================================================================
-# 2. CONFIGURACIÓN DE PÁGINA (Primera instrucción ejecutable de Streamlit)
+# 2. CONFIGURACIÓN DE PÁGINA
 # ==============================================================================
 st.set_page_config(
     page_title="OptiMatch Mine - Control de Flota",
@@ -130,14 +130,14 @@ def ejecutar_simulacion_analitica(
     fl_factor=0.88,
     seed=42,
 ):
-    t_carguio_medio = 2.20  # min
-    t_transito_medio = 14.20  # min
-    t_maniobras_medio = 2.30  # min
-    cap_tolva_base = 44.6  # ton nominal
+    t_carguio_medio = 2.20
+    t_transito_medio = 14.20
+    t_maniobras_medio = 2.30
+    cap_tolva_base = 44.6
     
     cap_tolva = cap_tolva_base * (fl_factor / 0.88)
 
-    t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio  # 18.70 min
+    t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio
     mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base) if (n_palas * t_ciclo_base) > 0 else 0.0
 
     if mf <= 0.94:
@@ -252,7 +252,7 @@ def obtener_base64_img(nombre_archivo):
     return None
 
 # ==============================================================================
-# 7. CSS PERSONALIZADO Y BORDES EN TARJETAS KPI
+# 7. CSS PERSONALIZADO (Ajuste de Lectura en Tarjetas KPI)
 # ==============================================================================
 st.markdown("""
     <style>
@@ -305,23 +305,23 @@ st.markdown("""
     }
     div[data-testid="stDataFrame"] { background-color: #F1F5F9 !important; border: 2px solid #CBD5E1 !important; border-radius: 10px; }
     
-    /* ENCUADRES DE COLOR PARA LAS TARJETAS DE MÉTRICAS (KPI CARDS) */
+    /* ENCUADRES Y LECTURA CORREGIDA EN TARJETAS DE MÉTRICAS (KPI CARDS) */
     div[data-testid="stMetric"] {
-        background-color: #1E293B !important;
+        background-color: #FFFFFF !important;
         border: 2px solid #F59E0B !important;
         border-radius: 10px !important;
-        padding: 12px 16px !important;
-        box-shadow: 0px 4px 10px rgba(245, 158, 11, 0.2) !important;
+        padding: 12px 14px !important;
+        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.06) !important;
         text-align: center !important;
     }
     div[data-testid="stMetricLabel"] p {
-        color: #CBD5E1 !important;
+        color: #475569 !important;
         font-weight: 800 !important;
         font-size: 13px !important;
     }
-    div[data-testid="stMetricValue"] {
-        color: #38BDF8 !important;
-        font-size: 22px !important;
+    div[data-testid="stMetricValue"] div {
+        color: #0F172A !important;
+        font-size: 20px !important;
         font-weight: 900 !important;
         white-space: nowrap !important;
     }
@@ -917,10 +917,11 @@ with col_eval2:
         st.error(f"🔴 **DESCALCE SEVERO POR SOBREDIMENSIONAMIENTO (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: exceso de camiones generando colas e ineficiencia OPEX.*")
 
 # ==============================================================================
-# 14. MÓDULO DE SEGUIMIENTO ESPACIAL EN CANVAS HTML/JS CON CONTROL RADIAL VHF
+# 14. MÓDULO DE SEGUIMIENTO ESPACIAL (MAPA MINERO TOPOGRÁFICO Y CONTROL RADIAL)
 # ==============================================================================
 st.markdown("---")
-st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
+# CAMBIO DE ÍCONO: MAPA MINERO TOPOGRÁFICO
+st.subheader("🗺️ 🏔️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
 st.markdown(
     f"💡 **Ciclo Operacional Calculado:** **{fmt_num(t_ciclo_fisico_min, 2)} min** "
     f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h: {fmt_num(t_ida_min, 2)}m | "
@@ -1421,14 +1422,16 @@ if not df_lista_ag.empty:
             st.warning(f"⚠️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
         else:
             st.error(f"🚨 **DESVIACIÓN CRÍTICA ({fmt_num(adherencia_plan, 1)}%):** Impacto severo por eventos múltiples ({texto_causas}). Costo Real: ${fmt_num(costo_real_ton, 2)} USD/Ton.")
-else:
-    st.info("Aún no hay agendamientos guardados en la base de datos para conciliar.")
 
+# ==============================================================================
+# 16. HISTÓRICO DE AGENDAMIENTOS Y AUDITORÍA GERENCIAL (SIN ÍCONO NI CAJA)
+# ==============================================================================
 st.markdown("---")
 col_h1, col_h2 = st.columns([3, 1])
 
 with col_h1:
-    st.subheader("📜 Histórico de Agendamientos y Auditoría")
+    # SE REMOVIÓ EL ÍCONO DEL TITULO
+    st.subheader("Histórico de Agendamientos y Auditoría")
 
 with col_h2:
     if st.session_state.get("user_id") == "mcepeda":
@@ -1537,7 +1540,4 @@ if not df_hist.empty:
         if not df_turno_hoy.empty:
             st.dataframe(df_turno_hoy, use_container_width=True)
             st.success("📌 Mostrando únicamente el agendamiento activo de la jornada actual.")
-        else:
-            st.info("ℹ️ No hay agendamientos registrados para el turno del día de hoy. Configure su flota en la barra lateral y presione 'CIERRE Y GUARDADO EN BD'.")
-else:
-    st.info("Aún no hay agendamientos guardados en la base de datos.")
+        # SE REMOVIÓ LA CAJA DE TEXTO INFORMATIVA INFERIOR SI NO HAY REGISTROS
