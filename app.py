@@ -1,3 +1,6 @@
+# ==============================================================================
+# 1. IMPORTS Y LIBRERÍAS ESTÁNDAR / TERCEROS
+# ==============================================================================
 import base64
 from datetime import datetime
 import json
@@ -7,6 +10,7 @@ import sqlite3
 import threading
 import time
 import urllib.request
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -14,26 +18,32 @@ from plotly.subplots import make_subplots
 import streamlit as st
 import streamlit.components.v1 as components
 
+# ==============================================================================
+# 2. CONFIGURACIÓN DE PÁGINA (Primera instrucción ejecutable de Streamlit)
+# ==============================================================================
+st.set_page_config(
+    page_title="OptiMatch Mine - Control de Flota",
+    page_icon="⛏️",
+    layout="wide"
+)
 
-# ---------------------------------------------------------
-# MÓDULO KEEP-ALIVE: MANTIENE EL SERVIDOR ACTIVO 24/7
-# ---------------------------------------------------------
+# ==============================================================================
+# 3. MÓDULO KEEP-ALIVE: MANTIENE EL SERVIDOR ACTIVO 24/7
+# ==============================================================================
 def keep_alive_ping():
     while True:
         time.sleep(900)
         _ = datetime.now()
-
 
 if "keep_alive_started" not in st.session_state:
     st.session_state.keep_alive_started = True
     thread = threading.Thread(target=keep_alive_ping, daemon=True)
     thread.start()
 
-# ---------------------------------------------------------
-# INICIALIZACIÓN Y MIGRACIÓN AUTOMÁTICA DE LA BD (optimatch.db)
-# ---------------------------------------------------------
+# ==============================================================================
+# 4. INICIALIZACIÓN Y MIGRACIÓN AUTOMÁTICA DE LA BD (optimatch.db)
+# ==============================================================================
 DB_FILE = "optimatch.db"
-
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -55,27 +65,15 @@ def init_db():
         ("mcepeda", "admin2026", "Mauricio L. Cepeda Mondaca", "Administrador"),
         ("avidela", "mina2026", "Andy Videla Obregón", "Supervisor Mina"),
         ("ddaines", "mina2026", "Daniel Daines Araya", "Supervisor Mina"),
-        (
-            "cnikulin",
-            "uah2026",
-            "Dr. Christopher Nikulin",
-            "Gerente Operaciones / Evaluador",
-        ),
-        (
-            "cperez",
-            "uah2026",
-            "Dr. Camilo Pérez",
-            "Gerente Operaciones / Evaluador",
-        ),
+        ("cnikulin", "uah2026", "Dr. Christopher Nikulin", "Gerente Operaciones / Evaluador"),
+        ("cperez", "uah2026", "Dr. Camilo Pérez", "Gerente Operaciones / Evaluador"),
     ]
     c.executemany(
-        "INSERT INTO usuarios (username, password, nombre_completo, rol) VALUES"
-        " (?, ?, ?, ?)",
+        "INSERT INTO usuarios (username, password, nombre_completo, rol) VALUES (?, ?, ?, ?)",
         usuarios_oficiales,
     )
     conn.commit()
 
-    # Tabla con soporte para trazabilidad de adopción de la prescripción
     c.execute("""
         CREATE TABLE IF NOT EXISTS historico_agendamientos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,6 +91,8 @@ def init_db():
             costo_ton_usd REAL,
             beneficio_neto_usd REAL,
             match_factor REAL,
+            disponibilidad_fisica REAL,
+            factor_llenado REAL,
             prescripcion_aceptada INTEGER
         )
     """)
@@ -101,27 +101,25 @@ def init_db():
     c.execute("PRAGMA table_info(historico_agendamientos)")
     columnas = [column[1] for column in c.fetchall()]
     if "regimen_guardia" not in columnas:
-        c.execute(
-            "ALTER TABLE historico_agendamientos ADD COLUMN regimen_guardia"
-            " TEXT"
-        )
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN regimen_guardia TEXT")
         conn.commit()
     if "prescripcion_aceptada" not in columnas:
-        c.execute(
-            "ALTER TABLE historico_agendamientos ADD COLUMN"
-            " prescripcion_aceptada INTEGER DEFAULT 1"
-        )
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN prescripcion_aceptada INTEGER DEFAULT 1")
+        conn.commit()
+    if "disponibilidad_fisica" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN disponibilidad_fisica REAL DEFAULT 100.0")
+        conn.commit()
+    if "factor_llenado" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN factor_llenado REAL DEFAULT 0.88")
         conn.commit()
 
     conn.close()
 
-
 init_db()
 
-
-# ---------------------------------------------------------
-# MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA (SIN DEPENDENCIAS EXTERNAS)
-# ---------------------------------------------------------
+# ==============================================================================
+# 5. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA
+# ==============================================================================
 def ejecutar_simulacion_analitica(
     n_camiones,
     n_palas=1,
@@ -129,43 +127,38 @@ def ejecutar_simulacion_analitica(
     duracion_horas=10.0,
     costo_pala_h=441.0,
     costo_camion_h=290.0,
+    fl_factor=0.88,
     seed=42,
 ):
     t_carguio_medio = 2.20  # min
-    t_transito_medio = 14.20  # min (Ida 10.67 + Retorno 3.53)
+    t_transito_medio = 14.20  # min
     t_maniobras_medio = 2.30  # min
-    cap_tolva = 44.6  # ton
+    cap_tolva_base = 44.6  # ton nominal
+    
+    # Ajuste por Factor de Llenado (FL)
+    cap_tolva = cap_tolva_base * (fl_factor / 0.88)
 
     t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio  # 18.70 min exactos
-    mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base)
+    mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base) if (n_palas * t_ciclo_base) > 0 else 0.0
 
-    # Estimación estocástica de colas basada en la variabilidad CV = 0.3
     if mf <= 0.94:
-        espera_promedio_cola = 2.0 * (mf / 0.94)
+        espera_promedio_cola = 2.0 * (mf / 0.94) if mf > 0 else 0.0
     else:
         espera_promedio_cola = 2.0 + 8.5 * ((mf - 0.94) ** 1.3)
 
     t_ciclo_efectivo = t_ciclo_base + espera_promedio_cola
-    vueltas_turno = (duracion_horas * 60.0) / t_ciclo_efectivo
+    vueltas_turno = (duracion_horas * 60.0) / t_ciclo_efectivo if t_ciclo_efectivo > 0 else 0.0
     toneladas_totales = n_camiones * vueltas_turno * cap_tolva
 
-    # Balance de Combustible (Litros en Tránsito vs Ralentí)
     horas_transito = (vueltas_turno * t_ciclo_base) / 60.0
     horas_ralenti = (vueltas_turno * espera_promedio_cola) / 60.0
-    litros_totales = (n_camiones * horas_transito * 45.0) + (
-        n_camiones * horas_ralenti * 28.0
-    )
-    consumo_especifico = (
-        litros_totales / toneladas_totales if toneladas_totales > 0 else 0.0
-    )
+    litros_totales = (n_camiones * horas_transito * 45.0) + (n_camiones * horas_ralenti * 28.0)
+    consumo_especifico = (litros_totales / toneladas_totales) if toneladas_totales > 0 else 0.0
 
-    # Estructura de Costos OPEX
     costo_flota = n_camiones * costo_camion_h * duracion_horas
     costo_pala_tot = n_palas * costo_pala_h * duracion_horas
     costo_opex = costo_flota + costo_pala_tot
-    costo_unitario = (
-        costo_opex / toneladas_totales if toneladas_totales > 0 else 0.0
-    )
+    costo_unitario = (costo_opex / toneladas_totales) if toneladas_totales > 0 else 0.0
 
     return {
         "MF": mf,
@@ -177,17 +170,14 @@ def ejecutar_simulacion_analitica(
         "costo_unitario_usd_ton": costo_unitario,
     }
 
-
-# ---------------------------------------------------------
-# FUNCIÓN DE CONSULTA EN VIVO DE INDICADORES DE MERCADO
-# ---------------------------------------------------------
+# ==============================================================================
+# 6. FUNCIONES AUXILIARES Y API EN VIVO
+# ==============================================================================
 @st.cache_data(ttl=3600)
 def obtener_indicadores_mercado():
     try:
         url = "https://mindicador.cl/api"
-        req = urllib.request.Request(
-            url, headers={"User-Agent": "Mozilla/5.0"}
-        )
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=4) as response:
             data = json.loads(response.read().decode())
             usd_clp = data["dolar"]["valor"]
@@ -195,7 +185,6 @@ def obtener_indicadores_mercado():
             return usd_clp, diesel_industrial_usd
     except Exception:
         return 940.0, 1.15
-
 
 def obtener_siguiente_agendamiento():
     conn = sqlite3.connect(DB_FILE)
@@ -207,68 +196,26 @@ def obtener_siguiente_agendamiento():
     anio_actual = datetime.now().year
     return f"AGN-{anio_actual}-{siguiente_num:03d}"
 
-
 def validar_usuario(usr, pwd):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute(
-        "SELECT username, nombre_completo, rol FROM usuarios WHERE username ="
-        " ? AND password = ?",
-        (usr, pwd),
-    )
+    c.execute("SELECT username, nombre_completo, rol FROM usuarios WHERE username = ? AND password = ?", (usr, pwd))
     res = c.fetchone()
     conn.close()
     return res
 
-
-def guardar_agendamiento_db(
-    num_ag,
-    fecha,
-    hora,
-    faena,
-    turno,
-    regimen,
-    jefe,
-    ton,
-    lts_diesel,
-    costo_diesel,
-    opex,
-    costo_ton,
-    beneficio,
-    mf,
-    prescripcion_aceptada=1,
-):
+def guardar_agendamiento_db(num_ag, fecha, hora, faena, turno, regimen, jefe, ton, lts_diesel, costo_diesel, opex, costo_ton, beneficio, mf, df_val, fl_val, prescripcion_aceptada=1):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute(
-        """
+    c.execute("""
         INSERT INTO historico_agendamientos (
             num_agendamiento, fecha_registro, hora_registro, faena, turno, regimen_guardia, jefe_turno,
             ton_movidas, consumo_diesel_lts, costo_diesel_usd, opex_total_usd,
-            costo_ton_usd, beneficio_neto_usd, match_factor, prescripcion_aceptada
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """,
-        (
-            num_ag,
-            fecha,
-            hora,
-            faena,
-            turno,
-            regimen,
-            jefe,
-            ton,
-            lts_diesel,
-            costo_diesel,
-            opex,
-            costo_ton,
-            beneficio,
-            mf,
-            prescripcion_aceptada,
-        ),
-    )
+            costo_ton_usd, beneficio_neto_usd, match_factor, disponibilidad_fisica, factor_llenado, prescripcion_aceptada
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (num_ag, fecha, hora, faena, turno, regimen, jefe, ton, lts_diesel, costo_diesel, opex, costo_ton, beneficio, mf, df_val, fl_val, prescripcion_aceptada))
     conn.commit()
     conn.close()
-
 
 def borrar_historico_db():
     conn = sqlite3.connect(DB_FILE)
@@ -276,7 +223,6 @@ def borrar_historico_db():
     c.execute("DELETE FROM historico_agendamientos")
     conn.commit()
     conn.close()
-
 
 def fmt_num(val, dec=0):
     if dec == 0:
@@ -287,12 +233,11 @@ def fmt_num(val, dec=0):
         main_part = main_part.replace(",", ".")
         return f"{main_part},{dec_part}"
 
-
 def obtener_base64_img(nombre_archivo):
     posibles_rutas = [
         nombre_archivo,
         os.path.join(os.getcwd(), nombre_archivo),
-        os.path.join(os.path.dirname(__file__), nombre_archivo),
+        os.path.join(os.path.dirname(__file__), nombre_archivo) if '__file__' in globals() else nombre_archivo,
         os.path.join(os.getcwd(), "static", nombre_archivo),
     ]
     for r in posibles_rutas:
@@ -307,16 +252,10 @@ def obtener_base64_img(nombre_archivo):
                 pass
     return None
 
-
-# ---------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA Y CSS PERSONALIZADO
-# ---------------------------------------------------------
-st.set_page_config(
-    page_title="OptiMatch Mine - Control de Flota", page_icon="⛏️", layout="wide"
-)
-
-st.markdown(
-    """
+# ==============================================================================
+# 7. CSS PERSONALIZADO Y ESTILOS DE INTERFAZ
+# ==============================================================================
+st.markdown("""
     <style>
     .stApp { background-color: #FFFFFF !important; color: #0F172A !important; }
     .stApp p, .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp h4 { color: #0F172A !important; }
@@ -383,16 +322,14 @@ st.markdown(
     }
     div.stButton > button[kind="primary"]:hover { background-color: #B91C1C !important; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important; }
     </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 LOGO_PATH = "Logo_OptiMatch.png"
 LOGO_ATACAMA_PATH = "Logo_Atacama_Norte.png"
 
-# ---------------------------------------------------------
-# AUTENTICACIÓN PRIVADA
-# ---------------------------------------------------------
+# ==============================================================================
+# 8. SISTEMA DE AUTENTICACIÓN PRIVADO
+# ==============================================================================
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
@@ -403,56 +340,25 @@ if not st.session_state.autenticado:
         if os.path.exists(LOGO_PATH):
             st.image(LOGO_PATH, width=320)
         else:
-            st.markdown(
-                """
+            st.markdown("""
                 <div style="text-align: center; background-color: #1E293B; padding: 20px; border-radius: 15px; border: 2px solid #F59E0B;">
                     <h1 style="color: #F59E0B; font-size: 38px; margin-bottom: 0px;">⛏️ OptiMatch Mine</h1>
                     <h3 style="color: #F8FAFC; margin-top: 5px;">Control de Flota y Agendamiento Pre-Turno</h3>
                 </div>
-            """,
-                unsafe_allow_html=True,
-            )
+            """, unsafe_allow_html=True)
 
-        st.markdown(
-            "<p style='text-align: center; font-weight: 800; font-size:"
-            " 15px;'>Acceso Restringido por Perfil | Universidad Alberto"
-            " Hurtado</p>",
-            unsafe_allow_html=True,
-        )
+        st.markdown("<p style='text-align: center; font-weight: 800; font-size: 15px;'>Acceso Restringido por Perfil | Universidad Alberto Hurtado</p>", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
         with st.form("login_form_secure", clear_on_submit=True):
-            st.markdown(
-                '<p style="font-weight: 800; font-size: 16px;">Nombre de'
-                " Usuario:</p>",
-                unsafe_allow_html=True,
-            )
-            usuario = st.text_input(
-                "",
-                value="",
-                placeholder="Ingrese usuario...",
-                key="usr_field_clean",
-                autocomplete="off",
-            )
+            st.markdown('<p style="font-weight: 800; font-size: 16px;">Nombre de Usuario:</p>', unsafe_allow_html=True)
+            usuario = st.text_input("", value="", placeholder="Ingrese usuario...", key="usr_field_clean", autocomplete="off")
 
-            st.markdown(
-                '<p style="font-weight: 800; font-size: 16px;">Contraseña de'
-                " Acceso:</p>",
-                unsafe_allow_html=True,
-            )
-            clave = st.text_input(
-                "",
-                type="password",
-                value="",
-                placeholder="Ingrese contraseña...",
-                key="pwd_field_clean",
-                autocomplete="new-password",
-            )
+            st.markdown('<p style="font-weight: 800; font-size: 16px;">Contraseña de Acceso:</p>', unsafe_allow_html=True)
+            clave = st.text_input("", type="password", value="", placeholder="Ingrese contraseña...", key="pwd_field_clean", autocomplete="new-password")
 
             st.markdown("<br>", unsafe_allow_html=True)
-            btn_ingresar = st.form_submit_button(
-                "🔑 INGRESAR A LA PLATAFORMA", use_container_width=True
-            )
+            btn_ingresar = st.form_submit_button("🔑 INGRESAR A LA PLATAFORMA", use_container_width=True)
 
             if btn_ingresar:
                 datos_val = validar_usuario(usuario.strip(), clave.strip())
@@ -464,21 +370,18 @@ if not st.session_state.autenticado:
                     st.session_state.hora_ingreso = datetime.now()
                     st.rerun()
                 else:
-                    st.error(
-                        "❌ Usuario o contraseña no registrados en el sistema."
-                    )
+                    st.error("❌ Usuario o contraseña no registrados en el sistema.")
     st.stop()
 
-# ---------------------------------------------------------
-# CARÁTULA CENTRADA Y BARRA LATERAL
-# ---------------------------------------------------------
+# ==============================================================================
+# 9. CARÁTULA Y BARRA LATERAL (SIDEBAR)
+# ==============================================================================
 if os.path.exists(LOGO_PATH):
     c_hdr1, c_hdr2, c_hdr3 = st.columns([1, 1.2, 1])
     with c_hdr2:
         st.image(LOGO_PATH, use_container_width=True)
 
-st.markdown(
-    """
+st.markdown("""
     <div class="title-box">
         <h1 style="color: #0F172A; margin: 0; font-size: 28px; font-weight: 800;">OptiMatch Mine — Control de Flota</h1>
         <p style="color: #0284C7; margin: 6px 0 0 0; font-size: 14px; font-weight: 800; letter-spacing: 0.5px;">
@@ -488,55 +391,29 @@ st.markdown(
             Optimización del Match Carguío-Transporte & Control de Rentabilidad OPEX | Universidad Alberto Hurtado
         </p>
     </div>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 st.markdown("---")
 
 st.sidebar.header("🏢 Registro Operativo Mina")
-nombre_mina = st.sidebar.text_input(
-    "Nombre de la Mina / Faena", value="Mina Atacama Norte"
-)
+nombre_mina = st.sidebar.text_input("Nombre de la Mina / Faena", value="Mina Atacama Norte")
 
 num_agendamiento_auto = obtener_siguiente_agendamiento()
-num_agendamiento = st.sidebar.text_input(
-    "N° de Agendamiento Correlativo", value=num_agendamiento_auto
-)
+num_agendamiento = st.sidebar.text_input("N° de Agendamiento Correlativo", value=num_agendamiento_auto)
 
 st.sidebar.markdown("---")
 
 now_dt = datetime.now()
 fecha_str = now_dt.strftime("%d/%m/%Y")
-dias_semana_es = [
-    "Lunes",
-    "Martes",
-    "Miércoles",
-    "Jueves",
-    "Viernes",
-    "Sábado",
-    "Domingo",
-]
+dias_semana_es = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 nombre_dia_actual = dias_semana_es[now_dt.weekday()]
 
-st.sidebar.markdown(
-    "<label style='font-size:13px; font-weight:700;'>Fecha de"
-    " Agendamiento</label>",
-    unsafe_allow_html=True,
-)
-st.sidebar.markdown(
-    f'<div class="auto-box">{nombre_dia_actual}, {fecha_str}</div>',
-    unsafe_allow_html=True,
-)
-st.sidebar.markdown(
-    "<label style='font-size:13px; font-weight:700;'>Hora de"
-    " Agendamiento</label>",
-    unsafe_allow_html=True,
-)
+st.sidebar.markdown("<label style='font-size:13px; font-weight:700;'>Fecha de Agendamiento</label>", unsafe_allow_html=True)
+st.sidebar.markdown(f'<div class="auto-box">{nombre_dia_actual}, {fecha_str}</div>', unsafe_allow_html=True)
+st.sidebar.markdown("<label style='font-size:13px; font-weight:700;'>Hora de Agendamiento</label>", unsafe_allow_html=True)
 
 with st.sidebar:
-    components.html(
-        """
+    components.html("""
         <div id="reloj_vivo" style="background-color: #0F172A; border: 1px solid #F59E0B; border-radius: 6px; padding: 6px; text-align: center; font-size: 15px; font-weight: 800; color: #FFFFFF; font-family: sans-serif;"></div>
         <script>
             function actualizarReloj() {
@@ -548,162 +425,78 @@ with st.sidebar:
             }
             setInterval(actualizarReloj, 1000); actualizarReloj();
         </script>
-    """,
-        height=45,
-    )
+    """, height=45)
 
 hora_str = now_dt.strftime("%H:%M:%S")
 
-st.sidebar.markdown(
-    f"""
+st.sidebar.markdown(f"""
     <div style="background-color: #0F172A; padding: 10px; border-radius: 8px; border: 2px solid #F59E0B; margin-top: 6px; margin-bottom: 10px; text-align: center;">
         <span style="color: #F59E0B !important; font-size: 11px; font-weight: 800; display: block;">USUARIO RESPONSABLE</span>
         <span style="color: #FFFFFF !important; font-size: 16px; font-weight: 900; display: block; margin-top: 2px;">👤 {st.session_state.get('usuario_activo', 'Mauricio L. Cepeda Mondaca')}</span>
         <span style="color: #F59E0B !important; font-size: 11px; font-weight: 800; display: block; margin-top: 2px;">Perfil: {st.session_state.get('rol_activo', 'Administrador')}</span>
     </div>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-st.sidebar.markdown(
-    '<div class="orange-container-box">', unsafe_allow_html=True
-)
-st.sidebar.markdown(
-    '<span class="selector-label-centered">RÉGIMEN Y GUARDIA DE TRABAJO</span>',
-    unsafe_allow_html=True,
-)
-tipo_turno_sel = st.sidebar.selectbox(
-    "",
-    ["Turno 7x7", "Turno 4x3", "Turno 8x6", "Turno 5x2", "Otro"],
-    key="select_regimen_box",
-)
+st.sidebar.markdown('<div class="orange-container-box">', unsafe_allow_html=True)
+st.sidebar.markdown('<span class="selector-label-centered">RÉGIMEN Y GUARDIA DE TRABAJO</span>', unsafe_allow_html=True)
+tipo_turno_sel = st.sidebar.selectbox("", ["Turno 7x7", "Turno 4x3", "Turno 8x6", "Turno 5x2", "Otro"], key="select_regimen_box")
 regimen_guardia = f"{tipo_turno_sel} ({nombre_dia_actual})"
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
-st.sidebar.markdown(
-    '<div class="orange-container-box">', unsafe_allow_html=True
-)
-st.sidebar.markdown(
-    '<span class="selector-label-centered">SELECCIONAR TURNO'
-    " OPERATIVO</span>",
-    unsafe_allow_html=True,
-)
-turno_seleccionado = st.sidebar.selectbox(
-    "",
-    [
-        "Turno 1 (Día / 08:00 - 18:00)",
-        "Turno 2 (Noche / 20:00 - 06:00)",
-    ],
-    key="select_turno_box",
-)
+st.sidebar.markdown('<div class="orange-container-box">', unsafe_allow_html=True)
+st.sidebar.markdown('<span class="selector-label-centered">SELECCIONAR TURNO OPERATIVO</span>', unsafe_allow_html=True)
+turno_seleccionado = st.sidebar.selectbox("", ["Turno 1 (Día / 08:00 - 18:00)", "Turno 2 (Noche / 20:00 - 06:00)"], key="select_turno_box")
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
-horas_turno = st.sidebar.number_input(
-    "Horas Efectivas Turno", value=10.0, step=0.5
+horas_turno = st.sidebar.number_input("Horas Efectivas Turno", value=10.0, step=0.5)
+
+st.sidebar.markdown("---")
+st.sidebar.header("⚙️ Presets de Terreno (Pre-turno)")
+preset_fl = st.sidebar.select_slider(
+    "Factor de Llenado Balde/Tolva (FL)",
+    options=["Roca Gruesa (80%)", "Estándar (88%)", "Fino / Seco (92%)"],
+    value="Estándar (88%)"
 )
+
+fl_valor = 0.88
+if "80%" in preset_fl:
+    fl_valor = 0.80
+elif "92%" in preset_fl:
+    fl_valor = 0.92
 
 st.sidebar.markdown("---")
 st.sidebar.header("⛏️ Plan de Producción")
-target_mineral_num = st.sidebar.number_input(
-    "Objetivo Mineral (Ton)", value=18000, step=1000
-)
-target_esteril_num = st.sidebar.number_input(
-    "Objetivo Estéril (Ton)", value=12000, step=1000
-)
+target_mineral_num = st.sidebar.number_input("Objetivo Mineral (Ton)", value=18000, step=1000)
+target_esteril_num = st.sidebar.number_input("Objetivo Estéril (Ton)", value=12000, step=1000)
 
 st.sidebar.markdown("---")
 tc_mercado, diesel_mercado = obtener_indicadores_mercado()
 
-st.sidebar.markdown(
-    f"""
+st.sidebar.markdown(f"""
     <div style="background-color: #0F172A; padding: 6px; border-radius: 6px; border: 1px solid #0284C7; text-align: center; margin-bottom: 8px;">
         <span style="color: #38BDF8 !important; font-size: 10px; font-weight: 800; display: block;">🌐 MERCADO EN VIVO (CNE / BCO CENTRAL)</span>
         <span style="color: #FFFFFF !important; font-size: 11px; font-weight: 700;">USD/CLP: ${fmt_num(tc_mercado, 1)} | Diésel Ref: ${diesel_mercado} USD/L</span>
     </div>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-st.sidebar.markdown(
-    '<div class="orange-container-box">', unsafe_allow_html=True
-)
-st.sidebar.markdown(
-    '<span class="selector-label-centered">Seleccionar tipo de Operación /'
-    " Mineral</span>",
-    unsafe_allow_html=True,
-)
-tipo_mineral = st.sidebar.selectbox(
-    "",
-    [
-        "Caliche / Yodo",
-        "Cobre (Cu)",
-        "Oro (Au)",
-        "Plata (Ag)",
-        "Hierro (Fe)",
-        "Litio (Li / LCE)",
-        "Carbón / Energéticos",
-        "No Metálicos / Canteras",
-        "Movimiento de Tierras / Obras Civiles",
-    ],
-    key="select_mineral_box",
-)
+st.sidebar.markdown('<div class="orange-container-box">', unsafe_allow_html=True)
+st.sidebar.markdown('<span class="selector-label-centered">Seleccionar tipo de Operación / Mineral</span>', unsafe_allow_html=True)
+tipo_mineral = st.sidebar.selectbox("", [
+    "Caliche / Yodo", "Cobre (Cu)", "Oro (Au)", "Plata (Ag)", "Hierro (Fe)",
+    "Litio (Li / LCE)", "Carbón / Energéticos", "No Metálicos / Canteras", "Movimiento de Tierras / Obras Civiles"
+], key="select_mineral_box")
 st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
 unidades_map = {
-    "Caliche / Yodo": {
-        "razon": "Ton Caliche / kg Yodo",
-        "costo": "USD / Ton Caliche",
-        "val_razon": 3.91,
-        "val_usd": 9.079,
-    },
-    "Cobre (Cu)": {
-        "razon": "Ton Mineral / Ton Cu Fino",
-        "costo": "USD / Ton Mineral Cu",
-        "val_razon": 120.0,
-        "val_usd": 15.50,
-    },
-    "Oro (Au)": {
-        "razon": "Ton Mineral / Oz Au",
-        "costo": "USD / Ton Mineral Au",
-        "val_razon": 1.5,
-        "val_usd": 18.20,
-    },
-    "Plata (Ag)": {
-        "razon": "Ton Mineral / Oz Ag",
-        "costo": "USD / Ton Mineral Ag",
-        "val_razon": 0.8,
-        "val_usd": 12.00,
-    },
-    "Hierro (Fe)": {
-        "razon": "Ton Mineral / Ton Concentrado Fe",
-        "costo": "USD / Ton Mineral Fe",
-        "val_razon": 1.8,
-        "val_usd": 8.50,
-    },
-    "Litio (Li / LCE)": {
-        "razon": "Ton Salmuera-Roca / Ton LCE",
-        "costo": "USD / Ton Material Li",
-        "val_razon": 50.0,
-        "val_usd": 22.00,
-    },
-    "Carbón / Energéticos": {
-        "razon": "Ton ROM / Ton Carbón Limpio",
-        "costo": "USD / Ton Carbón",
-        "val_razon": 1.3,
-        "val_usd": 7.00,
-    },
-    "No Metálicos / Canteras": {
-        "razon": "Ton Brutas / Ton Roca Comercial",
-        "costo": "USD / Ton Material",
-        "val_razon": 1.1,
-        "val_usd": 5.00,
-    },
-    "Movimiento de Tierras / Obras Civiles": {
-        "razon": "m³ o Ton / Unidad Avance",
-        "costo": "USD / Ton o m³ Movido",
-        "val_razon": 1.0,
-        "val_usd": 4.50,
-    },
+    "Caliche / Yodo": {"razon": "Ton Caliche / kg Yodo", "costo": "USD / Ton Caliche", "val_razon": 3.91, "val_usd": 9.079},
+    "Cobre (Cu)": {"razon": "Ton Mineral / Ton Cu Fino", "costo": "USD / Ton Mineral Cu", "val_razon": 120.0, "val_usd": 15.50},
+    "Oro (Au)": {"razon": "Ton Mineral / Oz Au", "costo": "USD / Ton Mineral Au", "val_razon": 1.5, "val_usd": 18.20},
+    "Plata (Ag)": {"razon": "Ton Mineral / Oz Ag", "costo": "USD / Ton Mineral Ag", "val_razon": 0.8, "val_usd": 12.00},
+    "Hierro (Fe)": {"razon": "Ton Mineral / Ton Concentrado Fe", "costo": "USD / Ton Mineral Fe", "val_razon": 1.8, "val_usd": 8.50},
+    "Litio (Li / LCE)": {"razon": "Ton Salmuera-Roca / Ton LCE", "costo": "USD / Ton Material Li", "val_razon": 50.0, "val_usd": 22.00},
+    "Carbón / Energéticos": {"razon": "Ton ROM / Ton Carbón Limpio", "costo": "USD / Ton Carbón", "val_razon": 1.3, "val_usd": 7.00},
+    "No Metálicos / Canteras": {"razon": "Ton Brutas / Ton Roca Comercial", "costo": "USD / Ton Material", "val_razon": 1.1, "val_usd": 5.00},
+    "Movimiento de Tierras / Obras Civiles": {"razon": "m³ o Ton / Unidad Avance", "costo": "USD / Ton o m³ Movido", "val_razon": 1.0, "val_usd": 4.50},
 }
 
 label_razon = unidades_map[tipo_mineral]["razon"]
@@ -711,306 +504,66 @@ label_costo = unidades_map[tipo_mineral]["costo"]
 default_razon = unidades_map[tipo_mineral]["val_razon"]
 default_usd = unidades_map[tipo_mineral]["val_usd"]
 
-precio_diesel = st.sidebar.number_input(
-    "Precio Diésel (USD / Litro Contrato)",
-    value=float(diesel_mercado),
-    step=0.01,
-)
-factor_yodo = st.sidebar.number_input(
-    f"{label_razon}", value=float(default_razon), step=0.01
-)
-valor_ton_usd = st.sidebar.number_input(
-    f"{label_costo}", value=float(default_usd), step=0.001
-)
+precio_diesel = st.sidebar.number_input("Precio Diésel (USD / Litro Contrato)", value=float(diesel_mercado), step=0.01)
+factor_yodo = st.sidebar.number_input(f"{label_razon}", value=float(default_razon), step=0.01)
+valor_ton_usd = st.sidebar.number_input(f"{label_costo}", value=float(default_usd), step=0.001)
 
 st.sidebar.markdown("---")
 st.sidebar.header("🚛 Parámetros Físicos de Acarreo")
-distancia_acarreo_km = st.sidebar.number_input(
-    "Distancia Promedio Acarreo (km)", value=3.2, step=0.1
-)
-vel_cargado_kmh = st.sidebar.number_input(
-    "Velocidad Ida Cargado (km/h)", value=18.0, step=1.0
-)
-vel_vacio_kmh = st.sidebar.number_input(
-    "Velocidad Retorno Vacío (km/h)", value=30.0, step=1.0
-)
+distancia_acarreo_km = st.sidebar.number_input("Distancia Promedio Acarreo (km)", value=3.2, step=0.1)
+vel_cargado_kmh = st.sidebar.number_input("Velocidad Ida Cargado (km/h)", value=18.0, step=1.0)
+vel_vacio_kmh = st.sidebar.number_input("Velocidad Retorno Vacío (km/h)", value=30.0, step=1.0)
 
-# Tiempos Físicos Calibrados estrictamente con Tabla 3 del Manuscrito v5
 t_carga_min = 2.20
 t_descarga_min = 2.30
-t_ida_min = (
-    ((distancia_acarreo_km / vel_cargado_kmh) * 60.0)
-    if vel_cargado_kmh > 0
-    else 10.67
-)
-t_retorno_min = (
-    ((distancia_acarreo_km / vel_vacio_kmh) * 60.0)
-    if vel_vacio_kmh > 0
-    else 6.40
-)
-
-# Tiempo base fijado exacto de ciclo físico en 18.70 min
+t_ida_min = ((distancia_acarreo_km / vel_cargado_kmh) * 60.0) if vel_cargado_kmh > 0 else 10.67
+t_retorno_min = ((distancia_acarreo_km / vel_vacio_kmh) * 60.0) if vel_vacio_kmh > 0 else 6.40
 t_ciclo_fisico_min = 18.70
 
 st.sidebar.markdown("---")
 
-# ---------------------------------------------------------
-# INICIALIZACIÓN DE FLOTA COMPLETA AMPLIADA
-# ---------------------------------------------------------
+# ==============================================================================
+# 10. INICIALIZACIÓN DE FLOTA AMPLIADA CON HORÓMETROS
+# ==============================================================================
 if "palas_df" not in st.session_state:
     st.session_state.palas_df = pd.DataFrame([
-        {
-            "Item": 1,
-            "Agendar": True,
-            "Estado": "🟢 Disponible",
-            "ID": "PA622",
-            "Modelo": "Liebherr R9200",
-            "Operador": "Carlos Araya",
-            "Rend_TonH": 1216,
-            "Consumo_LtsH": 120.0,
-            "Costo_USDH": 441.00,
-        },
-        {
-            "Item": 2,
-            "Agendar": False,
-            "Estado": "🟡 Mantenimiento / Resguardo",
-            "ID": "PA623",
-            "Modelo": "CAT 6020B",
-            "Operador": "Sin Asignar",
-            "Rend_TonH": 1216,
-            "Consumo_LtsH": 115.0,
-            "Costo_USDH": 420.00,
-        },
-        {
-            "Item": 3,
-            "Agendar": False,
-            "Estado": "🟢 Disponible",
-            "ID": "PA624",
-            "Modelo": "Komatsu PC2000",
-            "Operador": "Hernán Gómez",
-            "Rend_TonH": 1216,
-            "Consumo_LtsH": 118.0,
-            "Costo_USDH": 430.00,
-        },
-        {
-            "Item": 4,
-            "Agendar": False,
-            "Estado": "🔴 Falla Mecánica",
-            "ID": "PA625",
-            "Modelo": "Hitachi EX2600",
-            "Operador": "Sin Asignar",
-            "Rend_TonH": 1300,
-            "Consumo_LtsH": 128.0,
-            "Costo_USDH": 460.00,
-        },
+        {"Item": 1, "Agendar": True, "Estado": "🟢 Disponible", "ID": "PA622", "Modelo": "Liebherr R9200", "Horómetro Entrada": 14250.0, "Operador": "Carlos Araya", "Rend_TonH": 1216, "Consumo_LtsH": 120.0, "Costo_USDH": 441.00},
+        {"Item": 2, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "PA623", "Modelo": "CAT 6020B", "Horómetro Entrada": 11800.5, "Operador": "Sin Asignar", "Rend_TonH": 1216, "Consumo_LtsH": 115.0, "Costo_USDH": 420.00},
+        {"Item": 3, "Agendar": False, "Estado": "🟢 Disponible", "ID": "PA624", "Modelo": "Komatsu PC2000", "Horómetro Entrada": 9500.0, "Operador": "Hernán Gómez", "Rend_TonH": 1216, "Consumo_LtsH": 118.0, "Costo_USDH": 430.00},
+        {"Item": 4, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "PA625", "Modelo": "Hitachi EX2600", "Horómetro Entrada": 16120.0, "Operador": "Sin Asignar", "Rend_TonH": 1300, "Consumo_LtsH": 128.0, "Costo_USDH": 460.00},
     ])
 
 if "cf_df" not in st.session_state:
     st.session_state.cf_df = pd.DataFrame([
-        {
-            "Item": 1,
-            "Agendar": False,
-            "Estado": "🟡 Mantenimiento / Resguardo",
-            "ID": "CF437",
-            "Modelo": "Komatsu WA900",
-            "Operador": "Sin Asignar",
-            "Rend_TonH": 685,
-            "Consumo_LtsH": 75.0,
-            "Costo_USDH": 342.50,
-        },
-        {
-            "Item": 2,
-            "Agendar": False,
-            "Estado": "🟢 Disponible",
-            "ID": "CF438",
-            "Modelo": "CAT 993K",
-            "Operador": "Manuel Torres",
-            "Rend_TonH": 720,
-            "Consumo_LtsH": 82.0,
-            "Costo_USDH": 360.00,
-        },
-        {
-            "Item": 3,
-            "Agendar": False,
-            "Estado": "🟢 Disponible",
-            "ID": "CF439",
-            "Modelo": "LeTourneau L-1850",
-            "Operador": "Roberto Marín",
-            "Rend_TonH": 900,
-            "Consumo_LtsH": 90.0,
-            "Costo_USDH": 395.00,
-        },
-        {
-            "Item": 4,
-            "Agendar": False,
-            "Estado": "🔴 Falla Mecánica",
-            "ID": "CF440",
-            "Modelo": "CAT 992K",
-            "Operador": "Sin Asignar",
-            "Rend_TonH": 650,
-            "Consumo_LtsH": 70.0,
-            "Costo_USDH": 325.00,
-        },
+        {"Item": 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "CF437", "Modelo": "Komatsu WA900", "Horómetro Entrada": 8400.0, "Operador": "Sin Asignar", "Rend_TonH": 685, "Consumo_LtsH": 75.0, "Costo_USDH": 342.50},
+        {"Item": 2, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CF438", "Modelo": "CAT 993K", "Horómetro Entrada": 10250.0, "Operador": "Manuel Torres", "Rend_TonH": 720, "Consumo_LtsH": 82.0, "Costo_USDH": 360.00},
+        {"Item": 3, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CF439", "Modelo": "LeTourneau L-1850", "Horómetro Entrada": 13100.0, "Operador": "Roberto Marín", "Rend_TonH": 900, "Consumo_LtsH": 90.0, "Costo_USDH": 395.00},
+        {"Item": 4, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CF440", "Modelo": "CAT 992K", "Horómetro Entrada": 7900.0, "Operador": "Sin Asignar", "Rend_TonH": 650, "Consumo_LtsH": 70.0, "Costo_USDH": 325.00},
     ])
 
 if "caex_df" not in st.session_state:
     st.session_state.caex_df = pd.DataFrame([
-        {
-            "Item": 1,
-            "Agendar": True,
-            "Estado": "🟢 Disponible",
-            "ID": "CA319",
-            "Modelo": "Komatsu HD1500-8",
-            "Operador": "Pedro Morales",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 2,
-            "Agendar": True,
-            "Estado": "🟢 Disponible",
-            "ID": "CA320",
-            "Modelo": "Komatsu HD1500-8",
-            "Operador": "Luis Tapia",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 3,
-            "Agendar": True,
-            "Estado": "🟢 Disponible",
-            "ID": "CA321",
-            "Modelo": "Komatsu HD1500-8",
-            "Operador": "Andrés Castro",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 4,
-            "Agendar": True,
-            "Estado": "🟢 Disponible",
-            "ID": "CA322",
-            "Modelo": "CAT 789D",
-            "Operador": "Diego Rojas",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 5,
-            "Agendar": True,
-            "Estado": "🟢 Disponible",
-            "ID": "CA323",
-            "Modelo": "CAT 789D",
-            "Operador": "Gonzalo Vera",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 6,
-            "Agendar": True,
-            "Estado": "🟢 Disponible",
-            "ID": "CA324",
-            "Modelo": "Komatsu HD1500-8",
-            "Operador": "Felipe Salinas",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 7,
-            "Agendar": True,
-            "Estado": "🟢 Disponible",
-            "ID": "CA325",
-            "Modelo": "Komatsu HD1500-8",
-            "Operador": "Jaime Silva",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 8,
-            "Agendar": True,
-            "Estado": "🟢 Disponible",
-            "ID": "CA326",
-            "Modelo": "Komatsu HD1500-8",
-            "Operador": "Marcelo Soto",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 9,
-            "Agendar": False,
-            "Estado": "🟢 Disponible",
-            "ID": "CA327",
-            "Modelo": "CAT 777G",
-            "Operador": "Javier Fuentes",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 10,
-            "Agendar": False,
-            "Estado": "🟢 Disponible",
-            "ID": "CA328",
-            "Modelo": "CAT 777G",
-            "Operador": "Cristian Muñoz",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 11,
-            "Agendar": False,
-            "Estado": "🔴 Falla Mecánica",
-            "ID": "CA329",
-            "Modelo": "Hitachi EH3500",
-            "Operador": "Sin Asignar",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
-        {
-            "Item": 12,
-            "Agendar": False,
-            "Estado": "🔴 Falla Mecánica",
-            "ID": "CA330",
-            "Modelo": "Hitachi EH3500",
-            "Operador": "Sin Asignar",
-            "Rend_TonH": 143,
-            "Consumo_LtsH": 45.0,
-            "Costo_USDH": 290.00,
-        },
+        {"Item": 1, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA319", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 12450.0, "Operador": "Pedro Morales", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 2, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA320", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 11200.5, "Operador": "Luis Tapia", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 3, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA321", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 9800.0, "Operador": "Andrés Castro", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 4, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA322", "Modelo": "CAT 789D", "Horómetro Entrada": 15300.2, "Operador": "Diego Rojas", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 5, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA323", "Modelo": "CAT 789D", "Horómetro Entrada": 8400.0, "Operador": "Gonzalo Vera", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 6, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA324", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 10120.0, "Operador": "Felipe Salinas", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 7, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA325", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 13400.0, "Operador": "Jaime Silva", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 8, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA326", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 9150.0, "Operador": "Marcelo Soto", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 9, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA327", "Modelo": "CAT 777G", "Horómetro Entrada": 11800.0, "Operador": "Javier Fuentes", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 10, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA328", "Modelo": "CAT 777G", "Horómetro Entrada": 7600.0, "Operador": "Cristian Muñoz", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 11, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA329", "Modelo": "Hitachi EH3500", "Horómetro Entrada": 14500.0, "Operador": "Sin Asignar", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 12, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA330", "Modelo": "Hitachi EH3500", "Horómetro Entrada": 16200.0, "Operador": "Sin Asignar", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
     ])
 
-# ---------------------------------------------------------
-# CABECERA CENTRADA UNIFICADA COMPACTA
-# ---------------------------------------------------------
-b64_logo = (
-    obtener_base64_img(LOGO_PATH)
-    or obtener_base64_img("image_5ea6ba.png")
-    or obtener_base64_img("Logo_OptiMatch.png")
-)
+# ==============================================================================
+# 11. TABLAS DE GESTIÓN Y CÁLCULO DE DISPONIBILIDAD FÍSICA (DF%)
+# ==============================================================================
+b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("image_5ea6ba.png") or obtener_base64_img("Logo_OptiMatch.png")
+img_tag_logo = f'<img src="{b64_logo}" style="height: 38px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 26px; vertical-align: middle; margin-right: 8px;">⛏️</span>'
 
-if b64_logo:
-    img_tag_logo = (
-        f'<img src="{b64_logo}" style="height: 38px; width: auto;'
-        ' vertical-align: middle; margin-right: 8px;">'
-    )
-else:
-    img_tag_logo = (
-        '<span style="font-size: 26px; vertical-align: middle; margin-right:'
-        ' 8px;">⛏️</span>'
-    )
-
-st.markdown(
-    f"""
+st.markdown(f"""
     <div style="text-align: center; width: 100%; margin-top: 0px; margin-bottom: 15px; padding: 0px;">
         <div style="display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
             {img_tag_logo}
@@ -1019,26 +572,18 @@ st.markdown(
             </h2>
         </div>
         <p style="color: #475569; font-weight: 600; margin: 2px 0px 0px 0px; font-size: 13px; text-align: center; line-height: 1.2;">
-            Selección de disponibilidad mecánica y asignación de equipos para el turno
+            Selección de disponibilidad mecánica, horómetros y asignación de equipos para el turno
         </p>
     </div>
-    """,
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-opciones_estado = [
-    "🟢 Disponible",
-    "🟡 Mantenimiento / Resguardo",
-    "🔴 Falla Mecánica",
-]
-
+opciones_estado = ["🟢 Disponible", "🟡 Mantenimiento / Resguardo", "🔴 Falla Mecánica"]
 
 def reindexar_flota(df):
     if not df.empty:
         df = df.reset_index(drop=True)
         df["Item"] = df.index + 1
     return df
-
 
 col_t1, col_t2, col_t3 = st.columns(3)
 
@@ -1053,47 +598,29 @@ with col_t1:
 
     btn_col1, btn_col2 = st.columns(2)
     with btn_col1:
-        if st.button(
-            "➖ Eliminar Último", key="del_pala", use_container_width=True
-        ):
+        if st.button("➖ Eliminar Último", key="del_pala", use_container_width=True):
             if len(st.session_state.palas_df) > 0:
                 st.session_state.palas_df = st.session_state.palas_df.iloc[:-1]
-                st.session_state.palas_df = reindexar_flota(
-                    st.session_state.palas_df
-                )
+                st.session_state.palas_df = reindexar_flota(st.session_state.palas_df)
                 st.rerun()
     with btn_col2:
-        if st.button(
-            "➕ Agregar Equipo", key="add_pala", use_container_width=True
-        ):
+        if st.button("➕ Agregar Equipo", key="add_pala", use_container_width=True):
             nueva_pala = {
-                "Item": len(st.session_state.palas_df) + 1,
-                "Agendar": False,
-                "Estado": "🟡 Mantenimiento / Resguardo",
-                "ID": f"PA{620 + len(st.session_state.palas_df) + 1}",
-                "Modelo": "Liebherr R9200",
-                "Operador": "Sin Asignar",
-                "Rend_TonH": 1216,
-                "Consumo_LtsH": 120.0,
-                "Costo_USDH": 441.00,
+                "Item": len(st.session_state.palas_df) + 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo",
+                "ID": f"PA{620 + len(st.session_state.palas_df) + 1}", "Modelo": "Liebherr R9200", "Horómetro Entrada": 10000.0,
+                "Operador": "Sin Asignar", "Rend_TonH": 1216, "Consumo_LtsH": 120.0, "Costo_USDH": 441.00,
             }
-            st.session_state.palas_df = pd.concat(
-                [st.session_state.palas_df, pd.DataFrame([nueva_pala])],
-                ignore_index=True,
-            )
+            st.session_state.palas_df = pd.concat([st.session_state.palas_df, pd.DataFrame([nueva_pala])], ignore_index=True)
             st.rerun()
 
     ed_palas = st.data_editor(
         st.session_state.palas_df,
         column_config={
             "Item": st.column_config.NumberColumn("N° Item", disabled=True),
-            "Estado": st.column_config.SelectboxColumn(
-                "Estado Mecánico", options=opciones_estado
-            ),
+            "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
+            "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f")
         },
-        hide_index=True,
-        key="editor_palas",
-        num_rows="fixed",
+        hide_index=True, key="editor_palas", num_rows="fixed",
     )
     st.session_state.palas_df = reindexar_flota(ed_palas)
 
@@ -1108,45 +635,29 @@ with col_t2:
 
     btn_col1, btn_col2 = st.columns(2)
     with btn_col1:
-        if st.button(
-            "➖ Eliminar Último", key="del_cf", use_container_width=True
-        ):
+        if st.button("➖ Eliminar Último", key="del_cf", use_container_width=True):
             if len(st.session_state.cf_df) > 0:
                 st.session_state.cf_df = st.session_state.cf_df.iloc[:-1]
                 st.session_state.cf_df = reindexar_flota(st.session_state.cf_df)
                 st.rerun()
     with btn_col2:
-        if st.button(
-            "➕ Agregar Equipo", key="add_cf", use_container_width=True
-        ):
+        if st.button("➕ Agregar Equipo", key="add_cf", use_container_width=True):
             nuevo_cf = {
-                "Item": len(st.session_state.cf_df) + 1,
-                "Agendar": False,
-                "Estado": "🟡 Mantenimiento / Resguardo",
-                "ID": f"CF{435 + len(st.session_state.cf_df) + 1}",
-                "Modelo": "CAT 993K",
-                "Operador": "Sin Asignar",
-                "Rend_TonH": 700,
-                "Consumo_LtsH": 80.0,
-                "Costo_USDH": 350.00,
+                "Item": len(st.session_state.cf_df) + 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo",
+                "ID": f"CF{435 + len(st.session_state.cf_df) + 1}", "Modelo": "CAT 993K", "Horómetro Entrada": 8000.0,
+                "Operador": "Sin Asignar", "Rend_TonH": 700, "Consumo_LtsH": 80.0, "Costo_USDH": 350.00,
             }
-            st.session_state.cf_df = pd.concat(
-                [st.session_state.cf_df, pd.DataFrame([nuevo_cf])],
-                ignore_index=True,
-            )
+            st.session_state.cf_df = pd.concat([st.session_state.cf_df, pd.DataFrame([nuevo_cf])], ignore_index=True)
             st.rerun()
 
     ed_cf = st.data_editor(
         st.session_state.cf_df,
         column_config={
             "Item": st.column_config.NumberColumn("N° Item", disabled=True),
-            "Estado": st.column_config.SelectboxColumn(
-                "Estado Mecánico", options=opciones_estado
-            ),
+            "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
+            "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f")
         },
-        hide_index=True,
-        key="editor_cf",
-        num_rows="fixed",
+        hide_index=True, key="editor_cf", num_rows="fixed",
     )
     st.session_state.cf_df = reindexar_flota(ed_cf)
 
@@ -1163,67 +674,47 @@ with col_t3:
 
     btn_col1, btn_col2 = st.columns(2)
     with btn_col1:
-        if st.button(
-            "➖ Eliminar Último", key="del_caex", use_container_width=True
-        ):
+        if st.button("➖ Eliminar Último", key="del_caex", use_container_width=True):
             if len(st.session_state.caex_df) > 0:
                 st.session_state.caex_df = st.session_state.caex_df.iloc[:-1]
-                st.session_state.caex_df = reindexar_flota(
-                    st.session_state.caex_df
-                )
+                st.session_state.caex_df = reindexar_flota(st.session_state.caex_df)
                 st.rerun()
     with btn_col2:
-        if st.button(
-            "➕ Agregar Equipo", key="add_caex", use_container_width=True
-        ):
+        if st.button("➕ Agregar Equipo", key="add_caex", use_container_width=True):
             nuevo_caex = {
-                "Item": len(st.session_state.caex_df) + 1,
-                "Agendar": False,
-                "Estado": "🟡 Mantenimiento / Resguardo",
-                "ID": f"CA{318 + len(st.session_state.caex_df) + 1}",
-                "Modelo": "Komatsu HD1500-8",
-                "Operador": "Sin Asignar",
-                "Rend_TonH": 143,
-                "Consumo_LtsH": 45.0,
-                "Costo_USDH": 290.00,
+                "Item": len(st.session_state.caex_df) + 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo",
+                "ID": f"CA{318 + len(st.session_state.caex_df) + 1}", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 10000.0,
+                "Operador": "Sin Asignar", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00,
             }
-            st.session_state.caex_df = pd.concat(
-                [st.session_state.caex_df, pd.DataFrame([nuevo_caex])],
-                ignore_index=True,
-            )
+            st.session_state.caex_df = pd.concat([st.session_state.caex_df, pd.DataFrame([nuevo_caex])], ignore_index=True)
             st.rerun()
 
     ed_caex = st.data_editor(
         st.session_state.caex_df,
         column_config={
             "Item": st.column_config.NumberColumn("N° Item", disabled=True),
-            "Estado": st.column_config.SelectboxColumn(
-                "Estado Mecánico", options=opciones_estado
-            ),
+            "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
+            "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f")
         },
-        hide_index=True,
-        key="editor_caex",
-        num_rows="fixed",
+        hide_index=True, key="editor_caex", num_rows="fixed",
     )
     st.session_state.caex_df = reindexar_flota(ed_caex)
 
-# ---------------------------------------------------------
-# EJECUCIÓN DEL MOTOR DE SIMULACIÓN Y CÁLCULOS UNIFICADOS
-# ---------------------------------------------------------
-palas_activas = ed_palas[
-    (ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")
-]
-cf_activos = ed_cf[
-    (ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")
-]
-caex_activos = ed_caex[
-    (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
-]
+# --- CÁLCULO DE DISPONIBILIDAD FÍSICA GLOBAL (DF%) ---
+total_caex = len(ed_caex)
+caex_disponibles = len(ed_caex[ed_caex["Estado"] == "🟢 Disponible"])
+disponibilidad_fisica_val = (caex_disponibles / total_caex * 100.0) if total_caex > 0 else 0.0
+
+# ==============================================================================
+# 12. EJECUCIÓN DEL MOTOR DE SIMULACIÓN Y CÁLCULOS UNIFICADOS
+# ==============================================================================
+palas_activas = ed_palas[(ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")]
+cf_activos = ed_cf[(ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")]
+caex_activos = ed_caex[(ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")]
 
 n_puestos_carguio = max(1, len(palas_activas) + len(cf_activos))
 n_caex_activos = len(caex_activos)
 
-# Ejecución de la simulación de colas estocástica analítica (CV=0.3)
 res_sim = ejecutar_simulacion_analitica(
     n_camiones=n_caex_activos,
     n_palas=n_puestos_carguio,
@@ -1231,6 +722,7 @@ res_sim = ejecutar_simulacion_analitica(
     duracion_horas=horas_turno,
     costo_pala_h=441.0,
     costo_camion_h=290.0,
+    fl_factor=fl_valor
 )
 
 match_factor = res_sim["MF"]
@@ -1242,55 +734,31 @@ costo_unitario_ton = res_sim["costo_unitario_usd_ton"]
 tiempo_cola_promedio = res_sim["cola_min"]
 
 costo_diesel_turno = litros_diesel_turno * precio_diesel
-produccion_estimada = (
-    (tonelaje_proyectado / factor_yodo) if factor_yodo > 0 else 0
-)
+produccion_estimada = (tonelaje_proyectado / factor_yodo) if factor_yodo > 0 else 0
 ingreso_bruto_usd = tonelaje_proyectado * valor_ton_usd
 beneficio_neto_usd = ingreso_bruto_usd - costo_opex_total_turno
-costo_diesel_por_ton = (
-    (costo_diesel_turno / tonelaje_proyectado)
-    if tonelaje_proyectado > 0
-    else 0
-)
+costo_diesel_por_ton = (costo_diesel_turno / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0
 
 emisiones_co2_kg = litros_diesel_turno * 2.68
-co2_por_ton = (
-    (emisiones_co2_kg / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0.0
-)
-vueltas_totales_meta = int(
-    (horas_turno * 60.0 / t_ciclo_fisico_min) * max(1, n_caex_activos)
-)
+co2_por_ton = (emisiones_co2_kg / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0.0
+vueltas_totales_meta = int((horas_turno * 60.0 / t_ciclo_fisico_min) * max(1, n_caex_activos))
 
-# Indicador booleano de adopción (1 si está dentro de la banda verde Lean ±8%)
 prescripcion_aceptada_val = 1 if (0.92 <= match_factor <= 1.08) else 0
 
 if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
     guardar_agendamiento_db(
-        num_agendamiento,
-        fecha_str,
-        hora_str,
-        nombre_mina,
-        turno_seleccionado,
-        regimen_guardia,
-        st.session_state.get("usuario_activo", "Mauricio L. Cepeda Mondaca"),
-        tonelaje_proyectado,
-        litros_diesel_turno,
-        costo_diesel_turno,
-        costo_opex_total_turno,
-        costo_unitario_ton,
-        beneficio_neto_usd,
-        match_factor,
-        prescripcion_aceptada_val,
+        num_agendamiento, fecha_str, hora_str, nombre_mina, turno_seleccionado, regimen_guardia,
+        st.session_state.get("usuario_activo", "Mauricio L. Cepeda Mondaca"), tonelaje_proyectado,
+        litros_diesel_turno, costo_diesel_turno, costo_opex_total_turno, costo_unitario_ton,
+        beneficio_neto_usd, match_factor, disponibilidad_fisica_val, fl_valor, prescripcion_aceptada_val
     )
-    st.sidebar.success(
-        f"✅ Agendamiento {num_agendamiento} guardado exitosamente."
-    )
+    st.sidebar.success(f"✅ Agendamiento {num_agendamiento} guardado exitosamente.")
     st.session_state.autenticado = False
     st.rerun()
 
-# ---------------------------------------------------------
-# DASHBOARD DE RESULTADOS
-# ---------------------------------------------------------
+# ==============================================================================
+# 13. DASHBOARD DE RESULTADOS Y CONTROL VISUAL HEADER
+# ==============================================================================
 st.markdown("---")
 st.header(f"📈 Resumen de Agendamiento Pre-Turno: {num_agendamiento}")
 
@@ -1314,11 +782,12 @@ else:
 
 st.markdown(faena_header_html, unsafe_allow_html=True)
 
+# --- TARJETAS KPI CARDS UNIFICADAS ---
 k1, k2, k3, k4, k5, k6 = st.columns(6)
-k1.metric("Ton Movidas", f"{fmt_num(tonelaje_proyectado, 0)} Ton")
-k2.metric("Consumo Diésel", f"{fmt_num(litros_diesel_turno, 0)} Lts")
-k3.metric("Costo Diésel", f"${fmt_num(costo_diesel_turno, 2)} USD")
-k4.metric("OPEX Total", f"${fmt_num(costo_opex_total_turno, 2)} USD")
+k1.metric("Disp. Física (DF)", f"{disponibilidad_fisica_val:.1f}%", delta=f"{caex_disponibles}/{total_caex} CAEX Activos")
+k2.metric("Match Factor (MF)", f"{fmt_num(match_factor, 2)}", delta="Banda Lean OK" if 0.92 <= match_factor <= 1.08 else "Fuera de Rango")
+k3.metric("Ton Movidas", f"{fmt_num(tonelaje_proyectado, 0)} Ton", delta=f"FL: {fl_valor*100:.0f}%")
+k4.metric("Consumo Diésel", f"{fmt_num(litros_diesel_turno, 0)} Lts")
 k5.metric("Costo/Ton", f"${fmt_num(costo_unitario_ton, 2)} USD/Ton")
 k6.metric("Beneficio Neto", f"${fmt_num(beneficio_neto_usd, 2)} USD")
 
@@ -1328,92 +797,39 @@ col_eval1, col_eval2 = st.columns(2)
 
 with col_eval1:
     st.markdown("### ⛽ Evaluación Económica y Meta de Producción")
-    st.markdown(
-        '<p class="highlight-red-large">• Costo Combustible / Ton:'
-        f" ${fmt_num(costo_diesel_por_ton, 2)} USD/Ton</p>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<p class="highlight-red-large">• Consumo Específico Diésel:'
-        f" {fmt_num(consumo_especifico_lts_ton, 3)} Lts/Ton</p>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<p class="highlight-red-large">• Tiempo en Cola Estimado'
-        f" (Simulación): {fmt_num(tiempo_cola_promedio, 1)} min/ciclo</p>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<p class="highlight-red-large">• Huella CO₂ Operativa:'
-        f" {fmt_num(co2_por_ton, 2)} kg CO₂/Ton ({fmt_num(emisiones_co2_kg, 0)} kg"
-        " CO₂ total)</p>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<p class="highlight-red-large">• Costo Combustible / Ton: ${fmt_num(costo_diesel_por_ton, 2)} USD/Ton</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Consumo Específico Diésel: {fmt_num(consumo_especifico_lts_ton, 3)} Lts/Ton</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Tiempo en Cola Estimado (Simulación): {fmt_num(tiempo_cola_promedio, 1)} min/ciclo</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Huella CO₂ Operativa: {fmt_num(co2_por_ton, 2)} kg CO₂/Ton ({fmt_num(emisiones_co2_kg, 0)} kg CO₂ total)</p>', unsafe_allow_html=True)
 
     total_objetivo = target_mineral_num + target_esteril_num
-    cumplimiento = (
-        (tonelaje_proyectado / total_objetivo) * 100
-        if total_objetivo > 0
-        else 0
-    )
-    st.markdown(
-        '<p class="highlight-red-large">• Cumplimiento Plan de Mina:'
-        f" {fmt_num(cumplimiento, 1)}% de {fmt_num(total_objetivo, 0)} Ton"
-        " Objetivo</p>",
-        unsafe_allow_html=True,
-    )
+    cumplimiento = (tonelaje_proyectado / total_objetivo * 100) if total_objetivo > 0 else 0
+    st.markdown(f'<p class="highlight-red-large">• Cumplimiento Plan de Mina: {fmt_num(cumplimiento, 1)}% de {fmt_num(total_objetivo, 0)} Ton Objetivo</p>', unsafe_allow_html=True)
     st.progress(min(cumplimiento / 100.0, 1.0))
 
 with col_eval2:
     st.markdown("### 🚦 Semáforo Prescriptivo de Balance de Flota")
-    st.markdown(
-        '<p class="mf-label">Match Factor Calculado (Físico):</p>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f'<p class="mf-value">{fmt_num(match_factor, 2)}</p>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<p class="mf-label">Match Factor Calculado (Físico):</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="mf-value">{fmt_num(match_factor, 2)}</p>', unsafe_allow_html=True)
 
-    # Evaluación prescriptiva ajustada a la banda Lean ±8% (0.92 <= MF <= 1.08)
     if 0.92 <= match_factor <= 1.08:
-        st.success(
-            "🟢 **AGENDAMIENTO ÓPTIMO Y RENTABLE EN BANDA VERDE (Match Factor:"
-            f" {fmt_num(match_factor, 2)})** — *Flota acoplada, desperdicio"
-            " de diésel por ralentí minimizado y costo unitario optimizado.*"
-        )
+        st.success(f"🟢 **AGENDAMIENTO ÓPTIMO Y RENTABLE EN BANDA VERDE (Match Factor: {fmt_num(match_factor, 2)})** — *Flota acoplada, desperdicio de diésel por ralentí minimizado y costo unitario optimizado.*")
     elif 0.85 <= match_factor < 0.92 or 1.08 < match_factor <= 1.15:
-        st.warning(
-            "🟡 **DESCALCE LEVE EN BANDA AMARILLA (Match Factor:"
-            f" {fmt_num(match_factor, 2)})** — *Alerta preventiva: evalúe"
-            " ajustar 1 CAEX según prioridad de tonelaje vs costo.*"
-        )
+        st.warning(f"🟡 **DESCALCE LEVE EN BANDA AMARILLA (Match Factor: {fmt_num(match_factor, 2)})** — *Alerta preventiva: evalúe ajustar 1 CAEX según prioridad de tonelaje vs costo.*")
     elif match_factor < 0.85:
-        st.error(
-            "🔴 **DESCALCE SEVERO POR SUB-TRANSPORTE (Match Factor:"
-            f" {fmt_num(match_factor, 2)})** — *Prescripción: subutilización de"
-            " la unidad de carguío.*"
-        )
+        st.error(f"🔴 **DESCALCE SEVERO POR SUB-TRANSPORTE (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: subutilización de la unidad de carguío.*")
     else:
-        st.error(
-            "🔴 **DESCALCE SEVERO POR SOBREDIMENSIONAMIENTO (Match Factor:"
-            f" {fmt_num(match_factor, 2)})** — *Prescripción: exceso de"
-            " camiones generando colas e ineficiencia OPEX.*"
-        )
+        st.error(f"🔴 **DESCALCE SEVERO POR SOBREDIMENSIONAMIENTO (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: exceso de camiones generando colas e ineficiencia OPEX.*")
 
-# ---------------------------------------------------------
-# MÓDULO DE SEGUIMIENTO ESPACIAL - SIMULACIÓN FÍSICA ACOPLADA
-# ---------------------------------------------------------
+# ==============================================================================
+# 14. MÓDULO DE SEGUIMIENTO ESPACIAL EN CANVAS HTML/JS CON CONTROL RADIAL VHF
+# ==============================================================================
 st.markdown("---")
-st.subheader(
-    "🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo"
-    " Acoplado)"
-)
+st.subheader("🗺️ Monitoreo Espacial del Circuito y Control de Fallas en Vivo (Modelo Acoplado)")
 st.markdown(
     f"💡 **Ciclo Operacional Calculado:** **{fmt_num(t_ciclo_fisico_min, 2)} min** "
-    f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h:"
-    f" {fmt_num(t_ida_min, 2)}m | Descarga: {t_descarga_min}m | Retorno @"
-    f" {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
+    f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h: {fmt_num(t_ida_min, 2)}m | "
+    f"Descarga: {t_descarga_min}m | Retorno @ {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
 )
 
 if "acarreo_iniciado" not in st.session_state:
@@ -1428,41 +844,24 @@ with col_trig1:
         st.success("✅ Acarreo iniciado por confirmación VHF.")
 
 with col_trig2:
-    st.markdown(
-        """
+    st.markdown("""
         <div style="padding: 6px 0px;">
             <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
                 📻 <b>AVISO RADIAL OPERADOR PALA - SIMULACIÓN BASADA EN VELOCIDADES REALES Y CICLO FÍSICO</b>
             </span>
         </div>
-    """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 
 with col_trig3:
     if st.button("🔄 Reiniciar Postura", use_container_width=True):
         st.session_state.acarreo_iniciado = False
 
-img_caex_cargado_b64 = (
-    obtener_base64_img("Camion_CAEX_Cargado.png")
-    or obtener_base64_img("Camión CAEX Cargado.png")
-    or obtener_base64_img("camion_caex_cargado.png")
-)
-img_caex_vacio_b64 = (
-    obtener_base64_img("Camion_CAEX_Vacio.png")
-    or obtener_base64_img("Camión CAEX Vacío.png")
-    or obtener_base64_img("camion_caex_vacio.png")
-)
-img_pala_b64 = obtener_base64_img("Gif Pala.jpg") or obtener_base64_img(
-    "image_859ef9.png"
-)
-img_cf_b64 = obtener_base64_img("Gif Cargador Frontal.jpg") or obtener_base64_img(
-    "image_859f19.png"
-)
+img_caex_cargado_b64 = obtener_base64_img("Camion_CAEX_Cargado.png") or obtener_base64_img("Camión CAEX Cargado.png") or obtener_base64_img("camion_caex_cargado.png")
+img_caex_vacio_b64 = obtener_base64_img("Camion_CAEX_Vacio.png") or obtener_base64_img("Camión CAEX Vacío.png") or obtener_base64_img("camion_caex_vacio.png")
+img_pala_b64 = obtener_base64_img("Gif Pala.jpg") or obtener_base64_img("image_859ef9.png")
+img_cf_b64 = obtener_base64_img("Gif Cargador Frontal.jpg") or obtener_base64_img("image_859f19.png")
 
-caex_agendados = ed_caex[
-    (ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")
-]
+caex_agendados = ed_caex[(ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")]
 lista_caex_js = []
 for _, r in caex_agendados.iterrows():
     lista_caex_js.append({
@@ -1473,9 +872,7 @@ for _, r in caex_agendados.iterrows():
     })
 
 palas_activas_js = []
-for _, r in ed_palas[
-    (ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")
-].iterrows():
+for _, r in ed_palas[(ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")].iterrows():
     palas_activas_js.append({
         "id": str(r.get("ID", "PALA")),
         "modelo": str(r.get("Modelo", "R9200")),
@@ -1484,9 +881,7 @@ for _, r in ed_palas[
     })
 
 cf_activos_js = []
-for _, r in ed_cf[
-    (ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")
-].iterrows():
+for _, r in ed_cf[(ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")].iterrows():
     cf_activos_js.append({
         "id": str(r.get("ID", "CF")),
         "modelo": str(r.get("Modelo", "WA900")),
@@ -1498,8 +893,6 @@ caex_json_str = json.dumps(lista_caex_js)
 palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
-
-# Formateo estricto del Match Factor exacto de Python
 mf_base_exacto = f"{match_factor:.2f}"
 
 html_gps_canvas = f"""
@@ -1565,19 +958,17 @@ html_gps_canvas = f"""
         const imgPala = new Image(); imgPala.src = "{img_pala_b64 or ''}";
         const imgCF = new Image(); imgCF.src = "{img_cf_b64 or ''}";
 
-        // TIEMPOS FÍSICOS RIGUROSOS PARA EL MATCH FACTOR (2.20 min / 18.70 min)
         const timeLoading = {t_carga_min};
         const timeHaul = {t_ida_min};
         const timeDumping = {t_descarga_min};
         const timeReturn = {t_retorno_min};
-        const totalCycleUnits = {t_ciclo_fisico_min}; // 18.70 min exactos base
+        const totalCycleUnits = {t_ciclo_fisico_min};
 
         const simSpeed = 0.0004;
         const totalNumCaex = Math.max(1, caexList.length);
         const staggerInterval = totalCycleUnits / totalNumCaex;
 
         let totalVueltasCompletadas = 0;
-
         let palasList = palasListRaw.map(p => ({{ ...p, stoppedByFault: false }}));
         let cfList = cfListRaw.map(cf => ({{ ...cf, stoppedByFault: false }}));
 
@@ -1592,8 +983,7 @@ html_gps_canvas = f"""
             }};
         }});
 
-        let palaHitboxes = [];
-        let cfHitboxes = [];
+        let palaHitboxes = []; let cfHitboxes = [];
 
         function recalculateDynamicMF() {{
             let activeCaex = vehicles.filter(v => !v.stoppedByFault);
@@ -1601,20 +991,15 @@ html_gps_canvas = f"""
             let activeCF = cfList.filter(cf => !cf.stoppedByFault).length;
             let activeLoadingEq = Math.max(1, activePalas + activeCF);
 
-            // FÓRMULA DE MATCH FACTOR ACOPLADA AL 100% CON EL MANUSCRITO Y DASHBOARD
             let mfDinamico = (activeCaex.length * timeLoading) / (activeLoadingEq * totalCycleUnits);
             
             let elemMF = document.getElementById('kpiMF');
             elemMF.innerText = mfDinamico.toFixed(2);
             document.getElementById('kpiFlota').innerText = activeCaex.length + "/" + vehicles.length;
 
-            if (mfDinamico >= 0.92 && mfDinamico <= 1.08) {{ 
-                elemMF.style.color = "#10B981"; // Verde
-            }} else if (mfDinamico < 0.85 || mfDinamico > 1.15) {{ 
-                elemMF.style.color = "#EF4444"; // Rojo
-            }} else {{ 
-                elemMF.style.color = "#F59E0B"; // Amarillo
-            }}
+            if (mfDinamico >= 0.92 && mfDinamico <= 1.08) {{ elemMF.style.color = "#10B981"; }}
+            else if (mfDinamico < 0.85 || mfDinamico > 1.15) {{ elemMF.style.color = "#EF4444"; }}
+            else {{ elemMF.style.color = "#F59E0B"; }}
         }}
 
         function drawCaexTruck(x, y, isLoaded, isReturning, isStopped) {{
@@ -1659,7 +1044,6 @@ html_gps_canvas = f"""
             ctx.fillStyle = "#DC2626";
             ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ " + speedEmptyKmh + " km/h)", xInicio, yRetorno - 22);
 
-            // PALAS DE CARGUÍO
             palasList.forEach((p, idx) => {{
                 let py = yIda - 20 - (idx * 46); let px = xInicio - 65; let size = 48;
                 if (imgPala.complete && imgPala.naturalWidth > 0 && !p.stoppedByFault) {{
@@ -1675,7 +1059,6 @@ html_gps_canvas = f"""
                 ctx.fillText("Pala " + p.id + statusTag, px - 8, py + 4);
             }});
 
-            // CARGADORES FRONTALES
             cfList.forEach((cf, idx) => {{
                 let totalPalas = palasList.length;
                 let py = yIda - 20 - ((totalPalas + idx) * 46); let px = xInicio - 65; let size = 38;
@@ -1731,13 +1114,11 @@ html_gps_canvas = f"""
                         v.isLoaded = true; v.isReturning = false; v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila"; v.speedKmh = speedLoadedKmh;
                     }} else if (t < timeLoading + timeHaul + timeDumping) {{
                         v.x = xFin; v.y = (yIda + yRetorno) / 2; 
-                        v.isLoaded = false; // DESCARGA EN CHANCADOR (PASA A TOLVA VACÍA)
-                        v.isReturning = true; v.statusText = "En Volteo / Descarga"; v.speedKmh = 0;
+                        v.isLoaded = false; v.isReturning = true; v.statusText = "En Volteo / Descarga"; v.speedKmh = 0;
                     }} else {{
                         let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
                         v.x = xFin - (progressRatio * trackWidth); v.y = yRetorno; 
-                        v.isLoaded = false; // RETORNO VACÍO POR VÍA ROJA
-                        v.isReturning = true; v.statusText = "Retorno Vacío -> " + eqNombre; v.speedKmh = speedEmptyKmh;
+                        v.isLoaded = false; v.isReturning = true; v.statusText = "Retorno Vacío -> " + eqNombre; v.speedKmh = speedEmptyKmh;
                     }}
                 }} else {{ v.statusText = "🔴 DETENIDO POR FALLA / MANTENCIÓN"; v.speedKmh = 0; }}
 
@@ -1853,9 +1234,9 @@ html_gps_canvas = f"""
 
 components.html(html_gps_canvas, height=400)
 
-# ---------------------------------------------------------
-# REPORTE Y FICHA PRESCRIPTIVA PRE-TURNO
-# ---------------------------------------------------------
+# ==============================================================================
+# 15. REPORTE, CONCILIACIÓN Y AUDITORÍA HISTÓRICA GERENCIAL
+# ==============================================================================
 st.markdown("---")
 col_exp1, col_exp2 = st.columns([2, 1])
 
@@ -1864,16 +1245,12 @@ with col_exp1:
 
 with col_exp2:
     df_export = pd.DataFrame([{
-        "N° Agendamiento": num_agendamiento,
-        "Fecha": fecha_str,
-        "Hora": hora_str,
-        "Faena / Mina": nombre_mina,
-        "Turno Operativo": turno_seleccionado,
-        "Régimen Guardia": regimen_guardia,
-        "Tipo de Mineral": tipo_mineral,
-        "Responsable Agendamiento": st.session_state.get(
-            "usuario_activo", "Mauricio L. Cepeda Mondaca"
-        ),
+        "N° Agendamiento": num_agendamiento, "Fecha": fecha_str, "Hora": hora_str,
+        "Faena / Mina": nombre_mina, "Turno Operativo": turno_seleccionado,
+        "Régimen Guardia": regimen_guardia, "Tipo de Mineral": tipo_mineral,
+        "Responsable Agendamiento": st.session_state.get("usuario_activo", "Mauricio L. Cepeda Mondaca"),
+        "Disponibilidad Física (%)": round(disponibilidad_fisica_val, 1),
+        "Factor de Llenado (%)": round(fl_valor * 100, 0),
         "Match Factor Calculado": round(match_factor, 2),
         "Toneladas Proyectadas (Ton)": round(tonelaje_proyectado, 0),
         "Consumo Diésel Total (Lts)": round(litros_diesel_turno, 0),
@@ -1882,184 +1259,76 @@ with col_exp2:
         "OPEX Total Turno (USD)": round(costo_opex_total_turno, 2),
         "Costo Unitario (USD/Ton)": round(costo_unitario_ton, 2),
         "Beneficio Neto Proyectado (USD)": round(beneficio_neto_usd, 2),
-        "Prescripción Aceptada": prescripcion_aceptada_val,
+        "Prescripcion Aceptada": prescripcion_aceptada_val,
     }])
 
-    csv_data = df_export.to_csv(
-        index=False, sep=";", encoding="utf-8-sig"
-    ).encode("utf-8-sig")
+    csv_data = df_export.to_csv(index=False, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
     st.download_button(
-        label="📥 Descargar Ficha Pre-Turno (Excel / CSV)",
-        data=csv_data,
-        file_name=f"Ficha_Agendamiento_{num_agendamiento}.csv",
-        mime="text/csv",
-        use_container_width=True,
+        label="📥 Descargar Ficha Pre-Turno (Excel / CSV)", data=csv_data,
+        file_name=f"Ficha_Agendamiento_{num_agendamiento}.csv", mime="text/csv", use_container_width=True,
     )
 
-# ---------------------------------------------------------
-# MÓDULO: CONCILIACIÓN Y CIERRE DE TURNO
-# ---------------------------------------------------------
 st.markdown("---")
 st.subheader("🔄 Conciliación y Cierre de Turno (Plan vs. Actual)")
-st.markdown(
-    "Selecciona el N° de Agendamiento guardado para auditar la trazabilidad"
-    " entre lo planificado y lo realmente obtenido en terreno."
-)
 
 conn_conc = sqlite3.connect(DB_FILE)
 df_lista_ag = pd.read_sql_query(
-    "SELECT num_agendamiento, fecha_registro, turno, jefe_turno, ton_movidas,"
-    " consumo_diesel_lts, opex_total_usd, match_factor FROM"
-    " historico_agendamientos ORDER BY id DESC",
+    "SELECT num_agendamiento, fecha_registro, turno, jefe_turno, ton_movidas, consumo_diesel_lts, opex_total_usd, match_factor FROM historico_agendamientos ORDER BY id DESC",
     conn_conc,
 )
 conn_conc.close()
 
 if not df_lista_ag.empty:
-    opciones_ag = df_lista_ag.apply(
-        lambda row: (
-            f"{row['num_agendamiento']} | {row['fecha_registro']} |"
-            f" {row['turno']} | Resp: {row['jefe_turno']}"
-        ),
-        axis=1,
-    ).tolist()
-
-    ag_seleccionado_str = st.selectbox(
-        "🔍 Seleccionar Agendamiento Guardado para Cierre:", opciones_ag
-    )
+    opciones_ag = df_lista_ag.apply(lambda row: f"{row['num_agendamiento']} | {row['fecha_registro']} | {row['turno']} | Resp: {row['jefe_turno']}", axis=1).tolist()
+    ag_seleccionado_str = st.selectbox("🔍 Seleccionar Agendamiento Guardado para Cierre:", opciones_ag)
     num_ag_selected = ag_seleccionado_str.split(" | ")[0]
 
-    datos_plan = df_lista_ag[
-        df_lista_ag["num_agendamiento"] == num_ag_selected
-    ].iloc[0]
+    datos_plan = df_lista_ag[df_lista_ag["num_agendamiento"] == num_ag_selected].iloc[0]
     ton_plan = float(datos_plan["ton_movidas"])
     diesel_plan = float(datos_plan["consumo_diesel_lts"])
     mf_plan = float(datos_plan["match_factor"])
 
-    st.info(
-        f"📋 **Datos Planificados en {num_ag_selected}:** Toneladas Proyectadas"
-        f" = **{fmt_num(ton_plan, 0)} Ton** | Diésel Presupuestado ="
-        f" **{fmt_num(diesel_plan, 0)} Lts** | Match Factor ="
-        f" **{fmt_num(mf_plan, 2)}**"
-    )
+    st.info(f"📋 **Datos Planificados en {num_ag_selected}:** Toneladas Proyectadas = **{fmt_num(ton_plan, 0)} Ton** | Diésel Presupuestado = **{fmt_num(diesel_plan, 0)} Lts** | Match Factor = **{fmt_num(mf_plan, 2)}**")
 
     col_c1, col_c2 = st.columns(2)
-
     with col_c1:
-        st.markdown(
-            "#### 📥 Ingreso de Datos Reales de Terreno (Post-Turno)"
-        )
+        st.markdown("#### 📥 Ingreso de Datos Reales de Terreno (Post-Turno)")
         st.markdown("**Toneladas Reales Extraídas (Ton):**")
-        ton_reales = st.number_input(
-            "",
-            value=ton_plan,
-            step=500.0,
-            key="input_ton_reales",
-            label_visibility="collapsed",
-        )
+        ton_reales = st.number_input("", value=ton_plan, step=500.0, key="input_ton_reales", label_visibility="collapsed")
 
         st.markdown("**Consumo Diésel Real (Litros):**")
-        diesel_real = st.number_input(
-            "",
-            value=diesel_plan,
-            step=200.0,
-            key="input_diesel_reales",
-            label_visibility="collapsed",
-        )
+        diesel_real = st.number_input("", value=diesel_plan, step=200.0, key="input_diesel_reales", label_visibility="collapsed")
 
-        opciones_causales = [
-            "Falla Mecánica de CAEX",
-            "Falla de Pala / Cargador",
-            "Inasistencia de Operador",
-            "Lluvia / Condición Climática",
-            "Voladura / Tronadura Atrasada",
-            "Atasco / Detención en Chancado",
-            "Otra",
-        ]
-
-        st.markdown(
-            "**Causas de Desviación / Imprevistos en Turno (Selección"
-            " Múltiple):**"
-        )
-        causas_seleccionadas = st.multiselect(
-            "",
-            options=opciones_causales,
-            default=[],
-            placeholder="Elija opciones",
-            label_visibility="collapsed",
-        )
+        opciones_causales = ["Falla Mecánica de CAEX", "Falla de Pala / Cargador", "Inasistencia de Operador", "Lluvia / Condición Climática", "Voladura / Tronadura Atrasada", "Atasco / Detención en Chancado", "Otra"]
+        st.markdown("**Causas de Desviación / Imprevistos en Turno (Selección Múltiple):**")
+        causas_seleccionadas = st.multiselect("", options=opciones_causales, default=[], placeholder="Elija opciones", label_visibility="collapsed")
 
         st.markdown("**Observaciones / Bitácora de Terreno:**")
-        observaciones_turno = st.text_input(
-            "",
-            value="",
-            placeholder=(
-                "Ej: CA321 fuera a las 11:00 hrs; PA622 detenida 45 min..."
-            ),
-            label_visibility="collapsed",
-        )
+        observaciones_turno = st.text_input("", value="", placeholder="Ej: CA321 fuera a las 11:00 hrs; PA622 detenida 45 min...", label_visibility="collapsed")
 
     with col_c2:
         st.markdown("#### 📊 Indicadores de Efectividad Operativa")
-        adherencia_plan = (
-            (ton_reales / ton_plan * 100) if ton_plan > 0 else 0.0
-        )
-        costo_real_usd = (
-            n_puestos_carguio * 441.0 * horas_turno
-            + n_caex_activos * 290.0 * horas_turno
-            + (diesel_real * precio_diesel)
-        )
-        costo_real_ton = (
-            (costo_real_usd / ton_reales) if ton_reales > 0 else 0.0
-        )
+        adherencia_plan = (ton_reales / ton_plan * 100) if ton_plan > 0 else 0.0
+        costo_real_usd = n_puestos_carguio * 441.0 * horas_turno + n_caex_activos * 290.0 * horas_turno + (diesel_real * precio_diesel)
+        costo_real_ton = (costo_real_usd / ton_reales) if ton_reales > 0 else 0.0
 
         if adherencia_plan >= 95.0:
-            st.markdown(
-                '<p class="adh-green-large">Adherencia al Plan de Mina:'
-                f" {fmt_num(adherencia_plan, 1)}%</p>",
-                unsafe_allow_html=True,
-            )
+            st.markdown(f'<p class="adh-green-large">Adherencia al Plan de Mina: {fmt_num(adherencia_plan, 1)}%</p>', unsafe_allow_html=True)
         else:
-            st.markdown(
-                '<p class="adh-red-large">Adherencia al Plan de Mina:'
-                f" {fmt_num(adherencia_plan, 1)}%</p>",
-                unsafe_allow_html=True,
-            )
+            st.markdown(f'<p class="adh-red-large">Adherencia al Plan de Mina: {fmt_num(adherencia_plan, 1)}%</p>', unsafe_allow_html=True)
 
         st.progress(min(adherencia_plan / 100.0, 1.0))
-        texto_causas = (
-            ", ".join(causas_seleccionadas)
-            if causas_seleccionadas
-            else "Sin imprevistos registrados"
-        )
+        texto_causas = ", ".join(causas_seleccionadas) if causas_seleccionadas else "Sin imprevistos registrados"
 
         if adherencia_plan >= 98.0:
-            st.success(
-                "🎯 **AGENDAMIENTO EXITOSO:** Cumplimiento del"
-                f" {fmt_num(adherencia_plan, 1)}% de la meta proyectada"
-                f" ({num_ag_selected})."
-            )
+            st.success(f"🎯 **AGENDAMIENTO EXITOSO:** Cumplimiento del {fmt_num(adherencia_plan, 1)}% de la meta proyectada ({num_ag_selected}).")
         elif adherencia_plan >= 85.0:
-            st.warning(
-                "⚠️ **CUMPLIMIENTO PARCIAL"
-                f" ({fmt_num(adherencia_plan, 1)}%):** Desviación menor"
-                f" atribuida a: {texto_causas}."
-            )
+            st.warning(f"⚠️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
         else:
-            st.error(
-                "🚨 **DESVIACIÓN CRÍTICA"
-                f" ({fmt_num(adherencia_plan, 1)}%):** Impacto severo por"
-                f" eventos múltiples ({texto_causas}). Costo Real:"
-                f" ${fmt_num(costo_real_ton, 2)} USD/Ton."
-            )
+            st.error(f"🚨 **DESVIACIÓN CRÍTICA ({fmt_num(adherencia_plan, 1)}%):** Impacto severo por eventos múltiples ({texto_causas}). Costo Real: ${fmt_num(costo_real_ton, 2)} USD/Ton.")
 else:
-    st.info(
-        "Aún no hay agendamientos guardados en la base de datos para conciliar."
-    )
+    st.info("Aún no hay agendamientos guardados en la base de datos para conciliar.")
 
-# ---------------------------------------------------------
-# HISTÓRICO EN BD RESTRINGIDO Y SEGMENTADO POR PERÍODOS
-# ---------------------------------------------------------
 st.markdown("---")
 col_h1, col_h2 = st.columns([3, 1])
 
@@ -2068,19 +1337,13 @@ with col_h1:
 
 with col_h2:
     if st.session_state.get("user_id") == "mcepeda":
-        if st.button(
-            "🗑 Borrar Histórico (Admin)",
-            type="primary",
-            use_container_width=True,
-        ):
+        if st.button("🗑 Borrar Histórico (Admin)", type="primary", use_container_width=True):
             borrar_historico_db()
             st.success("Histórico eliminado correctamente.")
             st.rerun()
 
 conn = sqlite3.connect(DB_FILE)
-df_hist = pd.read_sql_query(
-    "SELECT * FROM historico_agendamientos ORDER BY id DESC", conn
-)
+df_hist = pd.read_sql_query("SELECT * FROM historico_agendamientos ORDER BY id DESC", conn)
 conn.close()
 
 if not df_hist.empty:
@@ -2088,29 +1351,14 @@ if not df_hist.empty:
     usuario_actual = st.session_state.get("usuario_activo")
 
     if rol_actual in ["Administrador", "Gerente Operaciones / Evaluador"]:
-        st.markdown(
-            "### 🔒 [EXCLUSIVO GERENCIA] Panel de Control y Auditoría por"
-            " Períodos"
-        )
+        st.markdown("### 🔒 [EXCLUSIVO GERENCIA] Panel de Control y Auditoría por Períodos")
 
         c_f1, c_f2 = st.columns(2)
         with c_f1:
-            supervisores_lista = ["Todos"] + list(
-                df_hist["jefe_turno"].unique()
-            )
-            sup_filtro = st.selectbox(
-                "👤 Seleccionar Jefe de Mina:", supervisores_lista
-            )
+            supervisores_lista = ["Todos"] + list(df_hist["jefe_turno"].unique())
+            sup_filtro = st.selectbox("👤 Seleccionar Jefe de Mina:", supervisores_lista)
         with c_f2:
-            periodo_filtro = st.selectbox(
-                "📅 Seleccionar Período de Consolidación:",
-                [
-                    "Semanal (Ciclo 7x7)",
-                    "Mensual",
-                    "Anual",
-                    "Histórico Completo",
-                ],
-            )
+            periodo_filtro = st.selectbox("📅 Seleccionar Período de Consolidación:", ["Semanal (Ciclo 7x7)", "Mensual", "Anual", "Histórico Completo"])
 
         df_gerencia = df_hist.copy()
         if sup_filtro != "Todos":
@@ -2118,38 +1366,18 @@ if not df_hist.empty:
 
         st.dataframe(df_gerencia, use_container_width=True)
 
-        # Cálculo de la Tasa de Adopción de la Prescripción en %
         if "prescripcion_aceptada" in df_gerencia.columns:
             tasa_adopcion = df_gerencia["prescripcion_aceptada"].mean() * 100
-            st.metric(
-                "Tasa de Adopción Prescriptiva (Lean Mining)",
-                f"{fmt_num(tasa_adopcion, 1)}%",
-            )
+            st.metric("Tasa de Adopción Prescriptiva (Lean Mining)", f"{fmt_num(tasa_adopcion, 1)}%")
 
-        with st.expander(
-            f"📈 Evaluación de Rendimiento Gerencial ({periodo_filtro}) —"
-            f" Supervisor: {sup_filtro}",
-            expanded=True,
-        ):
+        with st.expander(f"📈 Evaluación de Rendimiento Gerencial ({periodo_filtro}) — Supervisor: {sup_filtro}", expanded=True):
             if periodo_filtro == "Semanal (Ciclo 7x7)":
                 dias_semana = [f"Día {i+1}" for i in range(7)]
-
                 if len(df_gerencia) >= 7:
-                    df_7dias = (
-                        df_gerencia.iloc[:7]
-                        .copy()
-                        .iloc[::-1]
-                        .reset_index(drop=True)
-                    )
-                    df_7dias["Dia_Turno"] = [
-                        f"Día {i+1} ({row['fecha_registro']})"
-                        for i, row in df_7dias.iterrows()
-                    ]
+                    df_7dias = df_gerencia.iloc[:7].copy().iloc[::-1].reset_index(drop=True)
+                    df_7dias["Dia_Turno"] = [f"Día {i+1} ({row['fecha_registro']})" for i, row in df_7dias.iterrows()]
                     ton_propuestas = df_7dias["ton_movidas"].values
-                    ton_reales = (
-                        df_7dias["ton_movidas"]
-                        * np.random.uniform(0.92, 0.99, size=len(df_7dias))
-                    ).values
+                    ton_reales = (df_7dias["ton_movidas"] * np.random.uniform(0.92, 0.99, size=len(df_7dias))).values
                     mf_valores = df_7dias["match_factor"].values
                 else:
                     n = len(df_gerencia)
@@ -2157,134 +1385,42 @@ if not df_hist.empty:
                     ton_propuestas = np.zeros(7)
                     ton_reales = np.zeros(7)
                     mf_valores = np.zeros(7)
-
                     if n > 0:
                         df_rev = df_gerencia.iloc[::-1].reset_index(drop=True)
                         for i in range(min(n, 7)):
-                            dias_labels[i] = (
-                                f"Día {i+1} ({df_rev.loc[i, 'fecha_registro']})"
-                            )
+                            dias_labels[i] = f"Día {i+1} ({df_rev.loc[i, 'fecha_registro']})"
                             ton_propuestas[i] = df_rev.loc[i, "ton_movidas"]
                             ton_reales[i] = df_rev.loc[i, "ton_movidas"] * 0.95
                             mf_valores[i] = df_rev.loc[i, "match_factor"]
 
-                    df_7dias = pd.DataFrame({
-                        "Dia_Turno": dias_labels,
-                        "ton_movidas": ton_propuestas,
-                        "match_factor": mf_valores,
-                    })
+                    df_7dias = pd.DataFrame({"Dia_Turno": dias_labels, "ton_movidas": ton_propuestas, "match_factor": mf_valores})
 
                 fig = make_subplots(specs=[[{"secondary_y": True}]])
+                fig.add_trace(go.Bar(x=df_7dias["Dia_Turno"], y=ton_propuestas, name="Toneladas Propuestas (Plan)", marker_color="#0284C7", text=[f"{fmt_num(v, 0)} T" for v in ton_propuestas], textposition="auto"), secondary_y=False)
+                fig.add_trace(go.Bar(x=df_7dias["Dia_Turno"], y=ton_reales, name="Toneladas Reales Logradas", marker_color="#10B981", text=[f"{fmt_num(v, 0)} T" for v in ton_reales], textposition="auto"), secondary_y=False)
+                fig.add_trace(go.Scatter(x=df_7dias["Dia_Turno"], y=mf_valores, name="Match Factor Promedio", mode="lines+markers+text", line=dict(color="#F59E0B", width=3), marker=dict(size=9, color="#F59E0B"), text=[f"MF: {v:.2f}" for v in mf_valores], textposition="top center"), secondary_y=True)
 
-                fig.add_trace(
-                    go.Bar(
-                        x=df_7dias["Dia_Turno"],
-                        y=ton_propuestas,
-                        name="Toneladas Propuestas (Plan)",
-                        marker_color="#0284C7",
-                        text=[f"{fmt_num(v, 0)} T" for v in ton_propuestas],
-                        textposition="auto",
-                    ),
-                    secondary_y=False,
-                )
-
-                fig.add_trace(
-                    go.Bar(
-                        x=df_7dias["Dia_Turno"],
-                        y=ton_reales,
-                        name="Toneladas Reales Logradas",
-                        marker_color="#10B981",
-                        text=[f"{fmt_num(v, 0)} T" for v in ton_reales],
-                        textposition="auto",
-                    ),
-                    secondary_y=False,
-                )
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=df_7dias["Dia_Turno"],
-                        y=mf_valores,
-                        name="Match Factor Promedio",
-                        mode="lines+markers+text",
-                        line=dict(color="#F59E0B", width=3),
-                        marker=dict(size=9, color="#F59E0B"),
-                        text=[f"MF: {v:.2f}" for v in mf_valores],
-                        textposition="top center",
-                    ),
-                    secondary_y=True,
-                )
-
-                fig.update_layout(
-                    title_text=(
-                        "<b>Cumplimiento Operativo Diario y Match Factor"
-                        " (Ciclo Semanal 7x7)</b>"
-                    ),
-                    barmode="group",
-                    template="plotly_white",
-                    height=450,
-                    legend=dict(
-                        orientation="h",
-                        yanchor="bottom",
-                        y=1.02,
-                        xanchor="right",
-                        x=1,
-                    ),
-                    margin=dict(l=20, r=20, t=60, b=20),
-                )
-
-                fig.update_xaxes(
-                    title_text="<b>Día de Turno de Agendamiento</b>"
-                )
-                fig.update_yaxes(
-                    title_text="<b>Toneladas (Ton)</b>", secondary_y=False
-                )
-                fig.update_yaxes(
-                    title_text="<b>Match Factor (MF)</b>",
-                    secondary_y=True,
-                    range=[0, 1.5],
-                )
-
+                fig.update_layout(title_text="<b>Cumplimiento Operativo Diario y Match Factor (Ciclo Semanal 7x7)</b>", barmode="group", template="plotly_white", height=450, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), margin=dict(l=20, r=20, t=60, b=20))
+                fig.update_xaxes(title_text="<b>Día de Turno de Agendamiento</b>")
+                fig.update_yaxes(title_text="<b>Toneladas (Ton)</b>", secondary_y=False)
+                fig.update_yaxes(title_text="<b>Match Factor (MF)</b>", secondary_y=True, range=[0, 1.5])
                 st.plotly_chart(fig, use_container_width=True)
 
                 tot_proyectado = sum(ton_propuestas)
                 tot_real = sum(ton_reales)
-                avg_mf = (
-                    np.mean(mf_valores[mf_valores > 0])
-                    if any(mf_valores > 0)
-                    else 0.0
-                )
-                cumplimiento_ciclo = (
-                    (tot_real / tot_proyectado * 100)
-                    if tot_proyectado > 0
-                    else 0.0
-                )
+                avg_mf = np.mean(mf_valores[mf_valores > 0]) if any(mf_valores > 0) else 0.0
+                cumplimiento_ciclo = (tot_real / tot_proyectado * 100) if tot_proyectado > 0 else 0.0
 
                 m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-                m_col1.metric(
-                    "Ton Propuestas (Ciclo)", f"{fmt_num(tot_proyectado, 0)} Ton"
-                )
-                m_col2.metric(
-                    "Ton Reales (Ciclo)", f"{fmt_num(tot_real, 0)} Ton"
-                )
-                m_col3.metric(
-                    "Cumplimiento Ciclo", f"{fmt_num(cumplimiento_ciclo, 1)}%"
-                )
-                m_col4.metric(
-                    "Match Factor Promedio", f"{fmt_num(avg_mf, 2)}"
-                )
-
+                m_col1.metric("Ton Propuestas (Ciclo)", f"{fmt_num(tot_proyectado, 0)} Ton")
+                m_col2.metric("Ton Reales (Ciclo)", f"{fmt_num(tot_real, 0)} Ton")
+                m_col3.metric("Cumplimiento Ciclo", f"{fmt_num(cumplimiento_ciclo, 1)}%")
+                m_col4.metric("Match Factor Promedio", f"{fmt_num(avg_mf, 2)}")
             else:
                 df_chart = pd.DataFrame({
-                    "Agendamiento / Fecha": (
-                        df_gerencia["num_agendamiento"]
-                        + " ("
-                        + df_gerencia["fecha_registro"]
-                        + ")"
-                    ),
+                    "Agendamiento / Fecha": df_gerencia["num_agendamiento"] + " (" + df_gerencia["fecha_registro"] + ")",
                     "Toneladas Proyectadas (Target)": df_gerencia["ton_movidas"],
-                    "Toneladas Reales Entregadas": (
-                        df_gerencia["ton_movidas"] * 0.96
-                    ),
+                    "Toneladas Reales Entregadas": df_gerencia["ton_movidas"] * 0.96,
                 }).set_index("Agendamiento / Fecha")
 
                 st.line_chart(df_chart, use_container_width=True)
@@ -2295,38 +1431,18 @@ if not df_hist.empty:
                 avg_mf = df_gerencia["match_factor"].mean()
 
                 m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-                m_col1.metric(
-                    "Total Ton Proyectadas", f"{fmt_num(tot_proyectado, 0)} Ton"
-                )
+                m_col1.metric("Total Ton Proyectadas", f"{fmt_num(tot_proyectado, 0)} Ton")
                 m_col2.metric("OPEX Acumulado", f"${fmt_num(tot_opex, 2)} USD")
-                m_col3.metric(
-                    "Costo Promedio", f"${fmt_num(avg_costo_ton, 2)} USD/Ton"
-                )
-                m_col4.metric(
-                    "Match Factor Promedio", f"{fmt_num(avg_mf, 2)}"
-                )
-
+                m_col3.metric("Costo Promedio", f"${fmt_num(avg_costo_ton, 2)} USD/Ton")
+                m_col4.metric("Match Factor Promedio", f"{fmt_num(avg_mf, 2)}")
     else:
-        st.markdown(
-            "### 👤 **Control Operativo de Turno Actual — Supervisor:**"
-            f" `{usuario_actual}`"
-        )
-        df_turno_hoy = df_hist[
-            (df_hist["jefe_turno"] == usuario_actual)
-            & (df_hist["fecha_registro"] == fecha_str)
-        ]
+        st.markdown(f"### 👤 **Control Operativo de Turno Actual — Supervisor:** `{usuario_actual}`")
+        df_turno_hoy = df_hist[(df_hist["jefe_turno"] == usuario_actual) & (df_hist["fecha_registro"] == fecha_str)]
 
         if not df_turno_hoy.empty:
             st.dataframe(df_turno_hoy, use_container_width=True)
-            st.success(
-                "📌 Mostrando únicamente el agendamiento activo de la jornada"
-                " actual."
-            )
+            st.success("📌 Mostrando únicamente el agendamiento activo de la jornada actual.")
         else:
-            st.info(
-                "ℹ️ No hay agendamientos registrados para el turno del día de"
-                " hoy. Configure su flota en la barra lateral y presione"
-                " 'CIERRE Y GUARDADO EN BD'."
-            )
+            st.info("ℹ️ No hay agendamientos registrados para el turno del día de hoy. Configure su flota en la barra lateral y presione 'CIERRE Y GUARDADO EN BD'.")
 else:
     st.info("Aún no hay agendamientos guardados en la base de datos.")
