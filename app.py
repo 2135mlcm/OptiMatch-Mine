@@ -306,7 +306,7 @@ def obtener_base64_img(nombre_archivo):
     return None
 
 # ==============================================================================
-# 8. ESTILOS VISUALES MEJORADOS (TAILWIND STYLE: SLATE + AMBER + BORDES SUAVES)
+# 8. ESTILOS VISUALES MEJORADOS Y COMPACTACIÓN DE ESPACIOS (SIDEBAR + DERECHA)
 # ==============================================================================
 st.markdown("""
     <style>
@@ -316,37 +316,56 @@ st.markdown("""
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
     }
     
+    /* REDUCCIÓN DE ESPACIOS Y RELLENOS GENERALES EN LA APLICACIÓN */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 1.5rem !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+    }
+    
     .stApp { 
         background-color: #F1F5F9 !important; 
         color: #0F172A !important; 
     }
     
-    /* SIDEBAR MODERNO DE COLOR SLATE-900 Y DETALLES EN AMBER-500 */
+    /* SIDEBAR COMPACTO SLATE-900 Y DETALLES EN AMBER-500 */
     section[data-testid="stSidebar"] { 
         background-color: #0F172A !important; 
         border-right: 2px solid #F59E0B !important; 
         box-shadow: 4px 0px 15px rgba(0,0,0,0.15) !important;
     }
+    section[data-testid="stSidebar"] > div:first-child {
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
     section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3, 
     section[data-testid="stSidebar"] label, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] p {
         color: #F8FAFC !important; font-weight: 700 !important;
+        margin-top: 2px !important; margin-bottom: 2px !important;
+    }
+    section[data-testid="stSidebar"] hr {
+        margin-top: 8px !important;
+        margin-bottom: 8px !important;
+        border-color: #334155 !important;
     }
     section[data-testid="stSidebar"] input {
         background-color: #1E293B !important; color: #FFFFFF !important; border: 1px solid #334155 !important;
         border-radius: 8px !important; text-align: center !important; font-weight: bold !important;
+        padding: 4px 8px !important;
     }
     section[data-testid="stSidebar"] input:focus {
         border-color: #F59E0B !important;
     }
     
-    /* CONTENEDORES ESTILO CARD CON TAILWIND SHADOWS */
+    /* CONTENEDORES ESTILO CARD */
     .dark-card {
-        background-color: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 14px 18px !important;
-        margin-bottom: 12px !important; box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+        background-color: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 10px 14px !important;
+        margin-bottom: 8px !important; box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
     }
     .amber-card {
-        background-color: #1E293B; border: 2px solid #F59E0B; border-radius: 12px; padding: 12px 16px !important;
-        margin-bottom: 12px !important; box-shadow: 0px 0px 10px rgba(245, 158, 11, 0.25);
+        background-color: #1E293B; border: 2px solid #F59E0B; border-radius: 12px; padding: 8px 12px !important;
+        margin-bottom: 8px !important; box-shadow: 0px 0px 10px rgba(245, 158, 11, 0.25);
     }
     
     /* SELECTORES PERSONALIZADOS EN SIDEBAR */
@@ -368,24 +387,24 @@ st.markdown("""
     
     .selector-label-centered {
         color: #F59E0B !important; font-size: 11px !important; font-weight: 900 !important;
-        text-align: center !important; display: block !important; margin-bottom: 4px !important; text-transform: uppercase; letter-spacing: 0.5px;
+        text-align: center !important; display: block !important; margin-bottom: 2px !important; text-transform: uppercase; letter-spacing: 0.5px;
     }
     .auto-box {
-        background-color: #1E293B; border: 1px solid #F59E0B; border-radius: 8px; padding: 6px 10px;
-        text-align: center; font-size: 14px; font-weight: 800; color: #FFFFFF !important; margin-bottom: 8px;
+        background-color: #1E293B; border: 1px solid #F59E0B; border-radius: 8px; padding: 4px 8px;
+        text-align: center; font-size: 13px; font-weight: 800; color: #FFFFFF !important; margin-bottom: 4px;
     }
     
-    /* BOTONES LATERALES */
+    /* BOTONES LATERALES Y GENERALES */
     section[data-testid="stSidebar"] button, section[data-testid="stSidebar"] button *,
     section[data-testid="stSidebar"] button p, section[data-testid="stSidebar"] button span {
         background-color: #F59E0B !important; color: #000000 !important; -webkit-text-fill-color: #000000 !important;
-        font-weight: 900 !important; font-size: 14px !important; border-radius: 8px !important;
+        font-weight: 900 !important; font-size: 13px !important; border-radius: 8px !important;
     }
     
     /* HEADER BANNER MODERNO GLASSMORPHISM */
     .main-title-card {
-        background: #FFFFFF; padding: 22px 30px; border-radius: 16px; border: 1px solid #E2E8F0;
-        box-shadow: 0px 10px 25px -5px rgba(0, 0, 0, 0.05); text-align: center; width: 100%; margin: 5px auto 20px auto;
+        background: #FFFFFF; padding: 14px 22px; border-radius: 14px; border: 1px solid #E2E8F0;
+        box-shadow: 0px 8px 20px -5px rgba(0, 0, 0, 0.05); text-align: center; width: 100%; margin: 0px auto 12px auto;
         position: relative; overflow: hidden;
     }
     .main-title-card::before {
@@ -393,42 +412,45 @@ st.markdown("""
         background: linear-gradient(90deg, #F59E0B 0%, #0284C7 50%, #10B981 100%);
     }
     
-    /* TARJETAS KPI MODERNAS CON TIPO DE LETRA INTER */
+    /* TARJETAS KPI MODERNAS */
     div[data-testid="stMetric"] {
         background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
-        border-radius: 12px !important; padding: 14px 16px !important;
-        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.03) !important; text-align: center !important;
+        border-radius: 10px !important; padding: 10px 12px !important;
+        box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.03) !important; text-align: center !important;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     div[data-testid="stMetric"]:hover {
         transform: translateY(-2px);
-        box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.06) !important;
+        box-shadow: 0px 6px 14px rgba(0, 0, 0, 0.06) !important;
         border-color: #CBD5E1 !important;
     }
     div[data-testid="stMetricLabel"] p { color: #64748B !important; font-weight: 800 !important; font-size: 11px !important; text-transform: uppercase; letter-spacing: 0.5px; }
-    div[data-testid="stMetricValue"] div { color: #0F172A !important; font-size: 20px !important; font-weight: 900 !important; white-space: nowrap !important; }
+    div[data-testid="stMetricValue"] div { color: #0F172A !important; font-size: 18px !important; font-weight: 900 !important; white-space: nowrap !important; }
 
     /* ESTILOS DE TEXTO Y SEMÁFOROS */
-    .mf-label { font-size: 18px !important; font-weight: 800 !important; color: #0F172A !important; margin-bottom: 2px !important; }
-    .mf-value { font-size: 38px !important; font-weight: 900 !important; color: #0284C7 !important; margin-top: 0px !important; }
-    .highlight-red-large { color: #DC2626 !important; font-size: 15px !important; font-weight: 800 !important; margin-bottom: 6px !important; }
-    .adh-green-large { color: #10B981 !important; font-size: 20px !important; font-weight: 900 !important; margin-bottom: 6px !important; }
-    .adh-red-large { color: #EF4444 !important; font-size: 20px !important; font-weight: 900 !important; margin-bottom: 6px !important; }
+    .mf-label { font-size: 16px !important; font-weight: 800 !important; color: #0F172A !important; margin-bottom: 2px !important; }
+    .mf-value { font-size: 34px !important; font-weight: 900 !important; color: #0284C7 !important; margin-top: 0px !important; }
+    .highlight-red-large { color: #DC2626 !important; font-size: 14px !important; font-weight: 800 !important; margin-bottom: 4px !important; }
+    .adh-green-large { color: #10B981 !important; font-size: 18px !important; font-weight: 900 !important; margin-bottom: 4px !important; }
+    .adh-red-large { color: #EF4444 !important; font-size: 18px !important; font-weight: 900 !important; margin-bottom: 4px !important; }
     
     /* TABLAS DE DATOS */
-    div[data-testid="stDataFrame"] { background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important; border-radius: 12px; box-shadow: 0px 2px 8px rgba(0,0,0,0.02); }
+    div[data-testid="stDataFrame"] { background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important; border-radius: 10px; box-shadow: 0px 2px 6px rgba(0,0,0,0.02); }
     
-    /* BOTONES PRIMARIOS (ACCIONES PRINCIPALES) */
+    /* BOTONES PRIMARIOS */
     div.stButton > button[kind="primary"] {
         background-color: #EF4444 !important; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;
         border: none !important; outline: none !important; font-weight: 900 !important;
-        font-size: 14px !important; border-radius: 10px !important; height: 42px !important; padding: 0px 18px !important;
+        font-size: 13px !important; border-radius: 8px !important; height: 38px !important; padding: 0px 14px !important;
         box-shadow: 0px 4px 10px rgba(239, 68, 68, 0.25) !important;
     }
     div.stButton > button[kind="primary"] p, div.stButton > button[kind="primary"] span {
         color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important; font-weight: 900 !important;
     }
     div.stButton > button[kind="primary"]:hover { background-color: #DC2626 !important; }
+
+    /* REDUCCIÓN DE ESPACIO ENTRE LÍNEAS HORIZONTALES (HR) */
+    hr { margin-top: 12px !important; margin-bottom: 12px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -482,7 +504,7 @@ if not st.session_state.autenticado:
     st.stop()
 
 # ==============================================================================
-# 10. CARÁTULA Y BARRA LATERAL (SIDEBAR) CON ACABADO SLATE-900 / AMBER-500
+# 10. CARÁTULA Y BARRA LATERAL (SIDEBAR) REORGANIZADA Y SIN RECUADROS SOBRANTES
 # ==============================================================================
 if os.path.exists(LOGO_PATH):
     c_hdr1, c_hdr2, c_hdr3 = st.columns([1, 1.2, 1])
@@ -491,11 +513,11 @@ if os.path.exists(LOGO_PATH):
 
 st.markdown("""
     <div class="main-title-card">
-        <h1 style="color: #0F172A; margin: 0; font-size: 26px; font-weight: 900; tracking-tight;">OptiMatch Mine — Control Prescriptivo v3.0</h1>
-        <p style="color: #0284C7; margin: 4px 0 0 0; font-size: 13px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">
+        <h1 style="color: #0F172A; margin: 0; font-size: 24px; font-weight: 900; tracking-tight;">OptiMatch Mine — Control Prescriptivo v3.0</h1>
+        <p style="color: #0284C7; margin: 2px 0 0 0; font-size: 12px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">
             SISTEMA DE SOPORTE A LA DECISIÓN PRE-TURNO PARA LA MEDIANA MINERÍA
         </p>
-        <p style="color: #64748B; margin: 2px 0 0 0; font-size: 12px; font-weight: 600;">
+        <p style="color: #64748B; margin: 2px 0 0 0; font-size: 11px; font-weight: 600;">
             Optimización del Match Carguío-Transporte & Control de Rentabilidad OPEX | Universidad Alberto Hurtado
         </p>
     </div>
@@ -514,13 +536,13 @@ fecha_str = now_dt.strftime("%d/%m/%Y")
 dias_semana_es = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 nombre_dia_actual = dias_semana_es[now_dt.weekday()]
 
-st.sidebar.markdown("<label style='font-size:12px; font-weight:700;'>Fecha de Agendamiento</label>", unsafe_allow_html=True)
+st.sidebar.markdown("<label style='font-size:11px; font-weight:700;'>Fecha de Agendamiento</label>", unsafe_allow_html=True)
 st.sidebar.markdown(f'<div class="auto-box">{nombre_dia_actual}, {fecha_str}</div>', unsafe_allow_html=True)
-st.sidebar.markdown("<label style='font-size:12px; font-weight:700;'>Hora de Agendamiento</label>", unsafe_allow_html=True)
+st.sidebar.markdown("<label style='font-size:11px; font-weight:700;'>Hora de Agendamiento</label>", unsafe_allow_html=True)
 
 with st.sidebar:
     components.html("""
-        <div id="reloj_vivo" style="background-color: #1E293B; border: 1px solid #F59E0B; border-radius: 8px; padding: 6px; text-align: center; font-size: 15px; font-weight: 800; color: #F59E0B; font-family: sans-serif;"></div>
+        <div id="reloj_vivo" style="background-color: #1E293B; border: 1px solid #F59E0B; border-radius: 6px; padding: 4px; text-align: center; font-size: 14px; font-weight: 800; color: #F59E0B; font-family: sans-serif;"></div>
         <script>
             function actualizarReloj() {
                 var now = new Date();
@@ -531,15 +553,15 @@ with st.sidebar:
             }
             setInterval(actualizarReloj, 1000); actualizarReloj();
         </script>
-    """, height=45)
+    """, height=38)
 
 hora_str = now_dt.strftime("%H:%M:%S")
 
 st.sidebar.markdown(f"""
-    <div style="background-color: #1E293B; padding: 10px; border-radius: 10px; border: 1px solid #334155; margin-top: 6px; margin-bottom: 10px; text-align: center;">
-        <span style="color: #F59E0B !important; font-size: 10px; font-weight: 800; display: block; text-transform: uppercase;">USUARIO RESPONSABLE</span>
-        <span style="color: #FFFFFF !important; font-size: 15px; font-weight: 900; display: block; margin-top: 2px;">👤 {st.session_state.get('usuario_activo', 'Mauricio L. Cepeda Mondaca')}</span>
-        <span style="color: #F59E0B !important; font-size: 10px; font-weight: 800; display: block; margin-top: 2px;">Perfil: {st.session_state.get('rol_activo', 'Administrador')}</span>
+    <div style="background-color: #1E293B; padding: 6px 8px; border-radius: 8px; border: 1px solid #334155; margin-top: 4px; margin-bottom: 6px; text-align: center;">
+        <span style="color: #F59E0B !important; font-size: 9px; font-weight: 800; display: block; text-transform: uppercase;">USUARIO RESPONSABLE</span>
+        <span style="color: #FFFFFF !important; font-size: 13px; font-weight: 900; display: block;">👤 {st.session_state.get('usuario_activo', 'Mauricio L. Cepeda Mondaca')}</span>
+        <span style="color: #F59E0B !important; font-size: 9px; font-weight: 800; display: block;">Perfil: {st.session_state.get('rol_activo', 'Administrador')}</span>
     </div>
 """, unsafe_allow_html=True)
 
@@ -569,10 +591,8 @@ merma_base_valor = FACTORES_MATERIAL[preset_fl]["merma_base_pct"]
 
 st.sidebar.markdown("---")
 st.sidebar.header("Pistas de Acarreo")
-st.sidebar.markdown('<div class="amber-card">', unsafe_allow_html=True)
-st.sidebar.markdown('<span class="selector-label-centered">Pendiente y Calidad de Camino</span>', unsafe_allow_html=True)
-perfil_rampa_sel = st.sidebar.selectbox("", list(PERFIL_RAMPAS.keys()), key="select_rampa_box")
-st.sidebar.markdown("</div>", unsafe_allow_html=True)
+# --- ELIMINADO EL RECUADRO SOBRANTE EN PISTAS DE ACARREO ---
+perfil_rampa_sel = st.sidebar.selectbox("Pendiente y Calidad de Camino", list(PERFIL_RAMPAS.keys()), key="select_rampa_box")
 
 st.sidebar.markdown("---")
 st.sidebar.header("⛏️ Plan de Producción")
@@ -583,19 +603,17 @@ st.sidebar.markdown("---")
 tc_mercado, diesel_mercado = obtener_indicadores_mercado()
 
 st.sidebar.markdown(f"""
-    <div style="background-color: #1E293B; padding: 8px; border-radius: 8px; border: 1px solid #0284C7; text-align: center; margin-bottom: 8px;">
-        <span style="color: #38BDF8 !important; font-size: 10px; font-weight: 800; display: block; text-transform: uppercase;">🌐 MERCADO EN VIVO (CNE / BCO CENTRAL)</span>
+    <div style="background-color: #1E293B; padding: 6px; border-radius: 6px; border: 1px solid #0284C7; text-align: center; margin-bottom: 6px;">
+        <span style="color: #38BDF8 !important; font-size: 9px; font-weight: 800; display: block; text-transform: uppercase;">🌐 MERCADO EN VIVO (CNE / BCO CENTRAL)</span>
         <span style="color: #FFFFFF !important; font-size: 11px; font-weight: 700;">USD/CLP: ${fmt_num(tc_mercado, 1)} | Diésel Ref: ${diesel_mercado} USD/L</span>
     </div>
 """, unsafe_allow_html=True)
 
-st.sidebar.markdown('<div class="amber-card">', unsafe_allow_html=True)
-st.sidebar.markdown('<span class="selector-label-centered">Tipo de Operación / Mineral</span>', unsafe_allow_html=True)
-tipo_mineral = st.sidebar.selectbox("", [
+# --- ELIMINADO EL RECUADRO SOBRANTE EN TIPO DE MINERAL ---
+tipo_mineral = st.sidebar.selectbox("Tipo de Operación / Mineral", [
     "Caliche / Yodo", "Cobre (Cu)", "Oro (Au)", "Plata (Ag)", "Hierro (Fe)",
     "Litio (Li / LCE)", "Carbón / Energéticos", "No Metálicos / Canteras", "Movimiento de Tierras / Obras Civiles"
 ], key="select_mineral_box")
-st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
 unidades_map = {
     "Caliche / Yodo": {"razon": "Ton Caliche / kg Yodo", "costo": "USD / Ton Caliche", "val_razon": 3.91, "val_usd": 9.079},
@@ -668,17 +686,17 @@ if "Cap_Ton" not in st.session_state.caex_df.columns:
 # 12. TABLAS DE GESTIÓN Y ALERTAS PM
 # ==============================================================================
 b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("Logo_OptiMatch.png")
-img_tag_logo = f'<img src="{b64_logo}" style="height: 38px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 26px; vertical-align: middle; margin-right: 8px;">⛏️</span>'
+img_tag_logo = f'<img src="{b64_logo}" style="height: 32px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 22px; vertical-align: middle; margin-right: 8px;">⛏️</span>'
 
 st.markdown(f"""
-    <div style="text-align: center; width: 100%; margin-top: 0px; margin-bottom: 15px; padding: 0px;">
+    <div style="text-align: center; width: 100%; margin-top: 0px; margin-bottom: 10px; padding: 0px;">
         <div style="display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
             {img_tag_logo}
-            <h2 style="margin: 0; padding: 0; color: #0F172A; font-size: 22px; font-weight: 800; line-height: 1.1;">
+            <h2 style="margin: 0; padding: 0; color: #0F172A; font-size: 20px; font-weight: 800; line-height: 1.1;">
                 Estado y Agendamiento de Flota Operativa
             </h2>
         </div>
-        <p style="color: #64748B; font-weight: 600; margin: 2px 0px 0px 0px; font-size: 13px; text-align: center;">
+        <p style="color: #64748B; font-weight: 600; margin: 2px 0px 0px 0px; font-size: 12px; text-align: center;">
             Selección de disponibilidad mecánica, horómetros, capacidad real de tolva (60T, 90T, 140T) y asignación para el turno
         </p>
     </div>
@@ -699,7 +717,7 @@ with col_t1:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
         if os.path.exists("Gif Pala.jpg"):
-            st.image("Gif Pala.jpg", width=80)
+            st.image("Gif Pala.jpg", width=70)
     with c_txt:
         st.markdown("### Pala de Carguío")
 
@@ -736,7 +754,7 @@ with col_t2:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
         if os.path.exists("Gif Cargador Frontal.jpg"):
-            st.image("Gif Cargador Frontal.jpg", width=80)
+            st.image("Gif Cargador Frontal.jpg", width=70)
     with c_txt:
         st.markdown("### Cargador Frontal")
 
@@ -773,9 +791,9 @@ with col_t3:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
         if os.path.exists("Camión CAEX Vacío.png"):
-            st.image("Camión CAEX Vacío.png", width=80)
+            st.image("Camión CAEX Vacío.png", width=70)
         elif os.path.exists("Gif Camión Minero.jpg"):
-            st.image("Gif Camión Minero.jpg", width=80)
+            st.image("Gif Camión Minero.jpg", width=70)
     with c_txt:
         st.markdown("### Camión CAEX")
 
@@ -961,16 +979,16 @@ b64_logo_atacama = obtener_base64_img(LOGO_ATACAMA_PATH)
 
 if b64_logo_atacama:
     faena_header_html = f"""
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
-            <img src="{b64_logo_atacama}" style="height: 45px; width: auto; vertical-align: middle; object-fit: contain;">
-            <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 18px; font-weight: 800; display: inline-block;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <img src="{b64_logo_atacama}" style="height: 38px; width: auto; vertical-align: middle; object-fit: contain;">
+            <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 16px; font-weight: 800; display: inline-block;">
                 Faena: {nombre_mina} | Fecha y Hora: {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})
             </h3>
         </div>
     """
 else:
     faena_header_html = f"""
-        <h3 style="margin: 0 0 15px 0; padding: 0; color: #0F172A; font-size: 18px; font-weight: 800;">
+        <h3 style="margin: 0 0 10px 0; padding: 0; color: #0F172A; font-size: 16px; font-weight: 800;">
             Faena: {nombre_mina} | Fecha y Hora: {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})
         </h3>
     """
@@ -1026,9 +1044,9 @@ img_plano_b64 = obtener_base64_img("Plano_Mina.png") or obtener_base64_img("mapa
 
 if img_plano_b64:
     header_monitoreo_html = f"""
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <img src="{img_plano_b64}" style="height: 32px; width: auto; vertical-align: middle;">
-            <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 20px; font-weight: 800;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <img src="{img_plano_b64}" style="height: 28px; width: auto; vertical-align: middle;">
+            <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 18px; font-weight: 800;">
                 Monitoreo Espacial del Circuito y Control de Fallas en Vivo
             </h3>
         </div>
@@ -1056,8 +1074,8 @@ with col_trig1:
 
 with col_trig2:
     st.markdown("""
-        <div style="padding: 6px 0px;">
-            <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
+        <div style="padding: 4px 0px;">
+            <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 12px !important; display: block;">
                 📻 <b>AVISO RADIAL OPERADOR PALA - SIMULACIÓN BASADA EN VELOCIDADES REALES Y CICLO FÍSICO</b>
             </span>
         </div>
