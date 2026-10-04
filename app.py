@@ -493,7 +493,7 @@ if not st.session_state.autenticado:
     st.stop()
 
 # ==============================================================================
-# 10. CARÁTULA Y BARRA LATERAL (SIDEBAR) REORGANIZADA Y SIN RECUADROS SOBRANTES
+# 10. CARÁTULA Y BARRA LATERAL (SIDEBAR) REORGANIZADA Y SIN ETIQUETAS SOBRANTES
 # ==============================================================================
 if os.path.exists(LOGO_PATH):
     c_hdr1, c_hdr2, c_hdr3 = st.columns([1, 1.2, 1])
@@ -514,7 +514,7 @@ st.markdown("""
 
 st.sidebar.header("Registro Operativo Mina")
 
-# AJUSTE 1: Recuadro del nombre de la mina y nro de agendamiento con el mismo estilo gris con líneas amarillas (amber-card)
+# AJUSTE 1: Eliminación de etiquetas superiores y recuadros en formato amber-card limpio
 st.sidebar.markdown('<div class="amber-card">', unsafe_allow_html=True)
 st.sidebar.markdown('<span class="selector-label-centered">Nombre de la Mina / Faena</span>', unsafe_allow_html=True)
 nombre_mina = st.sidebar.text_input("", value="Mina Atacama Norte", key="input_nombre_mina_side", label_visibility="collapsed")
@@ -831,11 +831,13 @@ st.markdown("<h3 style='text-align: center;'>TABLA CONTROL ESTADOS EQUIPOS MINA<
 # -----------------------------------------------------------------------------
 equipos_no_disponibles = []
 
-# Listas de opciones para los selectores tipo Excel solicitados (Ajustes 3 y 4)
+# Listas de opciones expandidas de fechas y horas para el calendario interactivo (Ajuste 2)
 lista_fechas_horas_opciones = [
     f"{fecha_str} 06:00", f"{fecha_str} 07:00", f"{fecha_str} 08:00", f"{fecha_str} 09:00",
     f"{fecha_str} 10:00", f"{fecha_str} 11:00", f"{fecha_str} 12:00", f"{fecha_str} 14:00",
-    f"{fecha_str} 18:00", f"{fecha_str} 20:00", f"{fecha_str} 22:00", f"{fecha_str} 23:59"
+    f"{fecha_str} 18:00", f"{fecha_str} 20:00", f"{fecha_str} 22:00", f"{fecha_str} 23:59",
+    "04-10-2026 08:00", "04-10-2026 12:00", "04-10-2026 17:30", "04-10-2026 22:00",
+    "05-10-2026 06:00", "05-10-2026 12:00", "05-10-2026 18:00"
 ]
 lista_logistica_turno_opciones = ["Mecánica / Turno A", "Contratista / Turno B", "Logística / Turno A", "Logística / Turno B"]
 
@@ -849,7 +851,7 @@ for _, r in ed_palas[ed_palas["Estado"] != "🟢 Disponible"].iterrows():
         "Tipo de Falla / Trabajo": "Inspección y mantenimiento preventivo" if "Mantenimiento" in r["Estado"] else "Falla mecánica reportada en terreno",
         "Inicio Detención": f"{fecha_str} 08:00",
         "Estimado de Salida (ETR)": f"{fecha_str} 20:00",
-        "Logística / Turno": "Mecánica / Turno A", # AJUSTE 2: Columna renombrada
+        "Logística / Turno": "Mecánica / Turno A",
         "Plazo Extra Días": 2,
         "Quien Autoriza": "Jefe Turno Mina (A)"
     })
@@ -864,7 +866,7 @@ for _, r in ed_cf[ed_cf["Estado"] != "🟢 Disponible"].iterrows():
         "Tipo de Falla / Trabajo": "Cambio de neumáticos y fluidos" if "Mantenimiento" in r["Estado"] else "Reparación de transmisión",
         "Inicio Detención": f"{fecha_str} 10:30",
         "Estimado de Salida (ETR)": f"{fecha_str} 22:00",
-        "Logística / Turno": "Contratista / Turno B", # AJUSTE 2: Columna renombrada
+        "Logística / Turno": "Contratista / Turno B",
         "Plazo Extra Días": 1,
         "Quien Autoriza": "Jefe Taller"
     })
@@ -879,19 +881,17 @@ for _, r in ed_caex[ed_caex["Estado"] != "🟢 Disponible"].iterrows():
         "Tipo de Falla / Trabajo": "Mantención preventivo 500 hrs" if "Mantenimiento" in r["Estado"] else "Falla en sistema de frenos / motor",
         "Inicio Detención": f"{fecha_str} 07:00",
         "Estimado de Salida (ETR)": f"{fecha_str} 18:00",
-        "Logística / Turno": "Mecánica / Turno A", # AJUSTE 2: Columna renombrada
+        "Logística / Turno": "Mecánica / Turno A",
         "Plazo Extra Días": 2,
         "Quien Autoriza": "Jefe Oper. Mina"
     })
 
-# Nombres de columnas actualizados (Ajuste 2: "Logística / Turno" en lugar de "Logística / Turno A")
 columnas_control_estandar = ["ID- Equipo", "Tipo / Flota", "Ubicación Actual", "Estado de Mantención", "Tipo de Falla / Trabajo", "Inicio Detención", "Estimado de Salida (ETR)", "Logística / Turno", "Plazo Extra Días", "Quien Autoriza"]
 
 if "control_estados_mina_df" not in st.session_state:
     st.session_state.control_estados_mina_df = pd.DataFrame(equipos_no_disponibles)
 else:
     df_previo = st.session_state.control_estados_mina_df
-    # Compatibilidad si existía con el nombre anterior
     if "Logística / Turno A" in df_previo.columns and "Logística / Turno" not in df_previo.columns:
         df_previo = df_previo.rename(columns={"Logística / Turno A": "Logística / Turno"})
         
@@ -907,7 +907,6 @@ else:
             nuevos_rows.append(eq)
     st.session_state.control_estados_mina_df = pd.DataFrame(nuevos_rows) if nuevos_rows else pd.DataFrame(columns=columnas_control_estandar)
 
-# Asegurar que todas las columnas existan
 for col_nec in columnas_control_estandar:
     if col_nec not in st.session_state.control_estados_mina_df.columns:
         st.session_state.control_estados_mina_df[col_nec] = ""
@@ -937,19 +936,18 @@ if equipos_hoy:
     st.markdown(f'<div style="background-color: #F59E0B; color: #0F172A; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🟡 ALERTA DE VENCIMIENTO HOY: Los equipos [{", ".join(equipos_hoy)}] vencen su ETR durante la jornada actual ({fecha_str}). Planifique relevo con el Jefe de Turno.</div>', unsafe_allow_html=True)
 
 if not st.session_state.control_estados_mina_df.empty:
-    # AJUSTES 3 y 4: SelectboxColumn tipo lista estilo Excel para Inicio Detención, ETR y Logística / Turno
     ed_control_estados = st.data_editor(
         st.session_state.control_estados_mina_df,
         column_config={
             "Inicio Detención": st.column_config.SelectboxColumn(
                 "Inicio Detención",
                 options=lista_fechas_horas_opciones,
-                help="Seleccione fecha y hora de inicio de detención"
+                help="Seleccione fecha y hora de inicio mediante calendario/lista"
             ),
             "Estimado de Salida (ETR)": st.column_config.SelectboxColumn(
                 "Estimado de Salida (ETR)",
                 options=lista_fechas_horas_opciones,
-                help="Seleccione fecha y hora estimada de salida (ETR)"
+                help="Seleccione fecha y hora estimada de salida mediante calendario/lista"
             ),
             "Logística / Turno": st.column_config.SelectboxColumn(
                 "Logística / Turno",
