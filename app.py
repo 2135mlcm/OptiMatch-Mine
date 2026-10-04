@@ -2,7 +2,7 @@
 # 1. IMPORTS Y LIBRERÍAS ESTÁNDAR / TERCEROS (PEP 8)
 # ==============================================================================
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 import os
 import random
@@ -115,6 +115,27 @@ def init_db():
         )
     """)
     conn.commit()
+
+    c.execute("PRAGMA table_info(historico_agendamientos)")
+    columnas = [column[1] for column in c.fetchall()]
+    if "regimen_guardia" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN regimen_guardia TEXT")
+        conn.commit()
+    if "prescripcion_aceptada" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN prescripcion_aceptada INTEGER DEFAULT 1")
+        conn.commit()
+    if "disponibilidad_fisica" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN disponibilidad_fisica REAL DEFAULT 100.0")
+        conn.commit()
+    if "factor_llenado" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN factor_llenado REAL DEFAULT 0.88")
+        conn.commit()
+    if "ton_efectivas" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN ton_efectivas REAL DEFAULT 0.0")
+        conn.commit()
+    if "merma_ton" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN merma_ton REAL DEFAULT 0.0")
+        conn.commit()
 
     conn.close()
 
@@ -356,28 +377,11 @@ st.markdown("""
         border-radius: 10px !important; padding: 10px 12px !important; text-align: center !important;
     }
 
-    /* ESTILOS TABLA DE ESTADOS MINA CON ALERTAS ROJAS Y AMARILLAS */
-    .tabla-control-header {
-        background-color: #0F172A; color: #F59E0B; text-align: center; font-weight: 900;
-        padding: 8px; font-size: 16px; border-radius: 8px 8px 0 0; letter-spacing: 1px;
-    }
-    
-    .card-equipo-vencido {
-        background-color: #DC2626 !important; color: #FFFFFF !important; border: 2px solid #991B1B !important;
-        border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0px 4px 10px rgba(220, 38, 38, 0.3);
-    }
-    .card-equipo-vencido * { color: #FFFFFF !important; font-weight: 900 !important; }
-
-    .card-equipo-hoy {
-        background-color: #FEF3C7 !important; color: #78350F !important; border: 2px solid #F59E0B !important;
-        border-radius: 10px; padding: 12px; margin-bottom: 10px; box-shadow: 0px 4px 10px rgba(245, 158, 11, 0.2);
-    }
-    .card-equipo-hoy * { color: #78350F !important; font-weight: 800 !important; }
-
-    .card-equipo-ok {
-        background-color: #FFFFFF !important; color: #0F172A !important; border: 1px solid #CBD5E1 !important;
-        border-radius: 10px; padding: 12px; margin-bottom: 10px;
-    }
+    .mf-label { font-size: 16px !important; font-weight: 800 !important; color: #0F172A !important; margin-bottom: 2px !important; }
+    .mf-value { font-size: 34px !important; font-weight: 900 !important; color: #0284C7 !important; margin-top: 0px !important; }
+    .highlight-red-large { color: #DC2626 !important; font-size: 14px !important; font-weight: 800 !important; margin-bottom: 4px !important; }
+    .adh-green-large { color: #10B981 !important; font-size: 18px !important; font-weight: 900 !important; margin-bottom: 4px !important; }
+    .adh-red-large { color: #EF4444 !important; font-size: 18px !important; font-weight: 900 !important; margin-bottom: 4px !important; }
 
     hr { margin-top: 12px !important; margin-bottom: 12px !important; }
     </style>
@@ -521,173 +525,220 @@ if "caex_df" not in st.session_state:
     ])
 
 # ==============================================================================
-# 12. TABLA CONTROL ESTADOS EQUIPOS MINA (SEGÚN ADJUNTO DEL USUARIO)
+# 12. TABLAS DE GESTIÓN Y ALERTAS PM
 # ==============================================================================
-st.markdown("---")
-st.markdown('<div class="tabla-control-header">TABLA CONTROL ESTADOS EQUIPOS MINA</div>', unsafe_allow_html=True)
+b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("Logo_OptiMatch.png")
+img_tag_logo = f'<img src="{b64_logo}" style="height: 32px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 22px; vertical-align: middle; margin-right: 8px;">⛏️</span>'
 
-# Datos iniciales mapeados exactamente de la imagen del usuario
-if "tabla_control_mina" not in st.session_state:
-    st.session_state.tabla_control_mina = pd.DataFrame([
-        {
-            "ID- Equipo": "CA-104",
-            "Tipo / Flota": "Camión CAEX",
-            "Ubicación Actual": "Taller Central - Bahía 2",
-            "Estado de Mantención": "Programada (PM 500 hrs)",
-            "Tipo de Falla / Trabajo": "Cambio de fluidos y filtros",
-            "Inicio Detención": "04-10-2026 8:00",
-            "Estimado de Salida (ETR)": "04-10-2026 20:00",
-            "Logística / Turno": "Mecánica / Turno A",
-            "Plazo Extra Días": 2,
-            "Quien Autoriza": "Jefe Oper. Mina"
-        },
-        {
-            "ID- Equipo": "PA-002",
-            "Tipo / Flota": "Pala Eléctrica",
-            "Ubicación Actual": "Terreno - Frente Rajo 4",
-            "Estado de Mantención": "Correctivo (Emergencia)",
-            "Tipo de Falla / Trabajo": "Falla en sistema hidráulico",
-            "Inicio Detención": "04-10-2026 14:15",
-            "Estimado de Salida (ETR)": "04-10-2026 17:30",
-            "Logística / Turno": "Terreno / Turno A",
-            "Plazo Extra Días": 4,
-            "Quien Autoriza": "Jefe Turno Mina (A)"
-        },
-        {
-            "ID- Equipo": "EX-301",
-            "Tipo / Flota": "Excavadora",
-            "Ubicación Actual": "Taller de Neumáticos",
-            "Estado de Mantención": "Programada (PM 500 hrs)",
-            "Tipo de Falla / Trabajo": "Rotación de neumáticos",
-            "Inicio Detención": "04-10-2026 11:30",
-            "Estimado de Salida (ETR)": "04-10-2026 15:00",
-            "Logística / Turno": "Contratista / Turno B",
-            "Plazo Extra Días": 2,
-            "Quien Autoriza": "Jefe Taller"
-        },
-        {
-            "ID- Equipo": "PE-205",
-            "Tipo / Flota": "Perforadora",
-            "Ubicación Actual": "Terreno - Fase 6 Norte",
-            "Estado de Mantención": "En Espera (Standby)",
-            "Tipo de Falla / Trabajo": "Espera de repuesto (manguera)",
-            "Inicio Detención": "03-10-2026 22:00",
-            "Estimado de Salida (ETR)": "03-10-2026 12:00",  # ETR Vencida para probar alerta roja
-            "Logística / Turno": "Logística / Turno A",
-            "Plazo Extra Días": 1,
-            "Quien Autoriza": "Gerente Mina"
-        },
+st.markdown(f"""
+    <div style="text-align: center; width: 100%; margin-top: 0px; margin-bottom: 10px; padding: 0px;">
+        <div style="display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+            {img_tag_logo}
+            <h2 style="margin: 0; padding: 0; color: #0F172A; font-size: 20px; font-weight: 800; line-height: 1.1;">
+                Estado y Agendamiento de Flota Operativa
+            </h2>
+        </div>
+        <p style="color: #64748B; font-weight: 600; margin: 2px 0px 0px 0px; font-size: 12px; text-align: center;">
+            Selección de disponibilidad mecánica, horómetros, capacidad real de tolva (60T, 90T, 140T) y asignación para el turno
+        </p>
+    </div>
+""", unsafe_allow_html=True)
+
+opciones_estado = ["🟢 Disponible", "🟡 Mantenimiento / Resguardo", "🔴 Falla Mecánica"]
+
+def reindexar_flota(df):
+    if not df.empty:
+        df = df.reset_index(drop=True)
+        df["Item"] = df.index + 1
+    return df
+
+col_t1, col_t2, col_t3 = st.columns(3)
+
+with col_t1:
+    st.markdown("### Pala de Carguío")
+    ed_palas = st.data_editor(st.session_state.palas_df, hide_index=True, key="editor_palas")
+    st.session_state.palas_df = reindexar_flota(ed_palas)
+
+with col_t2:
+    st.markdown("### Cargador Frontal")
+    ed_cf = st.data_editor(st.session_state.cf_df, hide_index=True, key="editor_cf")
+    st.session_state.cf_df = reindexar_flota(ed_cf)
+
+with col_t3:
+    st.markdown("### Camión CAEX")
+    ed_caex = st.data_editor(st.session_state.caex_df, hide_index=True, key="editor_caex")
+    st.session_state.caex_df = reindexar_flota(ed_caex)
+
+total_caex = len(ed_caex)
+caex_disponibles = len(ed_caex[ed_caex["Estado"] == "🟢 Disponible"])
+disponibilidad_fisica_val = (caex_disponibles / total_caex * 100.0) if total_caex > 0 else 0.0
+
+MATRIZ_TALLER_MP = {
+    "CAEX": {"horas_min": 48.0, "horas_max": 68.0, "perdida_df_min": 2.4, "perdida_df_max": 3.4},
+    "Pala": {"horas_min": 72.0, "horas_max": 96.0, "perdida_df_min": 3.6, "perdida_df_max": 4.8},
+    "Cargador": {"horas_min": 48.0, "horas_max": 59.0, "perdida_df_min": 2.4, "perdida_df_max": 2.9},
+}
+
+def evaluar_alerta_equipo(id_equipo, horometro_actual, tipo_equipo="CAEX"):
+    intervalo_base = 250.0
+    horas_para_pm = intervalo_base - (horometro_actual % intervalo_base)
+    proximo_horometro = horometro_actual + horas_para_pm
+    
+    if proximo_horometro % 2000 == 0:
+        tipo_pm = "PM 2.000 hrs (Overhaul)"
+    elif proximo_horometro % 1000 == 0:
+        tipo_pm = "PM 1.000 hrs (Tren Potencia)"
+    elif proximo_horometro % 500 == 0:
+        tipo_pm = "PM 500 hrs (Aceites / Filtros)"
+    else:
+        tipo_pm = "PM 250 hrs (Inspección / Engrase)"
+        
+    if horas_para_pm <= 0:
+        estado_alerta = "🔴 PAUTA VENCIDA"
+    elif horas_para_pm <= 20.0:
+        estado_alerta = f"⚠️ PM CERCANO ({horas_para_pm:.1f}h)"
+    else:
+        estado_alerta = "🟢 En Regla"
+        
+    return {
+        "ID Equipo": id_equipo,
+        "Horómetro Actual (h)": horometro_actual,
+        "Faltan (h)": round(horas_para_pm, 1),
+        "Próxima Pauta": tipo_pm,
+        "Estado PM": estado_alerta
+    }
+
+st.markdown("---")
+st.subheader("🛠️ Monitoreo Individual de Mantenimiento y Alertas de Taller")
+
+tab_maint1, tab_maint2 = st.tabs(["📋 Estado de Pautas por Equipo", "📊 Impacto en Disponibilidad Física (DF)"])
+
+with tab_maint1:
+    alertas_caex = [evaluar_alerta_equipo(row["ID"], row["Horómetro Entrada"], "CAEX") for _, row in ed_caex.iterrows() if row["Estado"] == "🟢 Disponible"]
+    alertas_palas = [evaluar_alerta_equipo(row["ID"], row["Horómetro Entrada"], "Pala") for _, row in ed_palas.iterrows() if row["Estado"] == "🟢 Disponible"]
+    alertas_cf = [evaluar_alerta_equipo(row["ID"], row["Horómetro Entrada"], "Cargador") for _, row in ed_cf.iterrows() if row["Estado"] == "🟢 Disponible"]
+
+    todos_equipos = alertas_caex + alertas_palas + alertas_cf
+    criticos = [eq for eq in todos_equipos if "⚠️" in eq["Estado PM"] or "🔴" in eq["Estado PM"]]
+
+    if criticos:
+        for eq in criticos:
+            st.markdown(f"""
+                <div style="
+                    background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+                    border-left: 5px solid #F59E0B;
+                    border-top: 1px solid #334155;
+                    border-right: 1px solid #334155;
+                    border-bottom: 1px solid #334155;
+                    border-radius: 10px;
+                    padding: 8px 14px;
+                    margin-bottom: 12px;
+                    box-shadow: 0px 4px 12px rgba(245, 158, 11, 0.15);
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                ">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 20px;">⚠️</span>
+                        <div>
+                            <span style="color: #F59E0B; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; display: block;">
+                                ALERTA PREVENTIVA DE TALLER EN VIVO — EQUIPO {eq['ID Equipo']}
+                            </span>
+                            <span style="color: #F8FAFC; font-size: 12px; font-weight: 600;">
+                                Próxima pauta: <b style="color: #38BDF8;">{eq['Próxima Pauta']}</b> | Horómetro actual: <b>{eq['Horómetro Actual (h)']} hrs</b>
+                            </span>
+                        </div>
+                    </div>
+                    <div style="
+                        background-color: #FEF3C7;
+                        border: 1px solid #F59E0B;
+                        color: #92400E;
+                        padding: 4px 10px;
+                        border-radius: 6px;
+                        font-weight: 900;
+                        font-size: 12px;
+                        white-space: nowrap;
+                    ">
+                        ⏳ FALTAN {eq['Faltan (h)']} HRS
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+    subtab_caex, subtab_palas, subtab_cf = st.tabs([
+        f"🚚 Flota CAEX ({len(alertas_caex)})", 
+        f"🏗️ Palas de Carguío ({len(alertas_palas)})", 
+        f"🚜 Cargadores Frontales ({len(alertas_cf)})"
     ])
 
-opciones_autorizadores = [
-    "Gerente Mina", "Jefe Oper. Mina", "Jefe Turno Mina (A)", 
-    "Jefe Turno (B)", "Jefe de Taller", "AdC Minera"
-]
+    def renderizar_tarjetas_equipo(lista_equipos):
+        if not lista_equipos:
+            st.info("No hay equipos activos agendados en esta categoría.")
+            return
 
-# Configuración del Editor de Datos Interactivo
-ed_tabla_control = st.data_editor(
-    st.session_state.tabla_control_mina,
-    column_config={
-        "ID- Equipo": st.column_config.TextColumn("ID- Equipo", disabled=True),
-        "Tipo / Flota": st.column_config.TextColumn("Tipo / Flota"),
-        "Ubicación Actual": st.column_config.TextColumn("Ubicación Actual"),
-        "Estado de Mantención": st.column_config.TextColumn("Estado de Mantención"),
-        "Tipo de Falla / Trabajo": st.column_config.TextColumn("Tipo de Falla / Trabajo"),
-        "Inicio Detención": st.column_config.TextColumn("Inicio Detención"),
-        "Estimado de Salida (ETR)": st.column_config.TextColumn("Estimado de Salida (ETR)"),
-        "Logística / Turno": st.column_config.TextColumn("Logística / Turno"),
-        "Plazo Extra Días": st.column_config.SelectboxColumn(
-            "Plazo Extra Días", 
-            options=list(range(1, 31)),
-            required=False
-        ),
-        "Quien Autoriza": st.column_config.SelectboxColumn(
-            "Quien Autoriza", 
-            options=opciones_autorizadores,
-            required=False
-        ),
-    },
-    hide_index=True,
-    use_container_width=True,
-    key="editor_tabla_control_mina"
-)
+        cols = st.columns(3)
+        for idx, eq in enumerate(lista_equipos):
+            col_target = cols[idx % 3]
+            es_critico = "⚠️️" in eq["Estado PM"] or "🔴" in eq["Estado PM"]
+            
+            border_color = "#F59E0B" if es_critico else "#CBD5E1"
+            bg_badge = "#FEF3C7" if es_critico else "#D1FAE5"
+            text_badge = "#92400E" if es_critico else "#065F46"
+            
+            with col_target:
+                st.markdown(f"""
+                    <div style="
+                        background-color: #FFFFFF;
+                        border: 1.5px solid {border_color};
+                        border-radius: 10px;
+                        padding: 10px 12px;
+                        margin-bottom: 10px;
+                        box-shadow: 0px 2px 6px rgba(0,0,0,0.04);
+                    ">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E2E8F0; padding-bottom: 6px; margin-bottom: 8px;">
+                            <span style="font-size: 15px; font-weight: 900; color: #0F172A;">🆔 {eq['ID Equipo']}</span>
+                            <span style="background-color: {bg_badge}; color: {text_badge}; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 4px;">
+                                {eq['Estado PM']}
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 11px;">
+                            <div>
+                                <span style="color: #64748B; font-weight: 700; display: block;">HORÓMETRO ACTUAL</span>
+                                <span style="color: #0F172A; font-weight: 900; font-size: 13px;">{eq['Horómetro Actual (h)']} hrs</span>
+                            </div>
+                            <div>
+                                <span style="color: #64748B; font-weight: 700; display: block;">FALTA PARA PM</span>
+                                <span style="color: {'#DC2626' if es_critico else '#0284C7'}; font-weight: 900; font-size: 13px;">{eq['Faltan (h)']} hrs</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #E2E8F0;">
+                            <span style="color: #64748B; font-weight: 700; font-size: 10px; display: block;">PRÓXIMA PAUTA DE MANTENCIÓN</span>
+                            <span style="color: #0F172A; font-weight: 800; font-size: 11px;">🛠️ {eq['Próxima Pauta']}</span>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-st.session_state.tabla_control_mina = ed_tabla_control
+    with subtab_caex:
+        renderizar_tarjetas_equipo(alertas_caex)
 
-# ------------------------------------------------------------------------------
-# LÓGICA DE ALERTAS VISUALES Y VENCIMIENTOS (TARJETAS DE CONTROL DE TALLER)
-# ------------------------------------------------------------------------------
-st.markdown("#### 🚨 Alertas de Vencimiento y Monitoreo de Salida (ETR) de Taller")
+    with subtab_palas:
+        renderizar_tarjetas_equipo(alertas_palas)
 
-fecha_actual_sistema = datetime.now()
-vencidos_count = 0
-por_vencer_count = 0
+    with subtab_cf:
+        renderizar_tarjetas_equipo(alertas_cf)
 
-for idx, row in ed_tabla_control.iterrows():
-    etr_str = row["Estimado de Salida (ETR)"]
-    id_eq = row["ID- Equipo"]
-    tipo_eq = row["Tipo / Flota"]
-    ubicacion = row["Ubicación Actual"]
-    estado = row["Estado de Mantención"]
-    falla = row["Tipo de Falla / Trabajo"]
-    logistica = row["Logística / Turno"]
-    plazo_extra = row["Plazo Extra Días"]
-    autoriza = row["Quien Autoriza"]
+with tab_maint2:
+    st.markdown("#### 📊 Balance de Disponibilidad Física (Pérdidas MP vs. Regla 80/20)")
+    col_m1, col_m2, col_m3 = st.columns(3)
 
-    try:
-        # Formato esperado: DD-MM-YYYY HH:MM
-        etr_dt = datetime.strptime(etr_str, "%d-%m-%Y %H:%M")
-    except Exception:
-        etr_dt = fecha_actual_sistema
+    horas_mp_caex_prom = (MATRIZ_TALLER_MP["CAEX"]["horas_min"] + MATRIZ_TALLER_MP["CAEX"]["horas_max"]) / 2.0
+    perdida_mp_prom = (MATRIZ_TALLER_MP["CAEX"]["perdida_df_min"] + MATRIZ_TALLER_MP["CAEX"]["perdida_df_max"]) / 2.0
+    df_maxima_teorica = 100.0 - perdida_mp_prom
 
-    # Evaluación de Estado de Alerta
-    es_vencido = etr_dt < fecha_actual_sistema
-    es_hoy = etr_dt.date() == fecha_actual_sistema.date() and not es_vencido
+    col_m1.metric("Pérdida Directa MP (Taller)", f"{perdida_mp_prom:.1f}%", delta=f"{horas_mp_caex_prom:.0f} hrs en taller / 2.000h")
+    col_m2.metric("DF Máxima Teórica (Solo MP)", f"{df_maxima_teorica:.1f}%", delta="Escenario Ideal Taller")
+    col_m3.metric("DF Real Operativa Terreno", f"{disponibilidad_fisica_val:.1f}%", delta=f"Impacto MC / LOTO: {max(0.0, df_maxima_teorica - disponibilidad_fisica_val):.1f}%", delta_color="normal" if disponibilidad_fisica_val >= 83 else "inverse")
 
-    if es_vencido:
-        vencidos_count += 1
-        st.markdown(f"""
-            <div class="card-equipo-vencido">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 16px;">🔴 <b>EQUIPO VENCIDO EN TALLER: {id_eq} ({tipo_eq})</b></span>
-                    <span style="background-color: #7F1D1D; color: #FFFFFF; padding: 4px 10px; border-radius: 6px; font-size: 11px;">
-                        🚨 PLAZO EXCEDIDO — SALIDA ETR: {etr_str}
-                    </span>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; font-size: 12px;">
-                    <div>📍 <b>Ubicación:</b> {ubicacion}</div>
-                    <div>🛠️ <b>Falla / Trabajo:</b> {falla} ({estado})</div>
-                    <div>👷 <b>Responsable:</b> {logistica}</div>
-                </div>
-                <div style="margin-top: 6px; font-size: 12px; border-top: 1px dashed #FCA5A5; padding-top: 4px;">
-                    📋 <b>Autorización Plazo Extra:</b> {plazo_extra or 'Sin asignar'} día(s) asignados por <b>{autoriza or 'Pendiente Autorización'}</b>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-
-    elif es_hoy:
-        por_vencer_count += 1
-        st.markdown(f"""
-            <div class="card-equipo-hoy">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 15px;">🟡 <b>POR VENCER HOY EN TALLER: {id_eq} ({tipo_eq})</b></span>
-                    <span style="background-color: #F59E0B; color: #FFFFFF; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 900;">
-                        ⏳ ESTIMADO DE SALIDA HOY: {etr_str}
-                    </span>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; font-size: 12px;">
-                    <div>📍 <b>Ubicación:</b> {ubicacion}</div>
-                    <div>🛠️ <b>Falla / Trabajo:</b> {falla} ({estado})</div>
-                    <div>👷 <b>Responsable:</b> {logistica}</div>
-                </div>
-                <div style="margin-top: 6px; font-size: 12px; border-top: 1px dashed #FCD34D; padding-top: 4px;">
-                    📋 <b>Autorización Plazo Extra:</b> {plazo_extra or '0'} día(s) | Autoriza: <b>{autoriza or 'En proceso'}</b>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-
-if vencidos_count == 0 and por_vencer_count == 0:
-    st.success("🟢 Todos los equipos en mantención se encuentran en plazo operativo normal.")
+    st.info("💡 **Nota de Gestión de Activos:** La diferencia entre la Disponibilidad Máxima Teórica (96,6% – 97,6%) y la DF Real de Terreno (83% – 88%) se debe al **Mantenimiento Correctivo (MC)** imprevisto y a **demoras operacionales en taller** (lavado, traslado, repuestos y tarjeteo de seguridad LOTO).")
 
 # ==============================================================================
 # 13. EJECUCIÓN DEL MOTOR DE SIMULACIÓN Y CÁLCULOS UNIFICADOS
@@ -724,7 +775,6 @@ costo_unitario_ton = res_sim["costo_unitario_usd_ton"]
 
 ingreso_bruto_usd = tonelaje_efectivo * valor_ton_usd
 beneficio_neto_usd = ingreso_bruto_usd - costo_opex_total_turno
-disponibilidad_fisica_val = (n_caex_activos / len(st.session_state.caex_df) * 100.0) if len(st.session_state.caex_df) > 0 else 0.0
 
 if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
     guardar_agendamiento_db(
@@ -751,6 +801,3 @@ k3.metric("Ton Entregadas Netas", f"{fmt_num(tonelaje_efectivo, 0)} Ton")
 k4.metric("Consumo Diésel Total", f"{fmt_num(litros_diesel_turno, 0)} Lts")
 k5.metric("Costo Real/Ton", f"${fmt_num(costo_unitario_ton, 2)} USD/Ton")
 k6.metric("Beneficio Neto", f"${fmt_num(beneficio_neto_usd, 2)} USD")
-
-st.markdown("---")
-st.info("💡 **Tabla de Control Estados Equipos Mina cargada correctamente.** Puedes editar los días de plazo extra (1 a 30) y asignar a la autoridad responsable directamente desde las celdas desplegables de la tabla.")
