@@ -669,7 +669,6 @@ if "caex_df" not in st.session_state:
 if "Cap_Ton" not in st.session_state.caex_df.columns:
     st.session_state.caex_df["Cap_Ton"] = 90.0
 
-# Inicialización del DataFrame interactivo para la Tabla Control Estados Equipos Mina
 if "control_estados_mina_df" not in st.session_state:
     st.session_state.control_estados_mina_df = pd.DataFrame([
         {
@@ -752,7 +751,6 @@ def reindexar_flota(df):
 
 col_t1, col_t2, col_t3 = st.columns(3)
 
-# --- COLUMNA 1: PALAS ---
 with col_t1:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
@@ -789,7 +787,6 @@ with col_t1:
     )
     st.session_state.palas_df = reindexar_flota(ed_palas)
 
-# --- COLUMNA 2: CARGADORES ---
 with col_t2:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
@@ -826,7 +823,6 @@ with col_t2:
     )
     st.session_state.cf_df = reindexar_flota(ed_cf)
 
-# --- COLUMNA 3: CAEX ---
 with col_t3:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
@@ -871,12 +867,12 @@ caex_disponibles = len(ed_caex[ed_caex["Estado"] == "🟢 Disponible"])
 disponibilidad_fisica_val = (caex_disponibles / total_caex * 100.0) if total_caex > 0 else 0.0
 
 st.markdown("---")
-st.markdown("### TABLA CONTROL ESTADOS EQUIPOS MINA")
+# TEXTO CENTRADO 1
+st.markdown("<h3 style='text-align: center;'>TABLA CONTROL ESTADOS EQUIPOS MINA</h3>", unsafe_allow_html=True)
 
-# Procesamiento de Alertas ETR para mostrar advertencias visuales
 equipos_vencidos = []
 equipos_hoy = []
-current_date_str = fecha_str  # "04-10-2026"
+current_date_str = fecha_str
 
 for idx, row in st.session_state.control_estados_mina_df.iterrows():
     etr_val = str(row["Estimado de Salida (ETR)"])
@@ -897,7 +893,6 @@ if equipos_vencidos:
 if equipos_hoy:
     st.markdown(f'<div style="background-color: #F59E0B; color: #0F172A; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🟡 ALERTA DE VENCIMIENTO HOY: Los equipos [{", ".join(equipos_hoy)}] vencen su ETR durante la jornada actual ({fecha_str}). Planifique relevo con el Jefe de Turno.</div>', unsafe_allow_html=True)
 
-# Editor interactivo con columnas desplegables solicitadas
 ed_control_estados = st.data_editor(
     st.session_state.control_estados_mina_df,
     column_config={
@@ -990,13 +985,14 @@ if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
 # 14. DASHBOARD DE RESULTADOS Y CONTROL VISUAL HEADER
 # ==============================================================================
 st.markdown("---")
-st.header(f"📈 Resumen de Agendamiento Pre-Turno: {num_agendamiento}")
+# TEXTO CENTRADO 2
+st.markdown(f"<h2 style='text-align: center;'>Resumen de Agendamiento Pre-Turno: {num_agendamiento}</h2>", unsafe_allow_html=True)
 
 b64_logo_atacama = obtener_base64_img(LOGO_ATACAMA_PATH)
 
 if b64_logo_atacama:
     faena_header_html = f"""
-        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; text-align: center;">
             <img src="{b64_logo_atacama}" style="height: 38px; width: auto; vertical-align: middle; object-fit: contain;">
             <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 16px; font-weight: 800; display: inline-block;">
                 Faena: {nombre_mina} | Fecha y Hora: {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})
@@ -1005,7 +1001,7 @@ if b64_logo_atacama:
     """
 else:
     faena_header_html = f"""
-        <h3 style="margin: 0 0 10px 0; padding: 0; color: #0F172A; font-size: 16px; font-weight: 800;">
+        <h3 style="margin: 0 0 10px 0; padding: 0; color: #0F172A; font-size: 16px; font-weight: 800; text-align: center;">
             Faena: {nombre_mina} | Fecha y Hora: {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})
         </h3>
     """
@@ -1061,7 +1057,7 @@ img_plano_b64 = obtener_base64_img("Plano_Mina.png") or obtener_base64_img("mapa
 
 if img_plano_b64:
     header_monitoreo_html = f"""
-        <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; text-align: center;">
             <img src="{img_plano_b64}" style="height: 28px; width: auto; vertical-align: middle;">
             <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 18px; font-weight: 800;">
                 Monitoreo Espacial del Circuito y Control de Fallas en Vivo
@@ -1070,12 +1066,13 @@ if img_plano_b64:
     """
     st.markdown(header_monitoreo_html, unsafe_allow_html=True)
 else:
-    st.subheader("Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
+    # TEXTO CENTRADO 3
+    st.markdown("<h3 style='text-align: center;'>Monitoreo Espacial del Circuito y Control de Fallas en Vivo</h3>", unsafe_allow_html=True)
 
 st.markdown(
-    f"💡 **Ciclo Operacional Calculado:** **{fmt_num(tiempo_ciclo_efectivo_min, 2)} min** "
+    f"<div style='text-align: center;'>💡 <b>Ciclo Operacional Calculado:</b> <b>{fmt_num(tiempo_ciclo_efectivo_min, 2)} min</b> "
     f"(Carga: 2.2m | Ida @ {fmt_num(vel_cargado_efectiva_kmh, 1)} km/h: {fmt_num(t_ida_min, 2)}m | "
-    f"Descarga: 2.3m | Retorno @ {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
+    f"Descarga: 2.3m | Retorno @ {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)</div>", unsafe_allow_html=True
 )
 
 if "acarreo_iniciado" not in st.session_state:
@@ -1091,7 +1088,7 @@ with col_trig1:
 
 with col_trig2:
     st.markdown("""
-        <div style="padding: 4px 0px;">
+        <div style="padding: 4px 0px; text-align: center;">
             <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 12px !important; display: block;">
                 📻 <b>AVISO RADIAL OPERADOR PALA - SIMULACIÓN BASADA EN VELOCIDADES REALES Y CICLO FÍSICO</b>
             </span>
@@ -1584,7 +1581,7 @@ if not df_lista_ag.empty:
         if adherencia_plan >= 98.0:
             st.success(f"🎯 **AGENDAMIENTO EXITOSO:** Cumplimiento del {fmt_num(adherencia_plan, 1)}% de la meta proyectada ({num_ag_selected}).")
         elif adherencia_plan >= 85.0:
-            st.warning(f"⚠️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
+            st.warning(f"⚠️️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
         else:
             st.error(f"🚨 **DESVIACIÓN CRÍTICA ({fmt_num(adherencia_plan, 1)}%):** Impacto severo por eventos múltiples ({texto_causas}). Costo Real: ${fmt_num(costo_real_ton, 2)} USD/Ton.")
 else:
@@ -1615,7 +1612,8 @@ if not df_hist.empty:
     usuario_actual = st.session_state.get("usuario_activo")
 
     if rol_actual in ["Administrador", "Gerente Operaciones / Evaluador"]:
-        st.markdown("### 🔒 [EXCLUSIVO GERENCIA] Panel de Control y Auditoría por Períodos")
+        # TEXTO CENTRADO 4
+        st.markdown("<h3 style='text-align: center;'>[EXCLUSIVO GERENCIA] Panel de control y Auditoría por períodos</h3>", unsafe_allow_html=True)
 
         c_f1, c_f2 = st.columns(2)
         with c_f1:
