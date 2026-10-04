@@ -316,7 +316,6 @@ st.markdown("""
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
     }
     
-    /* REDUCCIÓN DE ESPACIOS Y RELLENOS GENERALES EN LA APLICACIÓN */
     .block-container {
         padding-top: 1rem !important;
         padding-bottom: 1.5rem !important;
@@ -329,7 +328,6 @@ st.markdown("""
         color: #0F172A !important; 
     }
     
-    /* SIDEBAR COMPACTO SLATE-900 Y DETALLES EN AMBER-500 */
     section[data-testid="stSidebar"] { 
         background-color: #0F172A !important; 
         border-right: 2px solid #F59E0B !important; 
@@ -358,7 +356,6 @@ st.markdown("""
         border-color: #F59E0B !important;
     }
     
-    /* CONTENEDORES ESTILO CARD */
     .dark-card {
         background-color: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 10px 14px !important;
         margin-bottom: 8px !important; box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
@@ -368,7 +365,6 @@ st.markdown("""
         margin-bottom: 8px !important; box-shadow: 0px 0px 10px rgba(245, 158, 11, 0.25);
     }
     
-    /* SELECTORES PERSONALIZADOS EN SIDEBAR */
     div[data-baseweb="select"], div[data-baseweb="select"] *, div[data-baseweb="select"] > div,
     div[data-baseweb="select"] div[role="button"] {
         background-color: #1E293B !important; color: #FFFFFF !important; border-color: #F59E0B !important;
@@ -394,14 +390,12 @@ st.markdown("""
         text-align: center; font-size: 13px; font-weight: 800; color: #FFFFFF !important; margin-bottom: 4px;
     }
     
-    /* BOTONES LATERALES Y GENERALES */
     section[data-testid="stSidebar"] button, section[data-testid="stSidebar"] button *,
     section[data-testid="stSidebar"] button p, section[data-testid="stSidebar"] button span {
         background-color: #F59E0B !important; color: #000000 !important; -webkit-text-fill-color: #000000 !important;
         font-weight: 900 !important; font-size: 13px !important; border-radius: 8px !important;
     }
     
-    /* HEADER BANNER MODERNO GLASSMORPHISM */
     .main-title-card {
         background: #FFFFFF; padding: 14px 22px; border-radius: 14px; border: 1px solid #E2E8F0;
         box-shadow: 0px 8px 20px -5px rgba(0, 0, 0, 0.05); text-align: center; width: 100%; margin: 0px auto 12px auto;
@@ -412,7 +406,6 @@ st.markdown("""
         background: linear-gradient(90deg, #F59E0B 0%, #0284C7 50%, #10B981 100%);
     }
     
-    /* TARJETAS KPI MODERNAS */
     div[data-testid="stMetric"] {
         background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
         border-radius: 10px !important; padding: 10px 12px !important;
@@ -427,17 +420,14 @@ st.markdown("""
     div[data-testid="stMetricLabel"] p { color: #64748B !important; font-weight: 800 !important; font-size: 11px !important; text-transform: uppercase; letter-spacing: 0.5px; }
     div[data-testid="stMetricValue"] div { color: #0F172A !important; font-size: 18px !important; font-weight: 900 !important; white-space: nowrap !important; }
 
-    /* ESTILOS DE TEXTO Y SEMÁFOROS */
     .mf-label { font-size: 16px !important; font-weight: 800 !important; color: #0F172A !important; margin-bottom: 2px !important; }
     .mf-value { font-size: 34px !important; font-weight: 900 !important; color: #0284C7 !important; margin-top: 0px !important; }
     .highlight-red-large { color: #DC2626 !important; font-size: 14px !important; font-weight: 800 !important; margin-bottom: 4px !important; }
     .adh-green-large { color: #10B981 !important; font-size: 18px !important; font-weight: 900 !important; margin-bottom: 4px !important; }
     .adh-red-large { color: #EF4444 !important; font-size: 18px !important; font-weight: 900 !important; margin-bottom: 4px !important; }
     
-    /* TABLAS DE DATOS */
     div[data-testid="stDataFrame"] { background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important; border-radius: 10px; box-shadow: 0px 2px 6px rgba(0,0,0,0.02); }
     
-    /* BOTONES PRIMARIOS */
     div.stButton > button[kind="primary"] {
         background-color: #EF4444 !important; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;
         border: none !important; outline: none !important; font-weight: 900 !important;
@@ -449,7 +439,6 @@ st.markdown("""
     }
     div.stButton > button[kind="primary"]:hover { background-color: #DC2626 !important; }
 
-    /* REDUCCIÓN DE ESPACIO ENTRE LÍNEAS HORIZONTALES (HR) */
     hr { margin-top: 12px !important; margin-bottom: 12px !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -523,7 +512,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-st.sidebar.header("🏢 Registro Operativo Mina")
+st.sidebar.header("Registro Operativo Mina")
 nombre_mina = st.sidebar.text_input("Nombre de la Mina / Faena", value="Mina Atacama Norte")
 
 num_agendamiento_auto = obtener_siguiente_agendamiento()
@@ -591,7 +580,6 @@ merma_base_valor = FACTORES_MATERIAL[preset_fl]["merma_base_pct"]
 
 st.sidebar.markdown("---")
 st.sidebar.header("Pistas de Acarreo")
-# --- ELIMINADO EL RECUADRO SOBRANTE EN PISTAS DE ACARREO ---
 perfil_rampa_sel = st.sidebar.selectbox("Pendiente y Calidad de Camino", list(PERFIL_RAMPAS.keys()), key="select_rampa_box")
 
 st.sidebar.markdown("---")
@@ -609,7 +597,6 @@ st.sidebar.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# --- ELIMINADO EL RECUADRO SOBRANTE EN TIPO DE MINERAL ---
 tipo_mineral = st.sidebar.selectbox("Tipo de Operación / Mineral", [
     "Caliche / Yodo", "Cobre (Cu)", "Oro (Au)", "Plata (Ag)", "Hierro (Fe)",
     "Litio (Li / LCE)", "Carbón / Energéticos", "No Metálicos / Canteras", "Movimiento de Tierras / Obras Civiles"
@@ -623,7 +610,7 @@ unidades_map = {
     "Hierro (Fe)": {"razon": "Ton Mineral / Ton Concentrado Fe", "costo": "USD / Ton Mineral Fe", "val_razon": 1.8, "val_usd": 8.50},
     "Litio (Li / LCE)": {"razon": "Ton Salmuera-Roca / Ton LCE", "costo": "USD / Ton Material Li", "val_razon": 50.0, "val_usd": 22.00},
     "Carbón / Energéticos": {"razon": "Ton ROM / Ton Carbón Limpio", "costo": "USD / Ton Carbón", "val_razon": 1.3, "val_usd": 7.00},
-    "No Metálicos / Canteras": {"razon": "Ton Brutas / Ton Roca Comercial", "costo": "USD / Ton Material", "val_razon": 1.1, "val_usd": 5.00},
+    "No Metálicos / Canteras": {"razon": "Ton Brutas / Ton Roca Comercial", "val_razon": 1.1, "val_usd": 5.00},
     "Movimiento de Tierras / Obras Civiles": {"razon": "m³ o Ton / Unidad Avance", "costo": "USD / Ton o m³ Movido", "val_razon": 1.0, "val_usd": 4.50},
 }
 
@@ -682,11 +669,64 @@ if "caex_df" not in st.session_state:
 if "Cap_Ton" not in st.session_state.caex_df.columns:
     st.session_state.caex_df["Cap_Ton"] = 90.0
 
+# Inicialización del DataFrame interactivo para la Tabla Control Estados Equipos Mina
+if "control_estados_mina_df" not in st.session_state:
+    st.session_state.control_estados_mina_df = pd.DataFrame([
+        {
+            "ID- Equipo": "CA-104", 
+            "Tipo / Flota": "Camión CAEX", 
+            "Ubicación Actual": "Taller Central - Bahía 2", 
+            "Estado de Mantención": "Programada (PM 500 hrs)", 
+            "Tipo de Falla / Trabajo": "Cambio de fluidos y filtros", 
+            "Inicio Detención": "04-10-2026 8:00", 
+            "Estimado de Salida (ETR)": "04-10-2026 20:00", 
+            "Logística / Turno A": "Mecánica / Turno A", 
+            "Plazo Extra Días": 2, 
+            "Quien Autoriza": "Jefe Oper. Mina"
+        },
+        {
+            "ID- Equipo": "PA-002", 
+            "Tipo / Flota": "Pala Eléctrica", 
+            "Ubicación Actual": "Terreno - Frente Rajo 4", 
+            "Estado de Mantención": "Correctivo (Emergencia)", 
+            "Tipo de Falla / Trabajo": "Falla en sistema hidráulico", 
+            "Inicio Detención": "04-10-2026 14:15", 
+            "Estimado de Salida (ETR)": "04-10-2026 17:30", 
+            "Logística / Turno A": "Terreno / Turno A", 
+            "Plazo Extra Días": 4, 
+            "Quien Autoriza": "Jefe Turno Mina (A)"
+        },
+        {
+            "ID- Equipo": "EX-301", 
+            "Tipo / Flota": "Excavadora", 
+            "Ubicación Actual": "Taller de Neumáticos", 
+            "Estado de Mantención": "Programada (PM 500 hrs)", 
+            "Tipo de Falla / Trabajo": "Rotación de neumáticos", 
+            "Inicio Detención": "04-10-2026 11:30", 
+            "Estimado de Salida (ETR)": "04-10-2026 15:00", 
+            "Logística / Turno A": "Contratista / Turno B", 
+            "Plazo Extra Días": 2, 
+            "Quien Autoriza": "Jefe Taller"
+        },
+        {
+            "ID- Equipo": "PE-205", 
+            "Tipo / Flota": "Perforadora", 
+            "Ubicación Actual": "Terreno - Fase 6 Norte", 
+            "Estado de Mantención": "En Espera (Standby)", 
+            "Tipo de Falla / Trabajo": "Espera de repuesto (manguera)", 
+            "Inicio Detención": "03-10-2026 22:00", 
+            "Estimado de Salida (ETR)": "05-10-2026 12:00", 
+            "Logística / Turno A": "Logística / Turno A", 
+            "Plazo Extra Días": 0, 
+            "Quien Autoriza": "Gerente Mina"
+        },
+    ])
+
 # ==============================================================================
-# 12. TABLAS DE GESTIÓN Y ALERTAS PM
+# 12. TABLAS DE GESTIÓN Y ALERTAS PM (REEMPLAZADO POR TABLA CONTROL ESTADOS)
 # ==============================================================================
 b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("Logo_OptiMatch.png")
-img_tag_logo = f'<img src="{b64_logo}" style="height: 32px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 22px; vertical-align: middle; margin-right: 8px;">⛏️</span>'
+img_tag_logo = f'<img src="{b64_logo}" style="height: 32px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else ''
 
 st.markdown(f"""
     <div style="text-align: center; width: 100%; margin-top: 0px; margin-bottom: 10px; padding: 0px;">
@@ -830,81 +870,58 @@ total_caex = len(ed_caex)
 caex_disponibles = len(ed_caex[ed_caex["Estado"] == "🟢 Disponible"])
 disponibilidad_fisica_val = (caex_disponibles / total_caex * 100.0) if total_caex > 0 else 0.0
 
-MATRIZ_TALLER_MP = {
-    "CAEX": {"horas_min": 48.0, "horas_max": 68.0, "perdida_df_min": 2.4, "perdida_df_max": 3.4},
-    "Pala": {"horas_min": 72.0, "horas_max": 96.0, "perdida_df_min": 3.6, "perdida_df_max": 4.8},
-    "Cargador": {"horas_min": 48.0, "horas_max": 59.0, "perdida_df_min": 2.4, "perdida_df_max": 2.9},
-}
-
-def evaluar_alerta_equipo(id_equipo, horometro_actual, tipo_equipo="CAEX"):
-    intervalo_base = 250.0
-    horas_para_pm = intervalo_base - (horometro_actual % intervalo_base)
-    proximo_horometro = horometro_actual + horas_para_pm
-    
-    if proximo_horometro % 2000 == 0:
-        tipo_pm = "PM 2.000 hrs (Overhaul / Componentes Mayores)"
-    elif proximo_horometro % 1000 == 0:
-        tipo_pm = "PM 1.000 hrs (Tren Potencia / Mando Final)"
-    elif proximo_horometro % 500 == 0:
-        tipo_pm = "PM 500 hrs (Aceites / Filtros Motor)"
-    else:
-        tipo_pm = "PM 250 hrs (Engrase / Inspección Básico)"
-        
-    if horas_para_pm <= 0:
-        estado_alerta = "🔴 PAUTA VENCIDA"
-    elif horas_para_pm <= 20.0:
-        estado_alerta = f"⚠️ PM CERCANO ({horas_para_pm:.1f}h)"
-    else:
-        estado_alerta = "🟢 En Regla"
-        
-    return {
-        "ID Equipo": id_equipo,
-        "Horómetro Actual (h)": horometro_actual,
-        "Faltan (h)": round(horas_para_pm, 1),
-        "Próxima Pauta": tipo_pm,
-        "Estado PM": estado_alerta
-    }
-
 st.markdown("---")
-st.subheader("🛠️ Monitoreo Individual de Mantenimiento y Alertas de Taller")
+st.markdown("### TABLA CONTROL ESTADOS EQUIPOS MINA")
 
-tab_maint1, tab_maint2 = st.tabs(["📋 Estado de Pautas por Equipo", "📊 Impacto en Disponibilidad Física (DF)"])
+# Procesamiento de Alertas ETR para mostrar advertencias visuales
+equipos_vencidos = []
+equipos_hoy = []
+current_date_str = fecha_str  # "04-10-2026"
 
-with tab_maint1:
-    alertas_caex_lista = []
-    equipos_criticos = []
+for idx, row in st.session_state.control_estados_mina_df.iterrows():
+    etr_val = str(row["Estimado de Salida (ETR)"])
+    try:
+        etr_dt = datetime.strptime(etr_val[:10], "%d-%m-%Y")
+        now_dt_parsed = datetime.strptime(fecha_str, "%d/%m/%Y")
+        
+        if etr_dt.date() < now_dt_parsed.date():
+            equipos_vencidos.append(row["ID- Equipo"])
+        elif etr_dt.date() == now_dt_parsed.date():
+            equipos_hoy.append(row["ID- Equipo"])
+    except Exception:
+        pass
 
-    for idx, row in ed_caex.iterrows():
-        if row["Estado"] == "🟢 Disponible":
-            eval_eq = evaluar_alerta_equipo(row["ID"], row["Horómetro Entrada"], tipo_equipo="CAEX")
-            alertas_caex_lista.append(eval_eq)
-            if "⚠️" in eval_eq["Estado PM"] or "🔴" in eval_eq["Estado PM"]:
-                equipos_criticos.append(eval_eq)
+if equipos_vencidos:
+    st.markdown(f'<div style="background-color: #DC2626; color: #FFFFFF; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🔴 ALERTA DE VENCIMIENTO CRÍTICO: Los equipos [{", ".join(equipos_vencidos)}] tienen su ETR vencido (Anterior a {fecha_str}). Revise taller urgentemente.</div>', unsafe_allow_html=True)
 
-    if equipos_criticos:
-        for eq in equipos_criticos:
-            st.warning(
-                f"⚠️ **ALERTA PREVENTIVA DE TALLER:** El equipo **{eq['ID Equipo']}** se encuentra a "
-                f"**{eq['Faltan (h)']} hrs** de cumplir su **{eq['Próxima Pauta']}** "
-                f"(Horómetro actual: {eq['Horómetro Actual (h)']} hrs). Planifique su relevo en taller."
-            )
+if equipos_hoy:
+    st.markdown(f'<div style="background-color: #F59E0B; color: #0F172A; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🟡 ALERTA DE VENCIMIENTO HOY: Los equipos [{", ".join(equipos_hoy)}] vencen su ETR durante la jornada actual ({fecha_str}). Planifique relevo con el Jefe de Turno.</div>', unsafe_allow_html=True)
 
-    st.markdown("#### 📋 Control de Pautas de Mantención por Equipo Operativo")
-    st.dataframe(pd.DataFrame(alertas_caex_lista), use_container_width=True, hide_index=True)
-
-with tab_maint2:
-    st.markdown("#### 📊 Balance de Disponibilidad Física (Pérdidas MP vs. Regla 80/20)")
-    col_m1, col_m2, col_m3 = st.columns(3)
-
-    horas_mp_caex_prom = (MATRIZ_TALLER_MP["CAEX"]["horas_min"] + MATRIZ_TALLER_MP["CAEX"]["horas_max"]) / 2.0
-    perdida_mp_prom = (MATRIZ_TALLER_MP["CAEX"]["perdida_df_min"] + MATRIZ_TALLER_MP["CAEX"]["perdida_df_max"]) / 2.0
-    df_maxima_teorica = 100.0 - perdida_mp_prom
-
-    col_m1.metric("Pérdida Directa MP (Taller)", f"{perdida_mp_prom:.1f}%", delta=f"{horas_mp_caex_prom:.0f} hrs en taller / 2.000h")
-    col_m2.metric("DF Máxima Teórica (Solo MP)", f"{df_maxima_teorica:.1f}%", delta="Escenario Ideal Taller")
-    col_m3.metric("DF Real Operativa Terreno", f"{disponibilidad_fisica_val:.1f}%", delta=f"Impacto MC / LOTO: {max(0.0, df_maxima_teorica - disponibilidad_fisica_val):.1f}%", delta_color="normal" if disponibilidad_fisica_val >= 83 else "inverse")
-
-    st.info("💡 **Nota de Gestión de Activos:** La diferencia entre la Disponibilidad Máxima Teórica (96,6% – 97,6%) y la DF Real de Terreno (83% – 88%) se debe al **Mantenimiento Correctivo (MC)** imprevisto y a **demoras operacionales en taller** (lavado, traslado, repuestos y tarjeteo de seguridad LOTO).")
+# Editor interactivo con columnas desplegables solicitadas
+ed_control_estados = st.data_editor(
+    st.session_state.control_estados_mina_df,
+    column_config={
+        "Plazo Extra Días": st.column_config.SelectboxColumn(
+            "Plazo Extra Días",
+            options=[i for i in range(31)]
+        ),
+        "Quien Autoriza": st.column_config.SelectboxColumn(
+            "Quien Autoriza",
+            options=[
+                "Gerente Mina", 
+                "Jefe Oper. Mina", 
+                "Jefe Turno Mina (A)", 
+                "Jefe Turno (B)", 
+                "Jefe de Taller", 
+                "AdC Minera"
+            ]
+        )
+    },
+    hide_index=True,
+    key="editor_control_estados_mina",
+    use_container_width=True
+)
+st.session_state.control_estados_mina_df = ed_control_estados
 
 # ==============================================================================
 # 13. EJECUCIÓN DEL MOTOR DE SIMULACIÓN Y CÁLCULOS UNIFICADOS
