@@ -203,6 +203,8 @@ def ejecutar_simulacion_analitica(
         "MF": mf,
         "cola_min": espera_promedio_cola,
         "t_ciclo_min": t_ciclo_efectivo,
+        "t_ida_min": t_ida,
+        "t_retorno_min": t_retorno,
         "vel_cargado_efectiva": vel_cargado_efectiva,
         "ton_cargadas": toneladas_cargadas,
         "ton_merma": toneladas_merma,
@@ -610,7 +612,7 @@ if "caex_df" not in st.session_state:
 # 12. TABLAS DE GESTIÓN Y ASIGNACIÓN
 # ==============================================================================
 b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("Logo_OptiMatch.png")
-img_tag_logo = f'<img src="{b64_logo}" style="height: 38px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 26px; vertical-align: middle; margin-right: 8px;">⛏️</span>'
+img_tag_logo = f'<img src="{b64_logo}" style="height: 38px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 26px; vertical-align: middle; margin-right: 8px;">⛏️️</span>'
 
 st.markdown(f"""
     <div style="text-align: center; width: 100%; margin-top: 0px; margin-bottom: 15px; padding: 0px;">
@@ -692,6 +694,8 @@ costo_unitario_ton = res_sim["costo_unitario_usd_ton"]
 tiempo_cola_promedio = res_sim["cola_min"]
 tiempo_ciclo_efectivo_min = res_sim["t_ciclo_min"]
 vel_cargado_efectiva_kmh = res_sim["vel_cargado_efectiva"]
+t_ida_min = res_sim["t_ida_min"]
+t_retorno_min = res_sim["t_retorno_min"]
 
 costo_diesel_turno = litros_diesel_turno * precio_diesel
 ingreso_bruto_usd = tonelaje_efectivo * valor_ton_usd
@@ -736,7 +740,7 @@ col_eval1, col_eval2 = st.columns(2)
 
 with col_eval1:
     st.markdown("### ⛽ Evaluación Económica, Merma y Ruta")
-    st.markdown(f'<p class="highlight-red-large">• Pérdida en Ruta (Merma): {fmt_num(tonelaje_merma, 0)} Ton ({merma_pct_real:.1f}\% del total cargado)</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Pérdida en Ruta (Merma): {fmt_num(tonelaje_merma, 0)} Ton ({merma_pct_real:.1f}% del total cargado)</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="highlight-red-large">• Velocidad Efectiva Subida: {fmt_num(vel_cargado_efectiva_kmh, 1)} km/h ({perfil_rampa_sel})</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="highlight-red-large">• Consumo Específico Diésel Real: {fmt_num(consumo_especifico_lts_ton, 3)} Lts/Ton Entregada</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="highlight-red-large">• Tiempo en Cola Estimado: {fmt_num(tiempo_cola_promedio, 1)} min/ciclo</p>', unsafe_allow_html=True)
@@ -760,10 +764,365 @@ with col_eval2:
         st.error(f"🔴 **DESCALCE SEVERO (Match Factor: {fmt_num(match_factor, 2)})** — *Incompatibilidad en el circuito de acarreo.*")
 
 # ==============================================================================
-# 15. HISTÓRICO DE AGENDAMIENTOS Y AUDITORÍA
+# 15. SEGUIMIENTO ESPACIAL EN VIVO (CANVAS INTERACTIVO)
 # ==============================================================================
 st.markdown("---")
-st.subheader("Histórico de Agendamientos y Auditoría")
+st.subheader("Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
+
+st.markdown(
+    f"💡 **Ciclo Operacional Calculado:** **{fmt_num(tiempo_ciclo_efectivo_min, 2)} min** "
+    f"(Carga: 2.2m | Ida @ {fmt_num(vel_cargado_efectiva_kmh, 1)} km/h: {fmt_num(t_ida_min, 2)}m | "
+    f"Descarga: 2.3m | Retorno @ {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
+)
+
+if "acarreo_iniciado" not in st.session_state:
+    st.session_state.acarreo_iniciado = False
+
+col_trig1, col_trig2, col_trig3 = st.columns([1.8, 3.5, 1.5])
+
+with col_trig1:
+    btn_trig = st.button("🔴 INICIO DE ACARREO", type="primary")
+    if btn_trig:
+        st.session_state.acarreo_iniciado = True
+        st.success("✅ Acarreo iniciado por confirmación VHF.")
+
+with col_trig2:
+    st.markdown("""
+        <div style="padding: 6px 0px;">
+            <span style="color: #0F172A !important; font-weight: 800 !important; font-size: 13px !important; display: block;">
+                📻 <b>AVISO RADIAL OPERADOR PALA - SIMULACIÓN BASADA EN VELOCIDADES REALES Y CICLO FÍSICO</b>
+            </span>
+        </div>
+    """, unsafe_allow_html=True)
+
+with col_trig3:
+    if st.button("🔄 Reiniciar Postura", use_container_width=True):
+        st.session_state.acarreo_iniciado = False
+
+img_caex_cargado_b64 = obtener_base64_img("Camion_CAEX_Cargado.png") or obtener_base64_img("Camión CAEX Cargado.png")
+img_caex_vacio_b64 = obtener_base64_img("Camion_CAEX_Vacio.png") or obtener_base64_img("Camión CAEX Vacío.png")
+img_pala_b64 = obtener_base64_img("Gif Pala.jpg")
+img_cf_b64 = obtener_base64_img("Gif Cargador Frontal.jpg")
+
+caex_agendados = ed_caex[(ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")]
+lista_caex_js = []
+for _, r in caex_agendados.iterrows():
+    lista_caex_js.append({
+        "id": str(r.get("ID", "CAEX")),
+        "modelo": str(r.get("Modelo", "CAEX")),
+        "capTon": float(r.get("Cap_Ton", 90.0)),
+        "operador": str(r.get("Operador", "Sin Operador")),
+        "rend": float(r.get("Rend_TonH", 210.0)),
+    })
+
+palas_activas_js = []
+for _, r in ed_palas[(ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")].iterrows():
+    palas_activas_js.append({
+        "id": str(r.get("ID", "PALA")),
+        "modelo": str(r.get("Modelo", "R9200")),
+        "operador": str(r.get("Operador", "Sin Operador")),
+        "rend": float(r.get("Rend_TonH", 1216.0)),
+    })
+
+cf_activos_js = []
+for _, r in ed_cf[(ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")].iterrows():
+    cf_activos_js.append({
+        "id": str(r.get("ID", "CF")),
+        "modelo": str(r.get("Modelo", "WA900")),
+        "operador": str(r.get("Operador", "Sin Operador")),
+        "rend": float(r.get("Rend_TonH", 700.0)),
+    })
+
+caex_json_str = json.dumps(lista_caex_js)
+palas_json_str = json.dumps(palas_activas_js)
+cf_json_str = json.dumps(cf_activos_js)
+acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
+mf_base_exacto = f"{match_factor:.2f}"
+
+html_gps_canvas = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ margin: 0; padding: 0; background-color: #F8FAFC; font-family: Arial, sans-serif; overflow: hidden; }}
+        #mapContainer {{
+            width: 100%; height: 380px; position: relative; background-color: #FFFFFF;
+            border: 2px solid #CBD5E1; border-radius: 10px; box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
+        }}
+        canvas {{ width: 100%; height: 100%; display: block; cursor: pointer; }}
+        .kpi-panel {{
+            position: absolute; top: 10px; right: 15px; background: rgba(15, 23, 42, 0.95);
+            border: 2px solid #F59E0B; border-radius: 8px; padding: 8px 14px; color: #FFFFFF;
+            font-size: 11px; font-weight: 800; box-shadow: 0px 4px 10px rgba(0,0,0,0.3); z-index: 10;
+        }}
+        .kpi-title {{ color: #F59E0B; font-size: 11px; text-align: center; margin-bottom: 4px; border-bottom: 1px solid #334155; padding-bottom: 2px; }}
+        .kpi-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; text-align: center; }}
+        .kpi-val {{ font-size: 15px; color: #38BDF8; font-weight: 900; }}
+        .tooltip {{
+            position: absolute; display: none; background: rgba(15, 23, 42, 0.95); color: #FFFFFF;
+            padding: 8px 12px; border-radius: 6px; font-size: 11px; pointer-events: none;
+            border: 1px solid #F59E0B; box-shadow: 0px 4px 10px rgba(0,0,0,0.3); z-index: 100; line-height: 1.4;
+        }}
+    </style>
+</head>
+<body>
+    <div id="mapContainer">
+        <div class="kpi-panel">
+            <div class="kpi-title">📊 MÉTRICAS DE VUELTAS Y DINÁMICA DE TURNO</div>
+            <div class="kpi-grid">
+                <div><span>META VTS</span><div class="kpi-val" id="kpiMeta">{vueltas_totales_meta}</div></div>
+                <div><span>ACTUAL</span><div class="kpi-val" style="color:#10B981;" id="kpiActual">0</div></div>
+                <div><span>M. FACTOR</span><div class="kpi-val" style="color:#10B981;" id="kpiMF">{mf_base_exacto}</div></div>
+                <div><span>FLOTA ACT.</span><div class="kpi-val" style="color:#E2E8F0;" id="kpiFlota">{len(lista_caex_js)}/{len(lista_caex_js)}</div></div>
+            </div>
+        </div>
+        <canvas id="gpsCanvas"></canvas>
+        <div id="tooltip" class="tooltip"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gpsCanvas');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+
+        function resizeCanvas() {{ canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }}
+        resizeCanvas();
+
+        const caexList = {caex_json_str};
+        const palasListRaw = {palas_json_str};
+        const cfListRaw = {cf_json_str};
+        const isTrackingActive = {acarreo_activo_bool};
+        const globalFL = {fl_valor};
+
+        const distKm = {distancia_acarreo_km};
+        const speedLoadedKmh = {vel_cargado_efectiva_kmh};
+        const speedEmptyKmh = {vel_vacio_kmh};
+
+        const imgCaexCargado = new Image(); imgCaexCargado.src = "{img_caex_cargado_b64 or ''}";
+        const imgCaexVacio = new Image(); imgCaexVacio.src = "{img_caex_vacio_b64 or ''}";
+        const imgPala = new Image(); imgPala.src = "{img_pala_b64 or ''}";
+        const imgCF = new Image(); imgCF.src = "{img_cf_b64 or ''}";
+
+        const timeLoading = 2.20;
+        const timeHaul = {t_ida_min};
+        const timeDumping = 2.30;
+        const timeReturn = {t_retorno_min};
+        const totalCycleUnits = {tiempo_ciclo_efectivo_min};
+
+        const simSpeed = 0.0004;
+        const totalNumCaex = Math.max(1, caexList.length);
+        const staggerInterval = totalCycleUnits / totalNumCaex;
+
+        let totalVueltasCompletadas = 0;
+        let palasList = palasListRaw.map(p => ({{ ...p, stoppedByFault: false }}));
+        let cfList = cfListRaw.map(cf => ({{ ...cf, stoppedByFault: false }}));
+
+        let vehicles = caexList.map((c, idx) => {{
+            let offset = idx * staggerInterval;
+            let assignedEq = idx % Math.max(1, (palasList.length + cfList.length));
+            return {{
+                id: c.id, modelo: c.modelo, capTon: c.capTon || 90.0, operador: c.operador, rend: c.rend,
+                cycleTime: offset, prevCycleTime: offset, vueltas: 0, x: 0, y: 0,
+                isLoaded: false, statusText: "Postura Previa (Listo para Cargar)",
+                speedKmh: 0, isReturning: false, equipmentAssigned: assignedEq, stoppedByFault: false
+            }};
+        }});
+
+        let palaHitboxes = []; let cfHitboxes = [];
+
+        function recalculateDynamicMF() {{
+            let activeCaex = vehicles.filter(v => !v.stoppedByFault);
+            let activePalas = palasList.filter(p => !p.stoppedByFault).length;
+            let activeCF = cfList.filter(cf => !cf.stoppedByFault).length;
+            let activeLoadingEq = Math.max(1, activePalas + activeCF);
+
+            let mfDinamico = (activeCaex.length * timeLoading) / (activeLoadingEq * totalCycleUnits);
+            
+            let elemMF = document.getElementById('kpiMF');
+            elemMF.innerText = mfDinamico.toFixed(2);
+            document.getElementById('kpiFlota').innerText = activeCaex.length + "/" + vehicles.length;
+
+            if (mfDinamico >= 0.92 && mfDinamico <= 1.08) {{ elemMF.style.color = "#10B981"; }}
+            else if (mfDinamico < 0.85 || mfDinamico > 1.15) {{ elemMF.style.color = "#EF4444"; }}
+            else {{ elemMF.style.color = "#F59E0B"; }}
+        }}
+
+        function drawCaexTruck(x, y, isLoaded, isReturning, isStopped) {{
+            ctx.save(); ctx.translate(x, y);
+            if (isReturning) {{ ctx.scale(-1, 1); }}
+
+            ctx.fillStyle = isStopped ? "#EF4444" : (isLoaded ? "#D97706" : "#CBD5E1");
+            ctx.strokeStyle = "#0F172A"; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.roundRect(-18, -10, 26, 16, 2); ctx.fill(); ctx.stroke();
+
+            if (isLoaded && !isStopped) {{
+                ctx.fillStyle = "#78350F"; ctx.beginPath(); ctx.arc(-5, -5, 6, Math.PI, 0); ctx.fill();
+            }}
+
+            ctx.fillStyle = isStopped ? "#991B1B" : "#F59E0B";
+            ctx.beginPath(); ctx.roundRect(8, -6, 9, 12, 2); ctx.fill(); ctx.stroke();
+
+            ctx.fillStyle = "#1E293B"; ctx.beginPath();
+            ctx.arc(-10, 8, 4, 0, 2 * Math.PI); ctx.arc(6, 8, 4, 0, 2 * Math.PI);
+            ctx.arc(-10, -8, 4, 0, 2 * Math.PI); ctx.arc(6, -8, 4, 0, 2 * Math.PI); ctx.fill();
+            ctx.restore();
+        }}
+
+        function animate() {{
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const paddingL = 170; const paddingR = 170;
+            const trackWidth = canvas.width - paddingL - paddingR;
+            const yIda = canvas.height * 0.35; const yRetorno = canvas.height * 0.65;
+            const xInicio = paddingL; const xFin = paddingL + trackWidth;
+
+            palaHitboxes = []; cfHitboxes = [];
+
+            ctx.beginPath(); ctx.setLineDash([8, 6]); ctx.strokeStyle = "#10B981"; ctx.lineWidth = 4;
+            ctx.moveTo(xInicio, yIda); ctx.lineTo(xFin, yIda); ctx.stroke();
+
+            ctx.beginPath(); ctx.setLineDash([]); ctx.strokeStyle = "#DC2626"; ctx.lineWidth = 4;
+            ctx.moveTo(xInicio, yRetorno); ctx.lineTo(xFin, yRetorno); ctx.stroke();
+
+            ctx.font = "bold 11px Arial"; ctx.fillStyle = "#10B981"; ctx.textAlign = "left";
+            ctx.fillText("VÍA IDA CARGADO (" + distKm.toFixed(1) + " km @ " + speedLoadedKmh.toFixed(1) + " km/h)", xInicio, yIda - 22);
+            ctx.fillStyle = "#DC2626";
+            ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ " + speedEmptyKmh.toFixed(1) + " km/h)", xInicio, yRetorno - 22);
+
+            palasList.forEach((p, idx) => {{
+                let py = yIda - 20 - (idx * 46); let px = xInicio - 65; let size = 48;
+                if (imgPala.complete && imgPala.naturalWidth > 0 && !p.stoppedByFault) {{
+                    ctx.drawImage(imgPala, px, py - (size / 2), size, size);
+                }} else {{
+                    ctx.fillStyle = p.stoppedByFault ? "#EF4444" : "#F59E0B";
+                    ctx.fillRect(px, py - 20, 38, 38);
+                }}
+                palaHitboxes.push({{ x: px + (size / 2), y: py, radius: 25, index: idx, data: p }});
+                ctx.fillStyle = p.stoppedByFault ? "#DC2626" : "#0F172A";
+                ctx.font = "bold 11px Arial"; ctx.textAlign = "right";
+                let statusTag = p.stoppedByFault ? " (FALLA)" : "";
+                ctx.fillText("Pala " + p.id + statusTag, px - 8, py + 4);
+            }});
+
+            cfList.forEach((cf, idx) => {{
+                let totalPalas = palasList.length;
+                let py = yIda - 20 - ((totalPalas + idx) * 46); let px = xInicio - 65; let size = 38;
+                if (imgCF.complete && imgCF.naturalWidth > 0 && !cf.stoppedByFault) {{
+                    ctx.drawImage(imgCF, px, py - (size / 2), size, size);
+                }} else {{
+                    ctx.fillStyle = cf.stoppedByFault ? "#EF4444" : "#F59E0B";
+                    ctx.fillRect(px, py - 15, 30, 30);
+                }}
+                cfHitboxes.push({{ x: px + (size / 2), y: py, radius: 22, index: idx, data: cf }});
+                ctx.fillStyle = cf.stoppedByFault ? "#DC2626" : "#0F172A";
+                ctx.font = "bold 11px Arial"; ctx.textAlign = "right";
+                let statusTag = cf.stoppedByFault ? " (FALLA)" : "";
+                ctx.fillText("CF " + cf.id + statusTag, px - 8, py + 4);
+            }});
+
+            ctx.fillStyle = "#DC2626"; ctx.beginPath();
+            ctx.arc(xFin + 25, (yIda + yRetorno) / 2, 12, 0, 2 * Math.PI); ctx.fill();
+
+            ctx.font = "bold 11px Arial"; ctx.fillStyle = "#DC2626"; ctx.textAlign = "left";
+            const yCentro = (yIda + yRetorno) / 2;
+            ctx.fillText("• BOTADERO", xFin + 45, yCentro - 14);
+            ctx.fillText("• CHANCADOR", xFin + 45, yCentro + 3);
+            ctx.fillText("• PILA DE ACOPIO", xFin + 45, yCentro + 20);
+
+            let totalEquiposCarguio = Math.max(1, palasList.length + cfList.length);
+
+            vehicles.forEach((v, idx) => {{
+                if (isTrackingActive && !v.stoppedByFault) {{
+                    v.prevCycleTime = v.cycleTime;
+                    v.cycleTime = (v.cycleTime + simSpeed) % totalCycleUnits;
+                    if (v.cycleTime < v.prevCycleTime) {{ v.vueltas++; totalVueltasCompletadas++; }}
+                }}
+
+                let t = v.cycleTime;
+                let eqIndex = (totalEquiposCarguio > 0) ? (v.equipmentAssigned % totalEquiposCarguio) : 0;
+                let targetY = yIda - 20 - (eqIndex * 46);
+                let eqNombre = "Pala/CF";
+
+                if (eqIndex < palasList.length) {{ eqNombre = palasList[eqIndex] ? palasList[eqIndex].id : "Pala"; }}
+                else {{ let cfIdx = eqIndex - palasList.length; eqNombre = cfList[cfIdx] ? cfList[cfIdx].id : "CF"; }}
+
+                if (!v.stoppedByFault) {{
+                    if (!isTrackingActive) {{
+                        v.x = xInicio; v.y = targetY; v.isLoaded = false; v.isReturning = false;
+                        v.statusText = "Postura Previa (Acolado en " + eqNombre + ")"; v.speedKmh = 0;
+                    }} else if (t < timeLoading) {{
+                        v.x = xInicio; v.y = targetY; v.isLoaded = false; v.isReturning = false;
+                        v.statusText = "En Carga (" + eqNombre + ")"; v.speedKmh = 0;
+                    }} else if (t < timeLoading + timeHaul) {{
+                        let progressRatio = (t - timeLoading) / timeHaul;
+                        v.x = xInicio + (progressRatio * trackWidth); v.y = targetY + progressRatio * (yIda - targetY);
+                        v.isLoaded = true; v.isReturning = false; v.statusText = "Acarreo Ida -> Botadero/Chancador/Pila"; v.speedKmh = speedLoadedKmh;
+                    }} else if (t < timeLoading + timeHaul + timeDumping) {{
+                        v.x = xFin; v.y = (yIda + yRetorno) / 2; 
+                        v.isLoaded = false; v.isReturning = true; v.statusText = "En Volteo / Descarga"; v.speedKmh = 0;
+                    }} else {{
+                        let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
+                        v.x = xFin - (progressRatio * trackWidth); v.y = yRetorno; 
+                        v.isLoaded = false; v.isReturning = true; v.statusText = "Retorno Vacío -> " + eqNombre; v.speedKmh = speedEmptyKmh;
+                    }}
+                }} else {{ v.statusText = "🔴 DETENIDO POR FALLA / MANTENCIÓN"; v.speedKmh = 0; }}
+
+                let imgToDraw = v.isLoaded ? imgCaexCargado : imgCaexVacio;
+                ctx.save(); ctx.translate(v.x, v.y);
+                if (v.isReturning) {{ ctx.scale(-1, 1); }}
+
+                if (!v.stoppedByFault && imgToDraw.complete && imgToDraw.naturalWidth > 0 && imgToDraw.src.length > 50) {{
+                    ctx.drawImage(imgToDraw, -20, -20, 40, 40);
+                }} else {{ drawCaexTruck(0, 0, v.isLoaded, false, v.stoppedByFault); }}
+                ctx.restore();
+
+                ctx.font = "bold 10px Arial"; ctx.textAlign = "center";
+                if (v.stoppedByFault) {{
+                    ctx.fillStyle = "#DC2626"; ctx.fillText("🔴 CAEX " + v.id + " (FALLA)", v.x, v.y + 26);
+                }} else {{
+                    ctx.fillStyle = "#0F172A";
+                    let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh.toFixed(0) + " km/h]" : " [0 km/h]";
+                    ctx.fillText("CAEX " + v.id + " (" + v.capTon + "T) - " + v.vueltas + " vts" + speedLabel, v.x, v.y + 26);
+                }}
+            }});
+
+            if (isTrackingActive) {{ document.getElementById('kpiActual').innerText = totalVueltasCompletadas; }}
+            recalculateDynamicMF(); requestAnimationFrame(animate);
+        }}
+
+        requestAnimationFrame(animate);
+
+        canvas.addEventListener('click', function(e) {{
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left; const clickY = e.clientY - rect.top;
+
+            vehicles.forEach(v => {{
+                let dist = Math.hypot(clickX - v.x, clickY - v.y);
+                if (dist < 28) {{ v.stoppedByFault = !v.stoppedByFault; }}
+            }});
+
+            palaHitboxes.forEach(p => {{
+                let dist = Math.hypot(clickX - p.x, clickY - p.y);
+                if (dist < p.radius) {{ palasList[p.index].stoppedByFault = !palasList[p.index].stoppedByFault; }}
+            }});
+
+            cfHitboxes.forEach(cf => {{
+                let dist = Math.hypot(clickX - cf.x, clickY - cf.y);
+                if (dist < cf.radius) {{ cfList[cf.index].stoppedByFault = !cfList[cf.index].stoppedByFault; }}
+            }});
+        }});
+    </script>
+</body>
+</html>
+"""
+
+components.html(html_gps_canvas, height=400)
+
+# ==============================================================================
+# 16. HISTÓRICO DE AGENDAMIENTOS Y AUDITORÍA GERENCIAL
+# ==============================================================================
+st.markdown("---")
+st.subheader("Histórico de Agendamientos y Auditoría Gerencial")
 
 conn = sqlite3.connect(DB_FILE)
 df_hist = pd.read_sql_query("SELECT * FROM historico_agendamientos ORDER BY id DESC", conn)
