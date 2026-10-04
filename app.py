@@ -660,7 +660,7 @@ if "caex_df" not in st.session_state:
         {"Item": 6, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA324", "Modelo": "CAT 777F", "Cap_Ton": 90.0, "Horómetro Entrada": 10120.0, "Operador": "Felipe Salinas", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
         {"Item": 7, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA325", "Modelo": "CAT 785D", "Cap_Ton": 140.0, "Horómetro Entrada": 13400.0, "Operador": "Jaime Silva", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
         {"Item": 8, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA326", "Modelo": "CAT 785D", "Cap_Ton": 140.0, "Horómetro Entrada": 9150.0, "Operador": "Marcelo Soto", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
-        {"Item": 9, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA327", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 11800.0, "Operador": "Javier Fuentes", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
+        {"Item": 9, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "CA327", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 11800.0, "Operador": "Javier Fuentes", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
         {"Item": 10, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA328", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 7600.0, "Operador": "Cristian Muñoz", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
         {"Item": 11, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA329", "Modelo": "Komatsu HD785-7", "Cap_Ton": 90.0, "Horómetro Entrada": 14500.0, "Operador": "Sin Asignar", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
         {"Item": 12, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA330", "Modelo": "CAT 785D", "Cap_Ton": 140.0, "Horómetro Entrada": 16200.0, "Operador": "Sin Asignar", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
@@ -669,60 +669,8 @@ if "caex_df" not in st.session_state:
 if "Cap_Ton" not in st.session_state.caex_df.columns:
     st.session_state.caex_df["Cap_Ton"] = 90.0
 
-if "control_estados_mina_df" not in st.session_state:
-    st.session_state.control_estados_mina_df = pd.DataFrame([
-        {
-            "ID- Equipo": "CA-104", 
-            "Tipo / Flota": "Camión CAEX", 
-            "Ubicación Actual": "Taller Central - Bahía 2", 
-            "Estado de Mantención": "Programada (PM 500 hrs)", 
-            "Tipo de Falla / Trabajo": "Cambio de fluidos y filtros", 
-            "Inicio Detención": "04-10-2026 8:00", 
-            "Estimado de Salida (ETR)": "04-10-2026 20:00", 
-            "Logística / Turno A": "Mecánica / Turno A", 
-            "Plazo Extra Días": 2, 
-            "Quien Autoriza": "Jefe Oper. Mina"
-        },
-        {
-            "ID- Equipo": "PA-002", 
-            "Tipo / Flota": "Pala Eléctrica", 
-            "Ubicación Actual": "Terreno - Frente Rajo 4", 
-            "Estado de Mantención": "Correctivo (Emergencia)", 
-            "Tipo de Falla / Trabajo": "Falla en sistema hidráulico", 
-            "Inicio Detención": "04-10-2026 14:15", 
-            "Estimado de Salida (ETR)": "04-10-2026 17:30", 
-            "Logística / Turno A": "Terreno / Turno A", 
-            "Plazo Extra Días": 4, 
-            "Quien Autoriza": "Jefe Turno Mina (A)"
-        },
-        {
-            "ID- Equipo": "EX-301", 
-            "Tipo / Flota": "Excavadora", 
-            "Ubicación Actual": "Taller de Neumáticos", 
-            "Estado de Mantención": "Programada (PM 500 hrs)", 
-            "Tipo de Falla / Trabajo": "Rotación de neumáticos", 
-            "Inicio Detención": "04-10-2026 11:30", 
-            "Estimado de Salida (ETR)": "04-10-2026 15:00", 
-            "Logística / Turno A": "Contratista / Turno B", 
-            "Plazo Extra Días": 2, 
-            "Quien Autoriza": "Jefe Taller"
-        },
-        {
-            "ID- Equipo": "PE-205", 
-            "Tipo / Flota": "Perforadora", 
-            "Ubicación Actual": "Terreno - Fase 6 Norte", 
-            "Estado de Mantención": "En Espera (Standby)", 
-            "Tipo de Falla / Trabajo": "Espera de repuesto (manguera)", 
-            "Inicio Detención": "03-10-2026 22:00", 
-            "Estimado de Salida (ETR)": "05-10-2026 12:00", 
-            "Logística / Turno A": "Logística / Turno A", 
-            "Plazo Extra Días": 0, 
-            "Quien Autoriza": "Gerente Mina"
-        },
-    ])
-
 # ==============================================================================
-# 12. TABLAS DE GESTIÓN Y ALERTAS PM (REEMPLAZADO POR TABLA CONTROL ESTADOS)
+# 12. TABLAS DE GESTIÓN Y SINCRONIZACIÓN AUTOMÁTICA DE TALLER / ESTADOS MINA
 # ==============================================================================
 b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("Logo_OptiMatch.png")
 img_tag_logo = f'<img src="{b64_logo}" style="height: 32px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else ''
@@ -867,25 +815,93 @@ caex_disponibles = len(ed_caex[ed_caex["Estado"] == "🟢 Disponible"])
 disponibilidad_fisica_val = (caex_disponibles / total_caex * 100.0) if total_caex > 0 else 0.0
 
 st.markdown("---")
-# TEXTO CENTRADO 1
 st.markdown("<h3 style='text-align: center;'>TABLA CONTROL ESTADOS EQUIPOS MINA</h3>", unsafe_allow_html=True)
 
+# -----------------------------------------------------------------------------
+# SINCRONIZACIÓN AUTOMÁTICA DE EQUIPOS EN TALLER / MANTENIMIENTO
+# -----------------------------------------------------------------------------
+equipos_no_disponibles = []
+
+# Recolectar de Palas
+for _, r in ed_palas[ed_palas["Estado"] != "🟢 Disponible"].iterrows():
+    equipos_no_disponibles.append({
+        "ID- Equipo": r["ID"],
+        "Tipo / Flota": "Pala Eléctrica",
+        "Ubicación Actual": "Taller Central - Bahía 1",
+        "Estado de Mantención": "Programada (PM 500 hrs)" if "Mantenimiento" in r["Estado"] else "Correctivo (Emergencia)",
+        "Tipo de Falla / Trabajo": "Inspección y mantenimiento preventivo" if "Mantenimiento" in r["Estado"] else "Falla mecánica reportada en terreno",
+        "Inicio Detención": f"{fecha_str} 08:00",
+        "Estimado de Salida (ETR)": f"{fecha_str} 20:00",
+        "Logística / Turno A": "Mecánica / Turno A",
+        "Plazo Extra Días": 2,
+        "Quien Autoriza": "Jefe Turno Mina (A)"
+    })
+
+# Recolectar de Cargadores Frontales
+for _, r in ed_cf[ed_cf["Estado"] != "🟢 Disponible"].iterrows():
+    equipos_no_disponibles.append({
+        "ID- Equipo": r["ID"],
+        "Tipo / Flota": "Cargador Frontal",
+        "Ubicación Actual": "Taller de Neumáticos",
+        "Estado de Mantención": "Programada (PM 500 hrs)" if "Mantenimiento" in r["Estado"] else "Correctivo (Emergencia)",
+        "Tipo de Falla / Trabajo": "Cambio de neumáticos y fluidos" if "Mantenimiento" in r["Estado"] else "Reparación de transmisión",
+        "Inicio Detención": f"{fecha_str} 10:30",
+        "Estimado de Salida (ETR)": f"{fecha_str} 22:00",
+        "Logística / Turno A": "Contratista / Turno B",
+        "Plazo Extra Días": 1,
+        "Quien Autoriza": "Jefe Taller"
+    })
+
+# Recolectar de CAEX
+for _, r in ed_caex[ed_caex["Estado"] != "🟢 Disponible"].iterrows():
+    equipos_no_disponibles.append({
+        "ID- Equipo": r["ID"],
+        "Tipo / Flota": "Camión CAEX",
+        "Ubicación Actual": "Taller Central - Bahía 3",
+        "Estado de Mantención": "Programada (PM 500 hrs)" if "Mantenimiento" in r["Estado"] else "Correctivo (Emergencia)",
+        "Tipo de Falla / Trabajo": "Mantención preventivo 500 hrs" if "Mantenimiento" in r["Estado"] else "Falla en sistema de frenos / motor",
+        "Inicio Detención": f"{fecha_str} 07:00",
+        "Estimado de Salida (ETR)": f"{fecha_str} 18:00",
+        "Logística / Turno A": "Mecánica / Turno A",
+        "Plazo Extra Días": 2,
+        "Quien Autoriza": "Jefe Oper. Mina"
+    })
+
+# Fusionar con el estado anterior para conservar los cambios interactivos del usuario (como Plazo Extra o Quien Autoriza)
+if "control_estados_mina_df" not in st.session_state:
+    st.session_state.control_estados_mina_df = pd.DataFrame(equipos_no_disponibles)
+else:
+    df_previo = st.session_state.control_estados_mina_df
+    nuevos_rows = []
+    for eq in equipos_no_disponibles:
+        eq_id = eq["ID- Equipo"]
+        match_prev = df_previo[df_previo["ID- Equipo"] == eq_id]
+        if not match_prev.empty:
+            # Mantener valores editados por el usuario
+            row_dict = match_prev.iloc[0].to_dict()
+            row_dict["Estado de Mantención"] = eq["Estado de Mantención"]
+            nuevos_rows.append(row_dict)
+        else:
+            nuevos_rows.append(eq)
+    st.session_state.control_estados_mina_df = pd.DataFrame(nuevos_rows) if nuevos_rows else pd.DataFrame(columns=["ID- Equipo", "Tipo / Flota", "Ubicación Actual", "Estado de Mantención", "Tipo de Falla / Trabajo", "Inicio Detención", "Estimado de Salida (ETR)", "Logística / Turno A", "Plazo Extra Días", "Quien Autoriza"])
+
+# Procesamiento de Alertas ETR para mostrar advertencias visuales
 equipos_vencidos = []
 equipos_hoy = []
-current_date_str = fecha_str
 
-for idx, row in st.session_state.control_estados_mina_df.iterrows():
-    etr_val = str(row["Estimado de Salida (ETR)"])
-    try:
-        etr_dt = datetime.strptime(etr_val[:10], "%d-%m-%Y")
-        now_dt_parsed = datetime.strptime(fecha_str, "%d/%m/%Y")
-        
-        if etr_dt.date() < now_dt_parsed.date():
-            equipos_vencidos.append(row["ID- Equipo"])
-        elif etr_dt.date() == now_dt_parsed.date():
-            equipos_hoy.append(row["ID- Equipo"])
-    except Exception:
-        pass
+if not st.session_state.control_estados_mina_df.empty:
+    for idx, row in st.session_state.control_estados_mina_df.iterrows():
+        etr_val = str(row["Estimado de Salida (ETR)"])
+        try:
+            etr_dt = datetime.strptime(etr_val[:10], "%d-%m-%Y")
+            now_dt_parsed = datetime.strptime(fecha_str, "%d/%m/%Y")
+            
+            if etr_dt.date() < now_dt_parsed.date():
+                equipos_vencidos.append(row["ID- Equipo"])
+            elif etr_dt.date() == now_dt_parsed.date():
+                equipos_hoy.append(row["ID- Equipo"])
+        except Exception:
+            pass
 
 if equipos_vencidos:
     st.markdown(f'<div style="background-color: #DC2626; color: #FFFFFF; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🔴 ALERTA DE VENCIMIENTO CRÍTICO: Los equipos [{", ".join(equipos_vencidos)}] tienen su ETR vencido (Anterior a {fecha_str}). Revise taller urgentemente.</div>', unsafe_allow_html=True)
@@ -893,30 +909,33 @@ if equipos_vencidos:
 if equipos_hoy:
     st.markdown(f'<div style="background-color: #F59E0B; color: #0F172A; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🟡 ALERTA DE VENCIMIENTO HOY: Los equipos [{", ".join(equipos_hoy)}] vencen su ETR durante la jornada actual ({fecha_str}). Planifique relevo con el Jefe de Turno.</div>', unsafe_allow_html=True)
 
-ed_control_estados = st.data_editor(
-    st.session_state.control_estados_mina_df,
-    column_config={
-        "Plazo Extra Días": st.column_config.SelectboxColumn(
-            "Plazo Extra Días",
-            options=[i for i in range(31)]
-        ),
-        "Quien Autoriza": st.column_config.SelectboxColumn(
-            "Quien Autoriza",
-            options=[
-                "Gerente Mina", 
-                "Jefe Oper. Mina", 
-                "Jefe Turno Mina (A)", 
-                "Jefe Turno (B)", 
-                "Jefe de Taller", 
-                "AdC Minera"
-            ]
-        )
-    },
-    hide_index=True,
-    key="editor_control_estados_mina",
-    use_container_width=True
-)
-st.session_state.control_estados_mina_df = ed_control_estados
+if not st.session_state.control_estados_mina_df.empty:
+    ed_control_estados = st.data_editor(
+        st.session_state.control_estados_mina_df,
+        column_config={
+            "Plazo Extra Días": st.column_config.SelectboxColumn(
+                "Plazo Extra Días",
+                options=[i for i in range(31)]
+            ),
+            "Quien Autoriza": st.column_config.SelectboxColumn(
+                "Quien Autoriza",
+                options=[
+                    "Gerente Mina", 
+                    "Jefe Oper. Mina", 
+                    "Jefe Turno Mina (A)", 
+                    "Jefe Turno (B)", 
+                    "Jefe de Taller", 
+                    "AdC Minera"
+                ]
+            )
+        },
+        hide_index=True,
+        key="editor_control_estados_mina",
+        use_container_width=True
+    )
+    st.session_state.control_estados_mina_df = ed_control_estados
+else:
+    st.info("🟢 Todos los equipos de la flota se encuentran Disponibles. No hay equipos en mantenimiento o taller actualmente.")
 
 # ==============================================================================
 # 13. EJECUCIÓN DEL MOTOR DE SIMULACIÓN Y CÁLCULOS UNIFICADOS
@@ -985,7 +1004,6 @@ if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
 # 14. DASHBOARD DE RESULTADOS Y CONTROL VISUAL HEADER
 # ==============================================================================
 st.markdown("---")
-# TEXTO CENTRADO 2
 st.markdown(f"<h2 style='text-align: center;'>Resumen de Agendamiento Pre-Turno: {num_agendamiento}</h2>", unsafe_allow_html=True)
 
 b64_logo_atacama = obtener_base64_img(LOGO_ATACAMA_PATH)
@@ -1066,7 +1084,6 @@ if img_plano_b64:
     """
     st.markdown(header_monitoreo_html, unsafe_allow_html=True)
 else:
-    # TEXTO CENTRADO 3
     st.markdown("<h3 style='text-align: center;'>Monitoreo Espacial del Circuito y Control de Fallas en Vivo</h3>", unsafe_allow_html=True)
 
 st.markdown(
@@ -1581,7 +1598,7 @@ if not df_lista_ag.empty:
         if adherencia_plan >= 98.0:
             st.success(f"🎯 **AGENDAMIENTO EXITOSO:** Cumplimiento del {fmt_num(adherencia_plan, 1)}% de la meta proyectada ({num_ag_selected}).")
         elif adherencia_plan >= 85.0:
-            st.warning(f"⚠️️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
+            st.warning(f"⚠️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
         else:
             st.error(f"🚨 **DESVIACIÓN CRÍTICA ({fmt_num(adherencia_plan, 1)}%):** Impacto severo por eventos múltiples ({texto_causas}). Costo Real: ${fmt_num(costo_real_ton, 2)} USD/Ton.")
 else:
@@ -1612,7 +1629,6 @@ if not df_hist.empty:
     usuario_actual = st.session_state.get("usuario_activo")
 
     if rol_actual in ["Administrador", "Gerente Operaciones / Evaluador"]:
-        # TEXTO CENTRADO 4
         st.markdown("<h3 style='text-align: center;'>[EXCLUSIVO GERENCIA] Panel de control y Auditoría por períodos</h3>", unsafe_allow_html=True)
 
         c_f1, c_f2 = st.columns(2)
@@ -1670,7 +1686,7 @@ if not df_hist.empty:
                 cumplimiento_ciclo = (tot_real / tot_proyectado * 100) if tot_proyectado > 0 else 0.0
 
                 m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-                m_col1.metric("Ton Propuestas (Ciclo)", f"{fmt_num(tot_proyectado, 0)} Ton")
+                m_col1.metric("Ton Proyectadas (Ciclo)", f"{fmt_num(tot_proyectado, 0)} Ton")
                 m_col2.metric("Ton Reales (Ciclo)", f"{fmt_num(tot_real, 0)} Ton")
                 m_col3.metric("Cumplimiento Ciclo", f"{fmt_num(cumplimiento_ciclo, 1)}%")
                 m_col4.metric("Match Factor Promedio", f"{fmt_num(avg_mf, 2)}")
