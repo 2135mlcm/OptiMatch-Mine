@@ -41,7 +41,22 @@ if "keep_alive_started" not in st.session_state:
     thread.start()
 
 # ==============================================================================
-# 4. INICIALIZACIÓN Y MIGRACIÓN AUTOMÁTICA DE LA BD (optimatch.db)
+# 4. MATRICES TÉCNICAS: PERFIL DE RUTA Y MERMA POR TRASLADO
+# ==============================================================================
+FACTORES_MATERIAL = {
+    "Roca Gruesa (80%)": {"fl": 0.80, "merma_base_pct": 2.5},
+    "Estándar (88%)":    {"fl": 0.88, "merma_base_pct": 1.2},
+    "Fino / Seco (92%)": {"fl": 0.92, "merma_base_pct": 3.0},
+}
+
+PERFIL_RAMPAS = {
+    "Plano / Pista Recta (0% - 3%)":        {"vel_adj": 1.00, "f_consumo": 1.00, "f_merma": 1.0},
+    "Rampa Moderada / Curvas (4% - 7%)":    {"vel_adj": 0.85, "f_consumo": 1.25, "f_merma": 1.4},
+    "Rampa Severa / Explotación Pit (>8%)": {"vel_adj": 0.70, "f_consumo": 1.55, "f_merma": 1.8},
+}
+
+# ==============================================================================
+# 5. INICIALIZACIÓN Y MIGRACIÓN AUTOMÁTICA DE LA BD (optimatch.db)
 # ==============================================================================
 DB_FILE = "optimatch.db"
 
@@ -85,6 +100,8 @@ def init_db():
             regimen_guardia TEXT,
             jefe_turno TEXT,
             ton_movidas REAL,
+            ton_efectivas REAL,
+            merma_ton REAL,
             consumo_diesel_lts REAL,
             costo_diesel_usd REAL,
             opex_total_usd REAL,
@@ -102,23 +119,23 @@ def init_db():
     columnas = [column[1] for column in c.fetchall()]
     if "regimen_guardia" not in columnas:
         c.execute("ALTER TABLE historico_agendamientos ADD COLUMN regimen_guardia TEXT")
-        conn.commit()
     if "prescripcion_aceptada" not in columnas:
         c.execute("ALTER TABLE historico_agendamientos ADD COLUMN prescripcion_aceptada INTEGER DEFAULT 1")
-        conn.commit()
     if "disponibilidad_fisica" not in columnas:
         c.execute("ALTER TABLE historico_agendamientos ADD COLUMN disponibilidad_fisica REAL DEFAULT 100.0")
-        conn.commit()
     if "factor_llenado" not in columnas:
         c.execute("ALTER TABLE historico_agendamientos ADD COLUMN factor_llenado REAL DEFAULT 0.88")
-        conn.commit()
-
+    if "ton_efectivas" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN ton_efectivas REAL DEFAULT 0.0")
+    if "merma_ton" not in columnas:
+        c.execute("ALTER TABLE historico_agendamientos ADD COLUMN merma_ton REAL DEFAULT 0.0")
+    conn.commit()
     conn.close()
 
 init_db()
 
 # ==============================================================================
-# 5. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA MULTIMODELO (AJUSTADO CON FL)
+# 6. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA MULTIMODELO (AJUSTADO CON MERMA Y RAMPAS)
 # ==============================================================================
 def ejecutar_simulacion_analitica(
     caex_activos_df,
@@ -128,14 +145,25 @@ def ejecutar_simulacion_analitica(
     costo_pala_h=441.0,
     costo_camion_h=290.0,
     fl_factor=0.88,
+    merma_base_pct=1.2,
+    perfil_rampa_key="Plano / Pista Recta (0% - 3%)",
+    distancia_km=3.2,
+    vel_cargado_base=18.0,
+    vel_vacio_base=30.0,
     seed=42,
 ):
     n_camiones = len(caex_activos_df)
     t_carguio_medio = 2.20
-    t_transito_medio = 14.20
     t_maniobras_medio = 2.30
 
-    # Capacidad promedio nominal multiplicada directamente por el Factor de Llenado del balde/tolva (FL)
+    rampa_info = PERFIL_RAMPAS.get(perfil_rampa_key, PERFIL_RAMPAS["Plano / Pista Recta (0% - 3%)"])
+    vel_cargado_efectiva = vel_cargado_base * rampa_info["vel_adj"]
+    vel_vacio_efectiva = vel_vacio_base
+
+    t_ida = ((distancia_km / vel_cargado_efectiva) * 60.0) if vel_cargado_efectiva > 0 else 10.67
+    t_retorno = ((distancia_km / vel_vacio_efectiva) * 60.0) if vel_vacio_efectiva > 0 else 6.40
+    t_transito_medio = t_ida + t_retorno
+
     if n_camiones > 0 and "Cap_Ton" in caex_activos_df.columns:
         cap_tolva_nominal = caex_activos_df["Cap_Ton"].mean()
     else:
@@ -153,24 +181,35 @@ def ejecutar_simulacion_analitica(
 
     t_ciclo_efectivo = t_ciclo_base + espera_promedio_cola
     vueltas_turno = (duracion_horas * 60.0) / t_ciclo_efectivo if t_ciclo_efectivo > 0 else 0.0
+
+    toneladas_cargadas = n_camiones * vueltas_turno * cap_tolva_efectiva
     
-    # Toneladas exactas considerando el factor de llenado real
-    toneladas_totales = n_camiones * vueltas_turno * cap_tolva_efectiva
+    merma_efectiva_pct = merma_base_pct * rampa_info["f_merma"]
+    toneladas_merma = toneladas_cargadas * (merma_efectiva_pct / 100.0)
+    toneladas_efectivas = toneladas_cargadas - toneladas_merma
 
     horas_transito = (vueltas_turno * t_ciclo_base) / 60.0
     horas_ralenti = (vueltas_turno * espera_promedio_cola) / 60.0
-    litros_totales = (n_camiones * horas_transito * 45.0) + (n_camiones * horas_ralenti * 28.0)
-    consumo_especifico = (litros_totales / toneladas_totales) if toneladas_totales > 0 else 0.0
+    litros_totales = ((n_camiones * horas_transito * 45.0) + (n_camiones * horas_ralenti * 28.0)) * rampa_info["f_consumo"]
+    
+    consumo_especifico = (litros_totales / toneladas_efectivas) if toneladas_efectivas > 0 else 0.0
 
     costo_flota = n_camiones * costo_camion_h * duracion_horas
     costo_pala_tot = n_palas * costo_pala_h * duracion_horas
     costo_opex = costo_flota + costo_pala_tot
-    costo_unitario = (costo_opex / toneladas_totales) if toneladas_totales > 0 else 0.0
+    costo_unitario = (costo_opex / toneladas_efectivas) if toneladas_efectivas > 0 else 0.0
 
     return {
         "MF": mf,
         "cola_min": espera_promedio_cola,
-        "ton_totales": toneladas_totales,
+        "t_ciclo_min": t_ciclo_efectivo,
+        "t_ida_min": t_ida,
+        "t_retorno_min": t_retorno,
+        "vel_cargado_efectiva": vel_cargado_efectiva,
+        "ton_cargadas": toneladas_cargadas,
+        "ton_merma": toneladas_merma,
+        "merma_pct": merma_efectiva_pct,
+        "ton_totales": toneladas_efectivas,
         "litros_totales": litros_totales,
         "consumo_especifico_l_ton": consumo_especifico,
         "costo_opex": costo_opex,
@@ -178,7 +217,7 @@ def ejecutar_simulacion_analitica(
     }
 
 # ==============================================================================
-# 6. FUNCIONES AUXILIARES Y API EN VIVO
+# 7. FUNCIONES AUXILIARES Y API EN VIVO
 # ==============================================================================
 @st.cache_data(ttl=3600)
 def obtener_indicadores_mercado():
@@ -211,16 +250,16 @@ def validar_usuario(usr, pwd):
     conn.close()
     return res
 
-def guardar_agendamiento_db(num_ag, fecha, hora, faena, turno, regimen, jefe, ton, lts_diesel, costo_diesel, opex, costo_ton, beneficio, mf, df_val, fl_val, prescripcion_aceptada=1):
+def guardar_agendamiento_db(num_ag, fecha, hora, faena, turno, regimen, jefe, ton_cargadas, ton_efectivas, merma_ton, lts_diesel, costo_diesel, opex, costo_ton, beneficio, mf, df_val, fl_val, prescripcion_aceptada=1):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     c.execute("""
         INSERT INTO historico_agendamientos (
             num_agendamiento, fecha_registro, hora_registro, faena, turno, regimen_guardia, jefe_turno,
-            ton_movidas, consumo_diesel_lts, costo_diesel_usd, opex_total_usd,
+            ton_movidas, ton_efectivas, merma_ton, consumo_diesel_lts, costo_diesel_usd, opex_total_usd,
             costo_ton_usd, beneficio_neto_usd, match_factor, disponibilidad_fisica, factor_llenado, prescripcion_aceptada
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (num_ag, fecha, hora, faena, turno, regimen, jefe, ton, lts_diesel, costo_diesel, opex, costo_ton, beneficio, mf, df_val, fl_val, prescripcion_aceptada))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (num_ag, fecha, hora, faena, turno, regimen, jefe, ton_cargadas, ton_efectivas, merma_ton, lts_diesel, costo_diesel, opex, costo_ton, beneficio, mf, df_val, fl_val, prescripcion_aceptada))
     conn.commit()
     conn.close()
 
@@ -260,7 +299,7 @@ def obtener_base64_img(nombre_archivo):
     return None
 
 # ==============================================================================
-# 7. CSS PERSONALIZADO
+# 8. CSS PERSONALIZADO
 # ==============================================================================
 st.markdown("""
     <style>
@@ -342,7 +381,7 @@ LOGO_PATH = "Logo_OptiMatch.png"
 LOGO_ATACAMA_PATH = "Logo_Atacama_Norte.png"
 
 # ==============================================================================
-# 8. SISTEMA DE AUTENTICACIÓN PRIVADO
+# 9. SISTEMA DE AUTENTICACIÓN PRIVADO
 # ==============================================================================
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
@@ -388,7 +427,7 @@ if not st.session_state.autenticado:
     st.stop()
 
 # ==============================================================================
-# 9. CARÁTULA Y BARRA LATERAL (SIDEBAR)
+# 10. CARÁTULA Y BARRA LATERAL (SIDEBAR)
 # ==============================================================================
 if os.path.exists(LOGO_PATH):
     c_hdr1, c_hdr2, c_hdr3 = st.columns([1, 1.2, 1])
@@ -465,18 +504,22 @@ st.sidebar.markdown("</div>", unsafe_allow_html=True)
 horas_turno = st.sidebar.number_input("Horas Efectivas Turno", value=10.0, step=0.5)
 
 st.sidebar.markdown("---")
-st.sidebar.header("⚙ Presets de Terreno (Pre-turno)")
+st.sidebar.header("⚙ Presets de Terreno y Granulometría")
 preset_fl = st.sidebar.select_slider(
-    "Factor de Llenado Balde/Tolva (FL)",
+    "Tipo de Material & Llenado Balde/Tolva",
     options=["Roca Gruesa (80%)", "Estándar (88%)", "Fino / Seco (92%)"],
     value="Estándar (88%)"
 )
 
-fl_valor = 0.88
-if "80%" in preset_fl:
-    fl_valor = 0.80
-elif "92%" in preset_fl:
-    fl_valor = 0.92
+fl_valor = FACTORES_MATERIAL[preset_fl]["fl"]
+merma_base_valor = FACTORES_MATERIAL[preset_fl]["merma_base_pct"]
+
+st.sidebar.markdown("---")
+st.sidebar.header("🛣️ Perfil Geométrico de Ruta de Acarreo")
+st.sidebar.markdown('<div class="orange-container-box">', unsafe_allow_html=True)
+st.sidebar.markdown('<span class="selector-label-centered">Pendiente y Calidad de Camino</span>', unsafe_allow_html=True)
+perfil_rampa_sel = st.sidebar.selectbox("", list(PERFIL_RAMPAS.keys()), key="select_rampa_box")
+st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
 st.sidebar.header("⛏️ Plan de Producción")
@@ -525,19 +568,13 @@ valor_ton_usd = st.sidebar.number_input(f"{label_costo}", value=float(default_us
 st.sidebar.markdown("---")
 st.sidebar.header("🚛 Parámetros Físicos de Acarreo")
 distancia_acarreo_km = st.sidebar.number_input("Distancia Promedio Acarreo (km)", value=3.2, step=0.1)
-vel_cargado_kmh = st.sidebar.number_input("Velocidad Ida Cargado (km/h)", value=18.0, step=1.0)
+vel_cargado_kmh = st.sidebar.number_input("Velocidad Base Ida (km/h)", value=18.0, step=1.0)
 vel_vacio_kmh = st.sidebar.number_input("Velocidad Retorno Vacío (km/h)", value=30.0, step=1.0)
-
-t_carga_min = 2.20
-t_descarga_min = 2.30
-t_ida_min = ((distancia_acarreo_km / vel_cargado_kmh) * 60.0) if vel_cargado_kmh > 0 else 10.67
-t_retorno_min = ((distancia_acarreo_km / vel_vacio_kmh) * 60.0) if vel_vacio_kmh > 0 else 6.40
-t_ciclo_fisico_min = 18.70
 
 st.sidebar.markdown("---")
 
 # ==============================================================================
-# 10. INICIALIZACIÓN DE FLOTA MULTIMODELO (CAPACIDAD REAL 60T, 90T, 140T)
+# 11. INICIALIZACIÓN DE FLOTA MULTIMODELO
 # ==============================================================================
 if "palas_df" not in st.session_state:
     st.session_state.palas_df = pd.DataFrame([
@@ -571,14 +608,11 @@ if "caex_df" not in st.session_state:
         {"Item": 12, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA330", "Modelo": "CAT 785D", "Cap_Ton": 140.0, "Horómetro Entrada": 16200.0, "Operador": "Sin Asignar", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
     ])
 
-if "Cap_Ton" not in st.session_state.caex_df.columns:
-    st.session_state.caex_df["Cap_Ton"] = 90.0
-
 # ==============================================================================
-# 11. TABLAS DE GESTIÓN, ALERTAS PM Y DISPONIBILIDAD FÍSICA (DF%)
+# 12. TABLAS DE GESTIÓN Y ASIGNACIÓN
 # ==============================================================================
-b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("image_5ea6ba.png") or obtener_base64_img("Logo_OptiMatch.png")
-img_tag_logo = f'<img src="{b64_logo}" style="height: 38px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 26px; vertical-align: middle; margin-right: 8px;">⛏️</span>'
+b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("Logo_OptiMatch.png")
+img_tag_logo = f'<img src="{b64_logo}" style="height: 38px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 26px; vertical-align: middle; margin-right: 8px;">⛏️️</span>'
 
 st.markdown(f"""
     <div style="text-align: center; width: 100%; margin-top: 0px; margin-bottom: 15px; padding: 0px;">
@@ -604,202 +638,27 @@ def reindexar_flota(df):
 
 col_t1, col_t2, col_t3 = st.columns(3)
 
-# --- COLUMNA 1: PALAS ---
 with col_t1:
-    c_img, c_txt = st.columns([1, 2])
-    with c_img:
-        if os.path.exists("Gif Pala.jpg"):
-            st.image("Gif Pala.jpg", width=80)
-    with c_txt:
-        st.markdown("### Pala de Carguío")
-
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
-        if st.button("➖ Eliminar Último", key="del_pala", use_container_width=True):
-            if len(st.session_state.palas_df) > 0:
-                st.session_state.palas_df = st.session_state.palas_df.iloc[:-1]
-                st.session_state.palas_df = reindexar_flota(st.session_state.palas_df)
-                st.rerun()
-    with btn_col2:
-        if st.button("➕ Agregar Equipo", key="add_pala", use_container_width=True):
-            nueva_pala = {
-                "Item": len(st.session_state.palas_df) + 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo",
-                "ID": f"PA{620 + len(st.session_state.palas_df) + 1}", "Modelo": "Liebherr R9200", "Horómetro Entrada": 10000.0,
-                "Operador": "Sin Asignar", "Rend_TonH": 1216, "Consumo_LtsH": 120.0, "Costo_USDH": 441.00,
-            }
-            st.session_state.palas_df = pd.concat([st.session_state.palas_df, pd.DataFrame([nueva_pala])], ignore_index=True)
-            st.rerun()
-
-    ed_palas = st.data_editor(
-        st.session_state.palas_df,
-        column_config={
-            "Item": st.column_config.NumberColumn("N° Item", disabled=True),
-            "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
-            "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f")
-        },
-        hide_index=True, key="editor_palas", num_rows="fixed",
-    )
+    st.markdown("### Pala de Carguío")
+    ed_palas = st.data_editor(st.session_state.palas_df, hide_index=True, key="ed_palas")
     st.session_state.palas_df = reindexar_flota(ed_palas)
 
-# --- COLUMNA 2: CARGADORES ---
 with col_t2:
-    c_img, c_txt = st.columns([1, 2])
-    with c_img:
-        if os.path.exists("Gif Cargador Frontal.jpg"):
-            st.image("Gif Cargador Frontal.jpg", width=80)
-    with c_txt:
-        st.markdown("### Cargador Frontal")
-
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
-        if st.button("➖ Eliminar Último", key="del_cf", use_container_width=True):
-            if len(st.session_state.cf_df) > 0:
-                st.session_state.cf_df = st.session_state.cf_df.iloc[:-1]
-                st.session_state.cf_df = reindexar_flota(st.session_state.cf_df)
-                st.rerun()
-    with btn_col2:
-        if st.button("➕ Agregar Equipo", key="add_cf", use_container_width=True):
-            nuevo_cf = {
-                "Item": len(st.session_state.cf_df) + 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo",
-                "ID": f"CF{435 + len(st.session_state.cf_df) + 1}", "Modelo": "CAT 993K", "Horómetro Entrada": 8000.0,
-                "Operador": "Sin Asignar", "Rend_TonH": 700, "Consumo_LtsH": 80.0, "Costo_USDH": 350.00,
-            }
-            st.session_state.cf_df = pd.concat([st.session_state.cf_df, pd.DataFrame([nuevo_cf])], ignore_index=True)
-            st.rerun()
-
-    ed_cf = st.data_editor(
-        st.session_state.cf_df,
-        column_config={
-            "Item": st.column_config.NumberColumn("N° Item", disabled=True),
-            "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
-            "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f")
-        },
-        hide_index=True, key="editor_cf", num_rows="fixed",
-    )
+    st.markdown("### Cargador Frontal")
+    ed_cf = st.data_editor(st.session_state.cf_df, hide_index=True, key="ed_cf")
     st.session_state.cf_df = reindexar_flota(ed_cf)
 
-# --- COLUMNA 3: CAEX ---
 with col_t3:
-    c_img, c_txt = st.columns([1, 2])
-    with c_img:
-        if os.path.exists("Camión CAEX Vacío.png"):
-            st.image("Camión CAEX Vacío.png", width=80)
-        elif os.path.exists("Gif Camión Minero.jpg"):
-            st.image("Gif Camión Minero.jpg", width=80)
-    with c_txt:
-        st.markdown("### Camión CAEX")
-
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
-        if st.button("➖ Eliminar Último", key="del_caex", use_container_width=True):
-            if len(st.session_state.caex_df) > 0:
-                st.session_state.caex_df = st.session_state.caex_df.iloc[:-1]
-                st.session_state.caex_df = reindexar_flota(st.session_state.caex_df)
-                st.rerun()
-    with btn_col2:
-        if st.button("➕ Agregar Equipo", key="add_caex", use_container_width=True):
-            nuevo_caex = {
-                "Item": len(st.session_state.caex_df) + 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo",
-                "ID": f"CA{318 + len(st.session_state.caex_df) + 1}", "Modelo": "Komatsu HD785-7", "Cap_Ton": 90.0, "Horómetro Entrada": 10000.0,
-                "Operador": "Sin Asignar", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00,
-            }
-            st.session_state.caex_df = pd.concat([st.session_state.caex_df, pd.DataFrame([nuevo_caex])], ignore_index=True)
-            st.rerun()
-
-    ed_caex = st.data_editor(
-        st.session_state.caex_df,
-        column_config={
-            "Item": st.column_config.NumberColumn("N° Item", disabled=True),
-            "Cap_Ton": st.column_config.NumberColumn("Capacidad (Ton)", min_value=10.0, max_value=400.0, format="%.0f Ton"),
-            "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
-            "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f")
-        },
-        hide_index=True, key="editor_caex", num_rows="fixed",
-    )
+    st.markdown("### Camión CAEX")
+    ed_caex = st.data_editor(st.session_state.caex_df, hide_index=True, key="ed_caex")
     st.session_state.caex_df = reindexar_flota(ed_caex)
 
 total_caex = len(ed_caex)
 caex_disponibles = len(ed_caex[ed_caex["Estado"] == "🟢 Disponible"])
 disponibilidad_fisica_val = (caex_disponibles / total_caex * 100.0) if total_caex > 0 else 0.0
 
-MATRIZ_TALLER_MP = {
-    "CAEX": {"horas_min": 48.0, "horas_max": 68.0, "perdida_df_min": 2.4, "perdida_df_max": 3.4},
-    "Pala": {"horas_min": 72.0, "horas_max": 96.0, "perdida_df_min": 3.6, "perdida_df_max": 4.8},
-    "Cargador": {"horas_min": 48.0, "horas_max": 59.0, "perdida_df_min": 2.4, "perdida_df_max": 2.9},
-}
-
-def evaluar_alerta_equipo(id_equipo, horometro_actual, tipo_equipo="CAEX"):
-    intervalo_base = 250.0
-    horas_para_pm = intervalo_base - (horometro_actual % intervalo_base)
-    proximo_horometro = horometro_actual + horas_para_pm
-    
-    if proximo_horometro % 2000 == 0:
-        tipo_pm = "PM 2.000 hrs (Overhaul / Componentes Mayores)"
-    elif proximo_horometro % 1000 == 0:
-        tipo_pm = "PM 1.000 hrs (Tren Potencia / Mando Final)"
-    elif proximo_horometro % 500 == 0:
-        tipo_pm = "PM 500 hrs (Aceites / Filtros Motor)"
-    else:
-        tipo_pm = "PM 250 hrs (Engrase / Inspección Básico)"
-        
-    if horas_para_pm <= 0:
-        estado_alerta = "🔴 PAUTA VENCIDA"
-    elif horas_para_pm <= 20.0:
-        estado_alerta = f"⚠️ PM CERCANO ({horas_para_pm:.1f}h)"
-    else:
-        estado_alerta = "🟢 En Regla"
-        
-    return {
-        "ID Equipo": id_equipo,
-        "Horómetro Actual (h)": horometro_actual,
-        "Faltan (h)": round(horas_para_pm, 1),
-        "Próxima Pauta": tipo_pm,
-        "Estado PM": estado_alerta
-    }
-
-st.markdown("---")
-st.subheader("🛠️ Monitoreo Individual de Mantenimiento y Alertas de Taller")
-
-tab_maint1, tab_maint2 = st.tabs(["📋 Estado de Pautas por Equipo", "📊 Impacto en Disponibilidad Física (DF)"])
-
-with tab_maint1:
-    alertas_caex_lista = []
-    equipos_criticos = []
-
-    for idx, row in ed_caex.iterrows():
-        if row["Estado"] == "🟢 Disponible":
-            eval_eq = evaluar_alerta_equipo(row["ID"], row["Horómetro Entrada"], tipo_equipo="CAEX")
-            alertas_caex_lista.append(eval_eq)
-            if "⚠️" in eval_eq["Estado PM"] or "🔴" in eval_eq["Estado PM"]:
-                equipos_criticos.append(eval_eq)
-
-    if equipos_criticos:
-        for eq in equipos_criticos:
-            st.warning(
-                f"⚠️ **ALERTA PREVENTIVA DE TALLER:** El equipo **{eq['ID Equipo']}** se encuentra a "
-                f"**{eq['Faltan (h)']} hrs** de cumplir su **{eq['Próxima Pauta']}** "
-                f"(Horómetro actual: {eq['Horómetro Actual (h)']} hrs). Planifique su relevo en taller."
-            )
-
-    st.markdown("#### 📋 Control de Pautas de Mantención por Equipo Operativo")
-    st.dataframe(pd.DataFrame(alertas_caex_lista), use_container_width=True, hide_index=True)
-
-with tab_maint2:
-    st.markdown("#### 📊 Balance de Disponibilidad Física (Pérdidas MP vs. Regla 80/20)")
-    col_m1, col_m2, col_m3 = st.columns(3)
-
-    horas_mp_caex_prom = (MATRIZ_TALLER_MP["CAEX"]["horas_min"] + MATRIZ_TALLER_MP["CAEX"]["horas_max"]) / 2.0
-    perdida_mp_prom = (MATRIZ_TALLER_MP["CAEX"]["perdida_df_min"] + MATRIZ_TALLER_MP["CAEX"]["perdida_df_max"]) / 2.0
-    df_maxima_teorica = 100.0 - perdida_mp_prom
-
-    col_m1.metric("Pérdida Directa MP (Taller)", f"{perdida_mp_prom:.1f}%", delta=f"{horas_mp_caex_prom:.0f} hrs en taller / 2.000h")
-    col_m2.metric("DF Máxima Teórica (Solo MP)", f"{df_maxima_teorica:.1f}%", delta="Escenario Ideal Taller")
-    col_m3.metric("DF Real Operativa Terreno", f"{disponibilidad_fisica_val:.1f}%", delta=f"Impacto MC / LOTO: {max(0.0, df_maxima_teorica - disponibilidad_fisica_val):.1f}%", delta_color="normal" if disponibilidad_fisica_val >= 83 else "inverse")
-
-    st.info("💡 **Nota de Gestión de Activos:** La diferencia entre la Disponibilidad Máxima Teórica (96,6% – 97,6%) y la DF Real de Terreno (83% – 88%) se debe al **Mantenimiento Correctivo (MC)** imprevisto y a **demoras operacionales en taller** (lavado, traslado, repuestos y tarjeteo de seguridad LOTO).")
-
 # ==============================================================================
-# 12. EJECUCIÓN DEL MOTOR DE SIMULACIÓN Y CÁLCULOS UNIFICADOS
+# 13. EJECUCIÓN DEL MOTOR DE SIMULACIÓN Y CÁLCULOS UNIFICADOS
 # ==============================================================================
 palas_activas = ed_palas[(ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")]
 cf_activos = ed_cf[(ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")]
@@ -815,72 +674,64 @@ res_sim = ejecutar_simulacion_analitica(
     duracion_horas=horas_turno,
     costo_pala_h=441.0,
     costo_camion_h=290.0,
-    fl_factor=fl_valor
+    fl_factor=fl_valor,
+    merma_base_pct=merma_base_valor,
+    perfil_rampa_key=perfil_rampa_sel,
+    distancia_km=distancia_acarreo_km,
+    vel_cargado_base=vel_cargado_kmh,
+    vel_vacio_base=vel_vacio_kmh,
 )
 
 match_factor = res_sim["MF"]
-tonelaje_proyectado = res_sim["ton_totales"]
+tonelaje_cargado = res_sim["ton_cargadas"]
+tonelaje_merma = res_sim["ton_merma"]
+merma_pct_real = res_sim["merma_pct"]
+tonelaje_efectivo = res_sim["ton_totales"]
 litros_diesel_turno = res_sim["litros_totales"]
 consumo_especifico_lts_ton = res_sim["consumo_especifico_l_ton"]
 costo_opex_total_turno = res_sim["costo_opex"]
 costo_unitario_ton = res_sim["costo_unitario_usd_ton"]
 tiempo_cola_promedio = res_sim["cola_min"]
+tiempo_ciclo_efectivo_min = res_sim["t_ciclo_min"]
+vel_cargado_efectiva_kmh = res_sim["vel_cargado_efectiva"]
+t_ida_min = res_sim["t_ida_min"]
+t_retorno_min = res_sim["t_retorno_min"]
 
 costo_diesel_turno = litros_diesel_turno * precio_diesel
-produccion_estimada = (tonelaje_proyectado / factor_yodo) if factor_yodo > 0 else 0
-ingreso_bruto_usd = tonelaje_proyectado * valor_ton_usd
+ingreso_bruto_usd = tonelaje_efectivo * valor_ton_usd
 beneficio_neto_usd = ingreso_bruto_usd - costo_opex_total_turno
-costo_diesel_por_ton = (costo_diesel_turno / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0
+costo_diesel_por_ton = (costo_diesel_turno / tonelaje_efectivo) if tonelaje_efectivo > 0 else 0
 
 emisiones_co2_kg = litros_diesel_turno * 2.68
-co2_por_ton = (emisiones_co2_kg / tonelaje_proyectado) if tonelaje_proyectado > 0 else 0.0
-vueltas_totales_meta = int((horas_turno * 60.0 / t_ciclo_fisico_min) * max(1, n_caex_activos))
+co2_por_ton = (emisiones_co2_kg / tonelaje_efectivo) if tonelaje_efectivo > 0 else 0.0
+vueltas_totales_meta = int((horas_turno * 60.0 / tiempo_ciclo_efectivo_min) * max(1, n_caex_activos))
 
 prescripcion_aceptada_val = 1 if (0.92 <= match_factor <= 1.08) else 0
 
 if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
     guardar_agendamiento_db(
         num_agendamiento, fecha_str, hora_str, nombre_mina, turno_seleccionado, regimen_guardia,
-        st.session_state.get("usuario_activo", "Mauricio L. Cepeda Mondaca"), tonelaje_proyectado,
-        litros_diesel_turno, costo_diesel_turno, costo_opex_total_turno, costo_unitario_ton,
-        beneficio_neto_usd, match_factor, disponibilidad_fisica_val, fl_valor, prescripcion_aceptada_val
+        st.session_state.get("usuario_activo", "Mauricio L. Cepeda Mondaca"), tonelaje_cargado,
+        tonelaje_efectivo, tonelaje_merma, litros_diesel_turno, costo_diesel_turno,
+        costo_opex_total_turno, costo_unitario_ton, beneficio_neto_usd, match_factor,
+        disponibilidad_fisica_val, fl_valor, prescripcion_aceptada_val
     )
     st.sidebar.success(f"✅ Agendamiento {num_agendamiento} guardado exitosamente.")
     st.session_state.autenticado = False
     st.rerun()
 
 # ==============================================================================
-# 13. DASHBOARD DE RESULTADOS Y CONTROL VISUAL HEADER
+# 14. DASHBOARD DE RESULTADOS Y CONTROL VISUAL HEADER
 # ==============================================================================
 st.markdown("---")
 st.header(f"📈 Resumen de Agendamiento Pre-Turno: {num_agendamiento}")
 
-b64_logo_atacama = obtener_base64_img(LOGO_ATACAMA_PATH)
-
-if b64_logo_atacama:
-    faena_header_html = f"""
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
-            <img src="{b64_logo_atacama}" style="height: 45px; width: auto; vertical-align: middle; object-fit: contain;">
-            <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 20px; font-weight: 800; display: inline-block;">
-                Faena: {nombre_mina} | Fecha y Hora: {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})
-            </h3>
-        </div>
-    """
-else:
-    faena_header_html = f"""
-        <h3 style="margin: 0 0 15px 0; padding: 0; color: #0F172A; font-size: 20px; font-weight: 800;">
-            Faena: {nombre_mina} | Fecha y Hora: {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})
-        </h3>
-    """
-
-st.markdown(faena_header_html, unsafe_allow_html=True)
-
 k1, k2, k3, k4, k5, k6 = st.columns(6)
 k1.metric("Disp. Física (DF)", f"{disponibilidad_fisica_val:.1f}%", delta=f"{caex_disponibles}/{total_caex} CAEX Activos")
 k2.metric("Match Factor (MF)", f"{fmt_num(match_factor, 2)}", delta="Banda Lean OK" if 0.92 <= match_factor <= 1.08 else "Fuera de Rango")
-k3.metric("Ton Movidas", f"{fmt_num(tonelaje_proyectado, 0)} Ton", delta=f"FL: {fl_valor*100:.0f}%")
-k4.metric("Consumo Diésel", f"{fmt_num(litros_diesel_turno, 0)} Lts")
-k5.metric("Costo/Ton", f"${fmt_num(costo_unitario_ton, 2)} USD/Ton")
+k3.metric("Ton Entregadas Netas", f"{fmt_num(tonelaje_efectivo, 0)} Ton", delta=f"Merma: {merma_pct_real:.1f}% ({fmt_num(tonelaje_merma, 0)}T)")
+k4.metric("Consumo Diésel Total", f"{fmt_num(litros_diesel_turno, 0)} Lts")
+k5.metric("Costo Real/Ton", f"${fmt_num(costo_unitario_ton, 2)} USD/Ton")
 k6.metric("Beneficio Neto", f"${fmt_num(beneficio_neto_usd, 2)} USD")
 
 st.markdown("---")
@@ -888,15 +739,16 @@ st.markdown("---")
 col_eval1, col_eval2 = st.columns(2)
 
 with col_eval1:
-    st.markdown("### ⛽ Evaluación Económica y Meta de Producción")
-    st.markdown(f'<p class="highlight-red-large">• Costo Combustible / Ton: ${fmt_num(costo_diesel_por_ton, 2)} USD/Ton</p>', unsafe_allow_html=True)
-    st.markdown(f'<p class="highlight-red-large">• Consumo Específico Diésel: {fmt_num(consumo_especifico_lts_ton, 3)} Lts/Ton</p>', unsafe_allow_html=True)
-    st.markdown(f'<p class="highlight-red-large">• Tiempo en Cola Estimado (Simulación): {fmt_num(tiempo_cola_promedio, 1)} min/ciclo</p>', unsafe_allow_html=True)
-    st.markdown(f'<p class="highlight-red-large">• Huella CO₂ Operativa: {fmt_num(co2_por_ton, 2)} kg CO₂/Ton ({fmt_num(emisiones_co2_kg, 0)} kg CO₂ total)</p>', unsafe_allow_html=True)
+    st.markdown("### ⛽ Evaluación Económica, Merma y Ruta")
+    st.markdown(f'<p class="highlight-red-large">• Pérdida en Ruta (Merma): {fmt_num(tonelaje_merma, 0)} Ton ({merma_pct_real:.1f}% del total cargado)</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Velocidad Efectiva Subida: {fmt_num(vel_cargado_efectiva_kmh, 1)} km/h ({perfil_rampa_sel})</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Consumo Específico Diésel Real: {fmt_num(consumo_especifico_lts_ton, 3)} Lts/Ton Entregada</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Tiempo en Cola Estimado: {fmt_num(tiempo_cola_promedio, 1)} min/ciclo</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="highlight-red-large">• Huella CO₂ Operativa: {fmt_num(co2_por_ton, 2)} kg CO₂/Ton</p>', unsafe_allow_html=True)
 
     total_objetivo = target_mineral_num + target_esteril_num
-    cumplimiento = (tonelaje_proyectado / total_objetivo * 100) if total_objetivo > 0 else 0
-    st.markdown(f'<p class="highlight-red-large">• Cumplimiento Plan de Mina: {fmt_num(cumplimiento, 1)}% de {fmt_num(total_objetivo, 0)} Ton Objetivo</p>', unsafe_allow_html=True)
+    cumplimiento = (tonelaje_efectivo / total_objetivo * 100) if total_objetivo > 0 else 0
+    st.markdown(f'<p class="highlight-red-large">• Cumplimiento Plan de Mina (Masa Efectiva): {fmt_num(cumplimiento, 1)}% de {fmt_num(total_objetivo, 0)} Ton Target</p>', unsafe_allow_html=True)
     st.progress(min(cumplimiento / 100.0, 1.0))
 
 with col_eval2:
@@ -905,38 +757,22 @@ with col_eval2:
     st.markdown(f'<p class="mf-value">{fmt_num(match_factor, 2)}</p>', unsafe_allow_html=True)
 
     if 0.92 <= match_factor <= 1.08:
-        st.success(f"🟢 **AGENDAMIENTO ÓPTIMO Y RENTABLE EN BANDA VERDE (Match Factor: {fmt_num(match_factor, 2)})** — *Flota acoplada, desperdicio de diésel por ralentí minimizado y costo unitario optimizado.*")
+        st.success(f"🟢 **AGENDAMIENTO ÓPTIMO EN BANDA VERDE (Match Factor: {fmt_num(match_factor, 2)})** — *Flota acoplada, desperdicio de diésel minimizado.*")
     elif 0.85 <= match_factor < 0.92 or 1.08 < match_factor <= 1.15:
-        st.warning(f"🟡 **DESCALCE LEVE EN BANDA AMARILLA (Match Factor: {fmt_num(match_factor, 2)})** — *Alerta preventiva: evalúe ajustar 1 CAEX según prioridad de tonelaje vs costo.*")
-    elif match_factor < 0.85:
-        st.error(f"🔴 **DESCALCE SEVERO POR SUB-TRANSPORTE (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: subutilización de la unidad de carguío.*")
+        st.warning(f"🟡 **DESCALCE LEVE EN BANDA AMARILLA (Match Factor: {fmt_num(match_factor, 2)})** — *Alerta preventiva: evalúe ajustar 1 CAEX.*")
     else:
-        st.error(f"🔴 **DESCALCE SEVERO POR SOBREDIMENSIONAMIENTO (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: exceso de camiones generando colas e ineficiencia OPEX.*")
+        st.error(f"🔴 **DESCALCE SEVERO (Match Factor: {fmt_num(match_factor, 2)})** — *Incompatibilidad en el circuito de acarreo.*")
 
 # ==============================================================================
-# 14. MÓDULO DE SEGUIMIENTO ESPACIAL (PLANO DE MINA CON CONDICIONAL DE IMAGEN)
+# 15. SEGUIMIENTO ESPACIAL EN VIVO (CANVAS INTERACTIVO)
 # ==============================================================================
 st.markdown("---")
-
-img_plano_b64 = obtener_base64_img("Plano_Mina.png") or obtener_base64_img("mapa_mina.png") or obtener_base64_img("plano_mina.png")
-
-if img_plano_b64:
-    header_monitoreo_html = f"""
-        <div style="display: flex; align-items: center; gap: 10px;">
-            <img src="{img_plano_b64}" style="height: 32px; width: auto; vertical-align: middle;">
-            <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 22px; font-weight: 800;">
-                Monitoreo Espacial del Circuito y Control de Fallas en Vivo
-            </h3>
-        </div>
-    """
-    st.markdown(header_monitoreo_html, unsafe_allow_html=True)
-else:
-    st.subheader("Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
+st.subheader("Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
 
 st.markdown(
-    f"💡 **Ciclo Operacional Calculado:** **{fmt_num(t_ciclo_fisico_min, 2)} min** "
-    f"(Carga: {t_carga_min}m | Ida @ {vel_cargado_kmh} km/h: {fmt_num(t_ida_min, 2)}m | "
-    f"Descarga: {t_descarga_min}m | Retorno @ {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
+    f"💡 **Ciclo Operacional Calculado:** **{fmt_num(tiempo_ciclo_efectivo_min, 2)} min** "
+    f"(Carga: 2.2m | Ida @ {fmt_num(vel_cargado_efectiva_kmh, 1)} km/h: {fmt_num(t_ida_min, 2)}m | "
+    f"Descarga: 2.3m | Retorno @ {vel_vacio_kmh} km/h: {fmt_num(t_retorno_min, 2)}m)"
 )
 
 if "acarreo_iniciado" not in st.session_state:
@@ -963,10 +799,10 @@ with col_trig3:
     if st.button("🔄 Reiniciar Postura", use_container_width=True):
         st.session_state.acarreo_iniciado = False
 
-img_caex_cargado_b64 = obtener_base64_img("Camion_CAEX_Cargado.png") or obtener_base64_img("Camión CAEX Cargado.png") or obtener_base64_img("camion_caex_cargado.png")
-img_caex_vacio_b64 = obtener_base64_img("Camion_CAEX_Vacio.png") or obtener_base64_img("Camión CAEX Vacío.png") or obtener_base64_img("camion_caex_vacio.png")
-img_pala_b64 = obtener_base64_img("Gif Pala.jpg") or obtener_base64_img("image_859ef9.png")
-img_cf_b64 = obtener_base64_img("Gif Cargador Frontal.jpg") or obtener_base64_img("image_859f19.png")
+img_caex_cargado_b64 = obtener_base64_img("Camion_CAEX_Cargado.png") or obtener_base64_img("Camión CAEX Cargado.png")
+img_caex_vacio_b64 = obtener_base64_img("Camion_CAEX_Vacio.png") or obtener_base64_img("Camión CAEX Vacío.png")
+img_pala_b64 = obtener_base64_img("Gif Pala.jpg")
+img_cf_b64 = obtener_base64_img("Gif Cargador Frontal.jpg")
 
 caex_agendados = ed_caex[(ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")]
 lista_caex_js = []
@@ -1059,7 +895,7 @@ html_gps_canvas = f"""
         const globalFL = {fl_valor};
 
         const distKm = {distancia_acarreo_km};
-        const speedLoadedKmh = {vel_cargado_kmh};
+        const speedLoadedKmh = {vel_cargado_efectiva_kmh};
         const speedEmptyKmh = {vel_vacio_kmh};
 
         const imgCaexCargado = new Image(); imgCaexCargado.src = "{img_caex_cargado_b64 or ''}";
@@ -1067,11 +903,11 @@ html_gps_canvas = f"""
         const imgPala = new Image(); imgPala.src = "{img_pala_b64 or ''}";
         const imgCF = new Image(); imgCF.src = "{img_cf_b64 or ''}";
 
-        const timeLoading = {t_carga_min};
+        const timeLoading = 2.20;
         const timeHaul = {t_ida_min};
-        const timeDumping = {t_descarga_min};
+        const timeDumping = 2.30;
         const timeReturn = {t_retorno_min};
-        const totalCycleUnits = {t_ciclo_fisico_min};
+        const totalCycleUnits = {tiempo_ciclo_efectivo_min};
 
         const simSpeed = 0.0004;
         const totalNumCaex = Math.max(1, caexList.length);
@@ -1149,9 +985,9 @@ html_gps_canvas = f"""
             ctx.moveTo(xInicio, yRetorno); ctx.lineTo(xFin, yRetorno); ctx.stroke();
 
             ctx.font = "bold 11px Arial"; ctx.fillStyle = "#10B981"; ctx.textAlign = "left";
-            ctx.fillText("VÍA IDA CARGADO (" + distKm.toFixed(1) + " km @ " + speedLoadedKmh + " km/h)", xInicio, yIda - 22);
+            ctx.fillText("VÍA IDA CARGADO (" + distKm.toFixed(1) + " km @ " + speedLoadedKmh.toFixed(1) + " km/h)", xInicio, yIda - 22);
             ctx.fillStyle = "#DC2626";
-            ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ " + speedEmptyKmh + " km/h)", xInicio, yRetorno - 22);
+            ctx.fillText("VÍA RETORNO VACÍO (" + distKm.toFixed(1) + " km @ " + speedEmptyKmh.toFixed(1) + " km/h)", xInicio, yRetorno - 22);
 
             palasList.forEach((p, idx) => {{
                 let py = yIda - 20 - (idx * 46); let px = xInicio - 65; let size = 48;
@@ -1245,7 +1081,7 @@ html_gps_canvas = f"""
                     ctx.fillStyle = "#DC2626"; ctx.fillText("🔴 CAEX " + v.id + " (FALLA)", v.x, v.y + 26);
                 }} else {{
                     ctx.fillStyle = "#0F172A";
-                    let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh + " km/h]" : " [0 km/h]";
+                    let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh.toFixed(0) + " km/h]" : " [0 km/h]";
                     ctx.fillText("CAEX " + v.id + " (" + v.capTon + "T) - " + v.vueltas + " vts" + speedLabel, v.x, v.y + 26);
                 }}
             }});
@@ -1275,71 +1111,6 @@ html_gps_canvas = f"""
                 if (dist < cf.radius) {{ cfList[cf.index].stoppedByFault = !cfList[cf.index].stoppedByFault; }}
             }});
         }});
-
-        canvas.addEventListener('mousemove', function(e) {{
-            const rect = canvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left; const mouseY = e.clientY - rect.top;
-            let hovered = false;
-
-            vehicles.forEach(v => {{
-                let dist = Math.hypot(mouseX - v.x, mouseY - v.y);
-                if (dist < 28) {{
-                    hovered = true; tooltip.style.display = 'block';
-                    tooltip.style.left = (v.x + 15) + 'px'; tooltip.style.top = (v.y - 35) + 'px';
-                    let capEfectiva = v.capTon * globalFL;
-                    let tonAprox = (v.vueltas * capEfectiva).toFixed(0);
-                    let toggleMsg = v.stoppedByFault ? "<span style='color:#10B981;'><b>(Haz clic para REANUDAR)</b></span>" : "<span style='color:#EF4444;'><b>(Haz clic para DETENER POR FALLA)</b></span>";
-                    tooltip.innerHTML = '<b>🚛 CAMIÓN CAEX ' + v.id + '</b><br>' +
-                                        '• Operador(a): <b>' + (v.operador || "Sin Asignar") + '</b><br>' +
-                                        '• Modelo: ' + (v.modelo || "CAEX") + '<br>' +
-                                        '• Cap. Nominal: ' + v.capTon + ' Ton<br>' +
-                                        '• Cap. Efectiva (FL ' + (globalFL*100).toFixed(0) + '%): ' + capEfectiva.toFixed(1) + ' Ton<br>' +
-                                        '• Vueltas Completadas: ' + v.vueltas + '<br>' +
-                                        '• Tonelaje Movido Aprox.: ' + tonAprox + ' Ton<br>' +
-                                        '• Estado: ' + v.statusText + '<br>' + toggleMsg;
-                }}
-            }});
-
-            if (!hovered) {{
-                palaHitboxes.forEach(p => {{
-                    let dist = Math.hypot(mouseX - p.x, mouseY - p.y);
-                    if (dist < p.radius) {{
-                        hovered = true; tooltip.style.display = 'block';
-                        tooltip.style.left = (p.x + 20) + 'px'; tooltip.style.top = (p.y - 35) + 'px';
-                        let pData = palasList[p.index];
-                        let toggleMsg = pData.stoppedByFault ? "<span style='color:#10B981;'><b>(Haz clic para REANUDAR)</b></span>" : "<span style='color:#EF4444;'><b>(Haz clic para DETENER POR FALLA)</b></span>";
-                        let statusText = pData.stoppedByFault ? "🔴 DETENIDA POR FALLA" : "🟢 Operando Normal";
-                        tooltip.innerHTML = '<b>🏗️ PALA DE CARGUÍO ' + pData.id + '</b><br>' +
-                                            '• Operador(a): <b>' + (pData.operador || "Sin Asignar") + '</b><br>' +
-                                            '• Modelo: ' + (pData.modelo || "R9200") + '<br>' +
-                                            '• Capacidad Nominal: 1216 Ton/h<br>' +
-                                            '• Factor Llenado (FL): ' + (globalFL*100).toFixed(0) + '%<br>' +
-                                            '• Estado: ' + statusText + '<br>' + toggleMsg;
-                    }}
-                }});
-            }}
-
-            if (!hovered) {{
-                cfHitboxes.forEach(cf => {{
-                    let dist = Math.hypot(mouseX - cf.x, mouseY - cf.y);
-                    if (dist < cf.radius) {{
-                        hovered = true; tooltip.style.display = 'block';
-                        tooltip.style.left = (cf.x + 20) + 'px'; tooltip.style.top = (cf.y - 35) + 'px';
-                        let cfData = cfList[cf.index];
-                        let toggleMsg = cfData.stoppedByFault ? "<span style='color:#10B981;'><b>(Haz clic para REANUDAR)</b></span>" : "<span style='color:#EF4444;'><b>(Haz clic para DETENER POR FALLA)</b></span>";
-                        let statusText = cfData.stoppedByFault ? "🔴 DETENIDO POR FALLA" : "🟢 Operando Normal";
-                        tooltip.innerHTML = '<b>🚜 CARGADOR FRONTAL ' + cfData.id + '</b><br>' +
-                                            '• Operador(a): <b>' + (cfData.operador || "Sin Asignar") + '</b><br>' +
-                                            '• Modelo: ' + (cfData.modelo || "WA900") + '<br>' +
-                                            '• Rendimiento: ' + cfData.rend + ' Ton/h<br>' +
-                                            '• Factor Llenado (FL): ' + (globalFL*100).toFixed(0) + '%<br>' +
-                                            '• Estado: ' + statusText + '<br>' + toggleMsg;
-                    }}
-                }});
-            }}
-
-            if (!hovered) {{ tooltip.style.display = 'none'; }}
-        }});
     </script>
 </body>
 </html>
@@ -1348,216 +1119,14 @@ html_gps_canvas = f"""
 components.html(html_gps_canvas, height=400)
 
 # ==============================================================================
-# 15. REPORTE, CONCILIACIÓN Y TASA DE ADOPCIÓN PRESCRIPTIVA COMPACTA
+# 16. HISTÓRICO DE AGENDAMIENTOS Y AUDITORÍA GERENCIAL
 # ==============================================================================
 st.markdown("---")
-col_exp1, col_exp2 = st.columns([2, 1])
-
-with col_exp1:
-    st.subheader("📄 Reporte y Ficha Prescriptiva Pre-Turno")
-
-with col_exp2:
-    df_export = pd.DataFrame([{
-        "N° Agendamiento": num_agendamiento, "Fecha": fecha_str, "Hora": hora_str,
-        "Faena / Mina": nombre_mina, "Turno Operativo": turno_seleccionado,
-        "Régimen Guardia": regimen_guardia, "Tipo de Mineral": tipo_mineral,
-        "Responsable Agendamiento": st.session_state.get("usuario_activo", "Mauricio L. Cepeda Mondaca"),
-        "Disponibilidad Física (%)": round(disponibilidad_fisica_val, 1),
-        "Factor de Llenado (%)": round(fl_valor * 100, 0),
-        "Match Factor Calculado": round(match_factor, 2),
-        "Toneladas Proyectadas (Ton)": round(tonelaje_proyectado, 0),
-        "Consumo Diésel Total (Lts)": round(litros_diesel_turno, 0),
-        "Consumo Específico (Lts/Ton)": round(consumo_especifico_lts_ton, 3),
-        "Huella CO2 Operativa (kg CO2/Ton)": round(co2_por_ton, 2),
-        "OPEX Total Turno (USD)": round(costo_opex_total_turno, 2),
-        "Costo Unitario (USD/Ton)": round(costo_unitario_ton, 2),
-        "Beneficio Neto Proyectado (USD)": round(beneficio_neto_usd, 2),
-        "Prescripcion Aceptada": prescripcion_aceptada_val,
-    }])
-
-    csv_data = df_export.to_csv(index=False, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
-    st.download_button(
-        label="📥 Descargar Ficha Pre-Turno (Excel / CSV)", data=csv_data,
-        file_name=f"Ficha_Agendamiento_{num_agendamiento}.csv", mime="text/csv", use_container_width=True,
-    )
-
-st.markdown("---")
-st.subheader("🔄 Conciliación y Cierre de Turno (Plan vs. Actual)")
-
-conn_conc = sqlite3.connect(DB_FILE)
-df_lista_ag = pd.read_sql_query(
-    "SELECT num_agendamiento, fecha_registro, turno, jefe_turno, ton_movidas, consumo_diesel_lts, opex_total_usd, match_factor, prescripcion_aceptada FROM historico_agendamientos ORDER BY id DESC",
-    conn_conc,
-)
-conn_conc.close()
-
-if not df_lista_ag.empty:
-    opciones_ag = df_lista_ag.apply(lambda row: f"{row['num_agendamiento']} | {row['fecha_registro']} | {row['turno']} | Resp: {row['jefe_turno']}", axis=1).tolist()
-    ag_seleccionado_str = st.selectbox("🔍 Seleccionar Agendamiento Guardado para Cierre:", opciones_ag)
-    num_ag_selected = ag_seleccionado_str.split(" | ")[0]
-
-    datos_plan = df_lista_ag[df_lista_ag["num_agendamiento"] == num_ag_selected].iloc[0]
-    ton_plan = float(datos_plan["ton_movidas"])
-    diesel_plan = float(datos_plan["consumo_diesel_lts"])
-    mf_plan = float(datos_plan["match_factor"])
-
-    st.info(f"📋 **Datos Planificados en {num_ag_selected}:** Toneladas Proyectadas = **{fmt_num(ton_plan, 0)} Ton** | Diésel Presupuestado = **{fmt_num(diesel_plan, 0)} Lts** | Match Factor = **{fmt_num(mf_plan, 2)}**")
-
-    col_c1, col_c2 = st.columns(2)
-    with col_c1:
-        st.markdown("#### 📥 Ingreso de Datos Reales de Terreno (Post-Turno)")
-        st.markdown("**Toneladas Reales Extraídas (Ton):**")
-        ton_reales = st.number_input("", value=ton_plan, step=500.0, key="input_ton_reales", label_visibility="collapsed")
-
-        st.markdown("**Consumo Diésel Real (Litros):**")
-        diesel_real = st.number_input("", value=diesel_plan, step=200.0, key="input_diesel_reales", label_visibility="collapsed")
-
-        opciones_causales = ["Falla Mecánica de CAEX", "Falla de Pala / Cargador", "Inasistencia de Operador", "Lluvia / Condición Climática", "Voladura / Tronadura Atrasada", "Atasco / Detención en Chancado", "Otra"]
-        st.markdown("**Causas de Desviación / Imprevistos en Turno (Selección Múltiple):**")
-        causas_seleccionadas = st.multiselect("", options=opciones_causales, default=[], placeholder="Elija opciones", label_visibility="collapsed")
-
-        st.markdown("**Observaciones / Bitácora de Terreno:**")
-        observaciones_turno = st.text_input("", value="", placeholder="Ej: CA321 fuera a las 11:00 hrs; PA622 detenida 45 min...", label_visibility="collapsed")
-
-    with col_c2:
-        st.markdown("#### 📊 Indicadores de Efectividad Operativa")
-        adherencia_plan = (ton_reales / ton_plan * 100) if ton_plan > 0 else 0.0
-        costo_real_usd = n_puestos_carguio * 441.0 * horas_turno + n_caex_activos * 290.0 * horas_turno + (diesel_real * precio_diesel)
-        costo_real_ton = (costo_real_usd / ton_reales) if ton_reales > 0 else 0.0
-
-        if adherencia_plan >= 95.0:
-            st.markdown(f'<p class="adh-green-large">Adherencia al Plan de Mina: {fmt_num(adherencia_plan, 1)}%</p>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<p class="adh-red-large">Adherencia al Plan de Mina: {fmt_num(adherencia_plan, 1)}%</p>', unsafe_allow_html=True)
-
-        st.progress(min(adherencia_plan / 100.0, 1.0))
-        
-        if "prescripcion_aceptada" in df_lista_ag.columns:
-            tasa_adopcion_val = df_lista_ag["prescripcion_aceptada"].mean() * 100
-            col_adop1, col_adop2 = st.columns([1.5, 1])
-            with col_adop1:
-                st.metric("Tasa de Adopción Prescriptiva (Lean Mining)", f"{tasa_adopcion_val:.1f}%", delta="Banda de Eficiencia Lean")
-
-        texto_causas = ", ".join(causas_seleccionadas) if causas_seleccionadas else "Sin imprevistos registrados"
-
-        if adherencia_plan >= 98.0:
-            st.success(f"🎯 **AGENDAMIENTO EXITOSO:** Cumplimiento del {fmt_num(adherencia_plan, 1)}% de la meta proyectada ({num_ag_selected}).")
-        elif adherencia_plan >= 85.0:
-            st.warning(f"⚠️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
-        else:
-            st.error(f"🚨 **DESVIACIÓN CRÍTICA ({fmt_num(adherencia_plan, 1)}%):** Impacto severo por eventos múltiples ({texto_causas}). Costo Real: ${fmt_num(costo_real_ton, 2)} USD/Ton.")
-else:
-    st.info("Aún no hay agendamientos guardados en la base de datos para conciliar.")
-
-# ==============================================================================
-# 16. HISTÓRICO DE AGENDAMIENTOS Y AUDITORÍA GERENCIAL DIRECTA
-# ==============================================================================
-st.markdown("---")
-col_h1, col_h2 = st.columns([3, 1])
-
-with col_h1:
-    st.subheader("Histórico de Agendamientos y Auditoría")
-
-with col_h2:
-    if st.session_state.get("user_id") == "mcepeda":
-        if st.button("🗑 Borrar Histórico (Admin)", type="primary", use_container_width=True):
-            borrar_historico_db()
-            st.success("Histórico eliminado correctamente.")
-            st.rerun()
+st.subheader("Histórico de Agendamientos y Auditoría Gerencial")
 
 conn = sqlite3.connect(DB_FILE)
 df_hist = pd.read_sql_query("SELECT * FROM historico_agendamientos ORDER BY id DESC", conn)
 conn.close()
 
 if not df_hist.empty:
-    rol_actual = st.session_state.get("rol_activo")
-    usuario_actual = st.session_state.get("usuario_activo")
-
-    if rol_actual in ["Administrador", "Gerente Operaciones / Evaluador"]:
-        st.markdown("### 🔒 [EXCLUSIVO GERENCIA] Panel de Control y Auditoría por Períodos")
-
-        c_f1, c_f2 = st.columns(2)
-        with c_f1:
-            supervisores_lista = ["Todos"] + list(df_hist["jefe_turno"].unique())
-            sup_filtro = st.selectbox("👤 Seleccionar Jefe de Mina:", supervisores_lista)
-        with c_f2:
-            periodo_filtro = st.selectbox("📅 Seleccionar Período de Consolidación:", ["Semanal (Ciclo 7x7)", "Mensual", "Anual", "Histórico Completo"])
-
-        df_gerencia = df_hist.copy()
-        if sup_filtro != "Todos":
-            df_gerencia = df_gerencia[df_gerencia["jefe_turno"] == sup_filtro]
-
-        st.dataframe(df_gerencia, use_container_width=True)
-
-        with st.expander(f"📈 Evaluación de Rendimiento Gerencial ({periodo_filtro}) — Supervisor: {sup_filtro}", expanded=True):
-            if periodo_filtro == "Semanal (Ciclo 7x7)":
-                dias_semana = [f"Día {i+1}" for i in range(7)]
-                if len(df_gerencia) >= 7:
-                    df_7dias = df_gerencia.iloc[:7].copy().iloc[::-1].reset_index(drop=True)
-                    df_7dias["Dia_Turno"] = [f"Día {i+1} ({row['fecha_registro']})" for i, row in df_7dias.iterrows()]
-                    ton_propuestas = df_7dias["ton_movidas"].values
-                    ton_reales = (df_7dias["ton_movidas"] * np.random.uniform(0.92, 0.99, size=len(df_7dias))).values
-                    mf_valores = df_7dias["match_factor"].values
-                else:
-                    n = len(df_gerencia)
-                    dias_labels = [f"Día {i+1}" for i in range(7)]
-                    ton_propuestas = np.zeros(7)
-                    ton_reales = np.zeros(7)
-                    mf_valores = np.zeros(7)
-                    if n > 0:
-                        df_rev = df_gerencia.iloc[::-1].reset_index(drop=True)
-                        for i in range(min(n, 7)):
-                            dias_labels[i] = f"Día {i+1} ({df_rev.loc[i, 'fecha_registro']})"
-                            ton_propuestas[i] = df_rev.loc[i, "ton_movidas"]
-                            ton_reales[i] = df_rev.loc[i, "ton_movidas"] * 0.95
-                            mf_valores[i] = df_rev.loc[i, "match_factor"]
-
-                    df_7dias = pd.DataFrame({"Dia_Turno": dias_labels, "ton_movidas": ton_propuestas, "match_factor": mf_valores})
-
-                fig = make_subplots(specs=[[{"secondary_y": True}]])
-                fig.add_trace(go.Bar(x=df_7dias["Dia_Turno"], y=ton_propuestas, name="Toneladas Propuestas (Plan)", marker_color="#0284C7", text=[f"{fmt_num(v, 0)} T" for v in ton_propuestas], textposition="auto"), secondary_y=False)
-                fig.add_trace(go.Bar(x=df_7dias["Dia_Turno"], y=ton_reales, name="Toneladas Reales Logradas", marker_color="#10B981", text=[f"{fmt_num(v, 0)} T" for v in ton_reales], textposition="auto"), secondary_y=False)
-                fig.add_trace(go.Scatter(x=df_7dias["Dia_Turno"], y=mf_valores, name="Match Factor Promedio", mode="lines+markers+text", line=dict(color="#F59E0B", width=3), marker=dict(size=9, color="#F59E0B"), text=[f"MF: {v:.2f}" for v in mf_valores], textposition="top center"), secondary_y=True)
-
-                fig.update_layout(title_text="<b>Cumplimiento Operativo Diario y Match Factor (Ciclo Semanal 7x7)</b>", barmode="group", template="plotly_white", height=450, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), margin=dict(l=20, r=20, t=60, b=20))
-                fig.update_xaxes(title_text="<b>Día de Turno de Agendamiento</b>")
-                fig.update_yaxes(title_text="<b>Toneladas (Ton)</b>", secondary_y=False)
-                fig.update_yaxes(title_text="<b>Match Factor (MF)</b>", secondary_y=True, range=[0, 1.5])
-                st.plotly_chart(fig, use_container_width=True)
-
-                tot_proyectado = sum(ton_propuestas)
-                tot_real = sum(ton_reales)
-                avg_mf = np.mean(mf_valores[mf_valores > 0]) if any(mf_valores > 0) else 0.0
-                cumplimiento_ciclo = (tot_real / tot_proyectado * 100) if tot_proyectado > 0 else 0.0
-
-                m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-                m_col1.metric("Ton Propuestas (Ciclo)", f"{fmt_num(tot_proyectado, 0)} Ton")
-                m_col2.metric("Ton Reales (Ciclo)", f"{fmt_num(tot_real, 0)} Ton")
-                m_col3.metric("Cumplimiento Ciclo", f"{fmt_num(cumplimiento_ciclo, 1)}%")
-                m_col4.metric("Match Factor Promedio", f"{fmt_num(avg_mf, 2)}")
-            else:
-                df_chart = pd.DataFrame({
-                    "Agendamiento / Fecha": df_gerencia["num_agendamiento"] + " (" + df_gerencia["fecha_registro"] + ")",
-                    "Toneladas Proyectadas (Target)": df_gerencia["ton_movidas"],
-                    "Toneladas Reales Entregadas": df_gerencia["ton_movidas"] * 0.96,
-                }).set_index("Agendamiento / Fecha")
-
-                st.line_chart(df_chart, use_container_width=True)
-
-                tot_proyectado = df_gerencia["ton_movidas"].sum()
-                tot_opex = df_gerencia["opex_total_usd"].sum()
-                avg_costo_ton = df_gerencia["costo_ton_usd"].mean()
-                avg_mf = df_gerencia["match_factor"].mean()
-
-                m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-                m_col1.metric("Total Ton Proyectadas", f"{fmt_num(tot_proyectado, 0)} Ton")
-                m_col2.metric("OPEX Acumulado", f"${fmt_num(tot_opex, 2)} USD")
-                m_col3.metric("Costo Promedio", f"${fmt_num(avg_costo_ton, 2)} USD/Ton")
-                m_col4.metric("Match Factor Promedio", f"{fmt_num(avg_mf, 2)}")
-    else:
-        st.markdown(f"### 👤 **Control Operativo de Turno Actual — Supervisor:** `{usuario_actual}`")
-        df_turno_hoy = df_hist[(df_hist["jefe_turno"] == usuario_actual) & (df_hist["fecha_registro"] == fecha_str)]
-
-        if not df_turno_hoy.empty:
-            st.dataframe(df_turno_hoy, use_container_width=True)
-            st.success("📌 Mostrando únicamente el agendamiento activo de la jornada actual.")
+    st.dataframe(df_hist, use_container_width=True)
