@@ -306,7 +306,7 @@ def obtener_base64_img(nombre_archivo):
     return None
 
 # ==============================================================================
-# 8. ESTILOS VISUALES MEJORADOS Y COMPACTACIÓN DE ESPACIOS (SIDEBAR + DERECHA)
+# 8. ESTILOS VISUALES MEJORADOS Y COMPACTACIÓN DE ESPACIOS
 # ==============================================================================
 st.markdown("""
     <style>
@@ -316,7 +316,6 @@ st.markdown("""
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
     }
     
-    /* REDUCCIÓN DE ESPACIOS Y RELLENOS GENERALES EN LA APLICACIÓN */
     .block-container {
         padding-top: 1rem !important;
         padding-bottom: 1.5rem !important;
@@ -329,7 +328,6 @@ st.markdown("""
         color: #0F172A !important; 
     }
     
-    /* SIDEBAR COMPACTO SLATE-900 Y DETALLES EN AMBER-500 */
     section[data-testid="stSidebar"] { 
         background-color: #0F172A !important; 
         border-right: 2px solid #F59E0B !important; 
@@ -358,7 +356,6 @@ st.markdown("""
         border-color: #F59E0B !important;
     }
     
-    /* CONTENEDORES ESTILO CARD */
     .dark-card {
         background-color: #1E293B; border: 1px solid #334155; border-radius: 12px; padding: 10px 14px !important;
         margin-bottom: 8px !important; box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
@@ -368,7 +365,6 @@ st.markdown("""
         margin-bottom: 8px !important; box-shadow: 0px 0px 10px rgba(245, 158, 11, 0.25);
     }
     
-    /* SELECTORES PERSONALIZADOS EN SIDEBAR */
     div[data-baseweb="select"], div[data-baseweb="select"] *, div[data-baseweb="select"] > div,
     div[data-baseweb="select"] div[role="button"] {
         background-color: #1E293B !important; color: #FFFFFF !important; border-color: #F59E0B !important;
@@ -394,14 +390,12 @@ st.markdown("""
         text-align: center; font-size: 13px; font-weight: 800; color: #FFFFFF !important; margin-bottom: 4px;
     }
     
-    /* BOTONES LATERALES Y GENERALES */
     section[data-testid="stSidebar"] button, section[data-testid="stSidebar"] button *,
     section[data-testid="stSidebar"] button p, section[data-testid="stSidebar"] button span {
         background-color: #F59E0B !important; color: #000000 !important; -webkit-text-fill-color: #000000 !important;
         font-weight: 900 !important; font-size: 13px !important; border-radius: 8px !important;
     }
     
-    /* HEADER BANNER MODERNO GLASSMORPHISM */
     .main-title-card {
         background: #FFFFFF; padding: 14px 22px; border-radius: 14px; border: 1px solid #E2E8F0;
         box-shadow: 0px 8px 20px -5px rgba(0, 0, 0, 0.05); text-align: center; width: 100%; margin: 0px auto 12px auto;
@@ -412,7 +406,6 @@ st.markdown("""
         background: linear-gradient(90deg, #F59E0B 0%, #0284C7 50%, #10B981 100%);
     }
     
-    /* TARJETAS KPI MODERNAS */
     div[data-testid="stMetric"] {
         background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important;
         border-radius: 10px !important; padding: 10px 12px !important;
@@ -427,17 +420,14 @@ st.markdown("""
     div[data-testid="stMetricLabel"] p { color: #64748B !important; font-weight: 800 !important; font-size: 11px !important; text-transform: uppercase; letter-spacing: 0.5px; }
     div[data-testid="stMetricValue"] div { color: #0F172A !important; font-size: 18px !important; font-weight: 900 !important; white-space: nowrap !important; }
 
-    /* ESTILOS DE TEXTO Y SEMÁFOROS */
     .mf-label { font-size: 16px !important; font-weight: 800 !important; color: #0F172A !important; margin-bottom: 2px !important; }
     .mf-value { font-size: 34px !important; font-weight: 900 !important; color: #0284C7 !important; margin-top: 0px !important; }
     .highlight-red-large { color: #DC2626 !important; font-size: 14px !important; font-weight: 800 !important; margin-bottom: 4px !important; }
     .adh-green-large { color: #10B981 !important; font-size: 18px !important; font-weight: 900 !important; margin-bottom: 4px !important; }
     .adh-red-large { color: #EF4444 !important; font-size: 18px !important; font-weight: 900 !important; margin-bottom: 4px !important; }
     
-    /* TABLAS DE DATOS */
     div[data-testid="stDataFrame"] { background-color: #FFFFFF !important; border: 1px solid #E2E8F0 !important; border-radius: 10px; box-shadow: 0px 2px 6px rgba(0,0,0,0.02); }
     
-    /* BOTONES PRIMARIOS */
     div.stButton > button[kind="primary"] {
         background-color: #EF4444 !important; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important;
         border: none !important; outline: none !important; font-weight: 900 !important;
@@ -449,7 +439,6 @@ st.markdown("""
     }
     div.stButton > button[kind="primary"]:hover { background-color: #DC2626 !important; }
 
-    /* REDUCCIÓN DE ESPACIO ENTRE LÍNEAS HORIZONTALES (HR) */
     hr { margin-top: 12px !important; margin-bottom: 12px !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -458,7 +447,7 @@ LOGO_PATH = "Logo_OptiMatch.png"
 LOGO_ATACAMA_PATH = "Logo_Atacama_Norte.png"
 
 # ==============================================================================
-# 9. SISTEMA DE AUTENTICACIÓN PRIVADO CON DISEÑO TAILWIND
+# 9. SISTEMA DE AUTENTICACIÓN PRIVADO
 # ==============================================================================
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
@@ -504,7 +493,7 @@ if not st.session_state.autenticado:
     st.stop()
 
 # ==============================================================================
-# 10. CARÁTULA Y BARRA LATERAL (SIDEBAR) REORGANIZADA Y SIN RECUADROS SOBRANTES
+# 10. CARÁTULA Y BARRA LATERAL (SIDEBAR) REORGANIZADA
 # ==============================================================================
 if os.path.exists(LOGO_PATH):
     c_hdr1, c_hdr2, c_hdr3 = st.columns([1, 1.2, 1])
@@ -591,7 +580,6 @@ merma_base_valor = FACTORES_MATERIAL[preset_fl]["merma_base_pct"]
 
 st.sidebar.markdown("---")
 st.sidebar.header("Pistas de Acarreo")
-# --- ELIMINADO EL RECUADRO SOBRANTE EN PISTAS DE ACARREO ---
 perfil_rampa_sel = st.sidebar.selectbox("Pendiente y Calidad de Camino", list(PERFIL_RAMPAS.keys()), key="select_rampa_box")
 
 st.sidebar.markdown("---")
@@ -609,7 +597,6 @@ st.sidebar.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-# --- ELIMINADO EL RECUADRO SOBRANTE EN TIPO DE MINERAL ---
 tipo_mineral = st.sidebar.selectbox("Tipo de Operación / Mineral", [
     "Caliche / Yodo", "Cobre (Cu)", "Oro (Au)", "Plata (Ag)", "Hierro (Fe)",
     "Litio (Li / LCE)", "Carbón / Energéticos", "No Metálicos / Canteras", "Movimiento de Tierras / Obras Civiles"
@@ -683,7 +670,7 @@ if "Cap_Ton" not in st.session_state.caex_df.columns:
     st.session_state.caex_df["Cap_Ton"] = 90.0
 
 # ==============================================================================
-# 12. TABLAS DE GESTIÓN Y ALERTAS PM
+# 12. TABLAS DE GESTIÓN Y ALERTAS PM POR TARJETAS Y PESTAÑAS
 # ==============================================================================
 b64_logo = obtener_base64_img(LOGO_PATH) or obtener_base64_img("Logo_OptiMatch.png")
 img_tag_logo = f'<img src="{b64_logo}" style="height: 32px; width: auto; vertical-align: middle; margin-right: 8px;">' if b64_logo else '<span style="font-size: 22px; vertical-align: middle; margin-right: 8px;">⛏️</span>'
@@ -712,7 +699,6 @@ def reindexar_flota(df):
 
 col_t1, col_t2, col_t3 = st.columns(3)
 
-# --- COLUMNA 1: PALAS ---
 with col_t1:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
@@ -749,7 +735,6 @@ with col_t1:
     )
     st.session_state.palas_df = reindexar_flota(ed_palas)
 
-# --- COLUMNA 2: CARGADORES ---
 with col_t2:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
@@ -786,7 +771,6 @@ with col_t2:
     )
     st.session_state.cf_df = reindexar_flota(ed_cf)
 
-# --- COLUMNA 3: CAEX ---
 with col_t3:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
@@ -842,13 +826,13 @@ def evaluar_alerta_equipo(id_equipo, horometro_actual, tipo_equipo="CAEX"):
     proximo_horometro = horometro_actual + horas_para_pm
     
     if proximo_horometro % 2000 == 0:
-        tipo_pm = "PM 2.000 hrs (Overhaul / Componentes Mayores)"
+        tipo_pm = "PM 2.000 hrs (Overhaul)"
     elif proximo_horometro % 1000 == 0:
-        tipo_pm = "PM 1.000 hrs (Tren Potencia / Mando Final)"
+        tipo_pm = "PM 1.000 hrs (Tren Potencia)"
     elif proximo_horometro % 500 == 0:
-        tipo_pm = "PM 500 hrs (Aceites / Filtros Motor)"
+        tipo_pm = "PM 500 hrs (Aceites / Filtros)"
     else:
-        tipo_pm = "PM 250 hrs (Engrase / Inspección Básico)"
+        tipo_pm = "PM 250 hrs (Inspección / Engrase)"
         
     if horas_para_pm <= 0:
         estado_alerta = "🔴 PAUTA VENCIDA"
@@ -871,26 +855,117 @@ st.subheader("🛠️ Monitoreo Individual de Mantenimiento y Alertas de Taller"
 tab_maint1, tab_maint2 = st.tabs(["📋 Estado de Pautas por Equipo", "📊 Impacto en Disponibilidad Física (DF)"])
 
 with tab_maint1:
-    alertas_caex_lista = []
-    equipos_criticos = []
+    alertas_caex = [evaluar_alerta_equipo(row["ID"], row["Horómetro Entrada"], "CAEX") for _, row in ed_caex.iterrows() if row["Estado"] == "🟢 Disponible"]
+    alertas_palas = [evaluar_alerta_equipo(row["ID"], row["Horómetro Entrada"], "Pala") for _, row in ed_palas.iterrows() if row["Estado"] == "🟢 Disponible"]
+    alertas_cf = [evaluar_alerta_equipo(row["ID"], row["Horómetro Entrada"], "Cargador") for _, row in ed_cf.iterrows() if row["Estado"] == "🟢 Disponible"]
 
-    for idx, row in ed_caex.iterrows():
-        if row["Estado"] == "🟢 Disponible":
-            eval_eq = evaluar_alerta_equipo(row["ID"], row["Horómetro Entrada"], tipo_equipo="CAEX")
-            alertas_caex_lista.append(eval_eq)
-            if "⚠️" in eval_eq["Estado PM"] or "🔴" in eval_eq["Estado PM"]:
-                equipos_criticos.append(eval_eq)
+    todos_equipos = alertas_caex + alertas_palas + alertas_cf
+    criticos = [eq for eq in todos_equipos if "⚠️" in eq["Estado PM"] or "🔴" in eq["Estado PM"]]
 
-    if equipos_criticos:
-        for eq in equipos_criticos:
-            st.warning(
-                f"⚠️ **ALERTA PREVENTIVA DE TALLER:** El equipo **{eq['ID Equipo']}** se encuentra a "
-                f"**{eq['Faltan (h)']} hrs** de cumplir su **{eq['Próxima Pauta']}** "
-                f"(Horómetro actual: {eq['Horómetro Actual (h)']} hrs). Planifique su relevo en taller."
-            )
+    if criticos:
+        for eq in criticos:
+            st.markdown(f"""
+                <div style="
+                    background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
+                    border-left: 5px solid #F59E0B;
+                    border-top: 1px solid #334155;
+                    border-right: 1px solid #334155;
+                    border-bottom: 1px solid #334155;
+                    border-radius: 10px;
+                    padding: 8px 14px;
+                    margin-bottom: 12px;
+                    box-shadow: 0px 4px 12px rgba(245, 158, 11, 0.15);
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                ">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 20px;">⚠️</span>
+                        <div>
+                            <span style="color: #F59E0B; font-weight: 900; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; display: block;">
+                                ALERTA PREVENTIVA DE TALLER EN VIVO — EQUIPO {eq['ID Equipo']}
+                            </span>
+                            <span style="color: #F8FAFC; font-size: 12px; font-weight: 600;">
+                                Próxima pauta: <b style="color: #38BDF8;">{eq['Próxima Pauta']}</b> | Horómetro actual: <b>{eq['Horómetro Actual (h)']} hrs</b>
+                            </span>
+                        </div>
+                    </div>
+                    <div style="
+                        background-color: #FEF3C7;
+                        border: 1px solid #F59E0B;
+                        color: #92400E;
+                        padding: 4px 10px;
+                        border-radius: 6px;
+                        font-weight: 900;
+                        font-size: 12px;
+                        white-space: nowrap;
+                    ">
+                        ⏳ FALTAN {eq['Faltan (h)']} HRS
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
-    st.markdown("#### 📋 Control de Pautas de Mantención por Equipo Operativo")
-    st.dataframe(pd.DataFrame(alertas_caex_lista), use_container_width=True, hide_index=True)
+    subtab_caex, subtab_palas, subtab_cf = st.tabs([
+        f"🚚 Flota CAEX ({len(alertas_caex)})", 
+        f"🏗️ Palas de Carguío ({len(alertas_palas)})", 
+        f"🚜 Cargadores Frontales ({len(alertas_cf)})"
+    ])
+
+    def renderizar_tarjetas_equipo(lista_equipos):
+        if not lista_equipos:
+            st.info("No hay equipos activos agendados en esta categoría.")
+            return
+
+        cols = st.columns(3)
+        for idx, eq in enumerate(lista_equipos):
+            col_target = cols[idx % 3]
+            es_critico = "⚠️" in eq["Estado PM"] or "🔴" in eq["Estado PM"]
+            
+            border_color = "#F59E0B" if es_critico else "#CBD5E1"
+            bg_badge = "#FEF3C7" if es_critico else "#D1FAE5"
+            text_badge = "#92400E" if es_critico else "#065F46"
+            
+            with col_target:
+                st.markdown(f"""
+                    <div style="
+                        background-color: #FFFFFF;
+                        border: 1.5px solid {border_color};
+                        border-radius: 10px;
+                        padding: 10px 12px;
+                        margin-bottom: 10px;
+                        box-shadow: 0px 2px 6px rgba(0,0,0,0.04);
+                    ">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #E2E8F0; padding-bottom: 6px; margin-bottom: 8px;">
+                            <span style="font-size: 15px; font-weight: 900; color: #0F172A;">🆔 {eq['ID Equipo']}</span>
+                            <span style="background-color: {bg_badge}; color: {text_badge}; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 4px;">
+                                {eq['Estado PM']}
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 11px;">
+                            <div>
+                                <span style="color: #64748B; font-weight: 700; display: block;">HORÓMETRO ACTUAL</span>
+                                <span style="color: #0F172A; font-weight: 900; font-size: 13px;">{eq['Horómetro Actual (h)']} hrs</span>
+                            </div>
+                            <div>
+                                <span style="color: #64748B; font-weight: 700; display: block;">FALTA PARA PM</span>
+                                <span style="color: {'#DC2626' if es_critico else '#0284C7'}; font-weight: 900; font-size: 13px;">{eq['Faltan (h)']} hrs</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #E2E8F0;">
+                            <span style="color: #64748B; font-weight: 700; font-size: 10px; display: block;">PRÓXIMA PAUTA DE MANTENCIÓN</span>
+                            <span style="color: #0F172A; font-weight: 800; font-size: 11px;">🛠️ {eq['Próxima Pauta']}</span>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+    with subtab_caex:
+        renderizar_tarjetas_equipo(alertas_caex)
+
+    with subtab_palas:
+        renderizar_tarjetas_equipo(alertas_palas)
+
+    with subtab_cf:
+        renderizar_tarjetas_equipo(alertas_cf)
 
 with tab_maint2:
     st.markdown("#### 📊 Balance de Disponibilidad Física (Pérdidas MP vs. Regla 80/20)")
@@ -1036,7 +1111,7 @@ with col_eval2:
         st.error(f"🔴 **DESCALCE SEVERO POR SOBREDIMENSIONAMIENTO (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: exceso de camiones generando colas e ineficiencia OPEX.*")
 
 # ==============================================================================
-# 15. MÓDULO DE SEGUIMIENTO ESPACIAL (PLANO DE MINA CON CONDICIONAL DE IMAGEN)
+# 15. MÓDULO DE SEGUIMIENTO ESPACIAL (PLANO DE MINA EN VIVO)
 # ==============================================================================
 st.markdown("---")
 
@@ -1470,7 +1545,7 @@ html_gps_canvas = f"""
 components.html(html_gps_canvas, height=400)
 
 # ==============================================================================
-# 16. REPORTE, CONCILIACIÓN Y TASA DE ADOPCIÓN PRESCRIPTIVA COMPACTA
+# 16. REPORTE Y CONCILIACIÓN PRE-TURNO
 # ==============================================================================
 st.markdown("---")
 col_exp1, col_exp2 = st.columns([2, 1])
