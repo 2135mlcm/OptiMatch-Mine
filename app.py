@@ -118,10 +118,10 @@ def init_db():
 init_db()
 
 # ==============================================================================
-# 5. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA
+# 5. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA MULTIMODELO (AJUSTADO CON FL)
 # ==============================================================================
 def ejecutar_simulacion_analitica(
-    n_camiones,
+    caex_activos_df,
     n_palas=1,
     cv=0.3,
     duracion_horas=10.0,
@@ -130,12 +130,18 @@ def ejecutar_simulacion_analitica(
     fl_factor=0.88,
     seed=42,
 ):
+    n_camiones = len(caex_activos_df)
     t_carguio_medio = 2.20
     t_transito_medio = 14.20
     t_maniobras_medio = 2.30
-    cap_tolva_base = 44.6
-    
-    cap_tolva = cap_tolva_base * (fl_factor / 0.88)
+
+    # Capacidad promedio nominal multiplicada directamente por el Factor de Llenado del balde/tolva (FL)
+    if n_camiones > 0 and "Cap_Ton" in caex_activos_df.columns:
+        cap_tolva_nominal = caex_activos_df["Cap_Ton"].mean()
+    else:
+        cap_tolva_nominal = 90.0
+
+    cap_tolva_efectiva = cap_tolva_nominal * fl_factor
 
     t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio
     mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base) if (n_palas * t_ciclo_base) > 0 else 0.0
@@ -147,7 +153,9 @@ def ejecutar_simulacion_analitica(
 
     t_ciclo_efectivo = t_ciclo_base + espera_promedio_cola
     vueltas_turno = (duracion_horas * 60.0) / t_ciclo_efectivo if t_ciclo_efectivo > 0 else 0.0
-    toneladas_totales = n_camiones * vueltas_turno * cap_tolva
+    
+    # Toneladas exactas considerando el factor de llenado real
+    toneladas_totales = n_camiones * vueltas_turno * cap_tolva_efectiva
 
     horas_transito = (vueltas_turno * t_ciclo_base) / 60.0
     horas_ralenti = (vueltas_turno * espera_promedio_cola) / 60.0
@@ -252,7 +260,7 @@ def obtener_base64_img(nombre_archivo):
     return None
 
 # ==============================================================================
-# 7. CSS PERSONALIZADO (Tarjetas KPI Estilizadas)
+# 7. CSS PERSONALIZADO
 # ==============================================================================
 st.markdown("""
     <style>
@@ -306,24 +314,12 @@ st.markdown("""
     div[data-testid="stDataFrame"] { background-color: #F1F5F9 !important; border: 2px solid #CBD5E1 !important; border-radius: 10px; }
     
     div[data-testid="stMetric"] {
-        background-color: #FFFFFF !important;
-        border: 2px solid #F59E0B !important;
-        border-radius: 10px !important;
-        padding: 12px 14px !important;
-        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.06) !important;
-        text-align: center !important;
+        background-color: #FFFFFF !important; border: 2px solid #F59E0B !important;
+        border-radius: 10px !important; padding: 12px 14px !important;
+        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.06) !important; text-align: center !important;
     }
-    div[data-testid="stMetricLabel"] p {
-        color: #475569 !important;
-        font-weight: 800 !important;
-        font-size: 13px !important;
-    }
-    div[data-testid="stMetricValue"] div {
-        color: #0F172A !important;
-        font-size: 20px !important;
-        font-weight: 900 !important;
-        white-space: nowrap !important;
-    }
+    div[data-testid="stMetricLabel"] p { color: #475569 !important; font-weight: 800 !important; font-size: 13px !important; }
+    div[data-testid="stMetricValue"] div { color: #0F172A !important; font-size: 20px !important; font-weight: 900 !important; white-space: nowrap !important; }
 
     .mf-label { font-size: 22px !important; font-weight: 800 !important; color: #0F172A !important; margin-bottom: 4px !important; }
     .mf-value { font-size: 36px !important; font-weight: 900 !important; color: #0284C7 !important; margin-top: 0px !important; }
@@ -469,7 +465,7 @@ st.sidebar.markdown("</div>", unsafe_allow_html=True)
 horas_turno = st.sidebar.number_input("Horas Efectivas Turno", value=10.0, step=0.5)
 
 st.sidebar.markdown("---")
-st.sidebar.header("⚙️️ Presets de Terreno (Pre-turno)")
+st.sidebar.header("⚙ Presets de Terreno (Pre-turno)")
 preset_fl = st.sidebar.select_slider(
     "Factor de Llenado Balde/Tolva (FL)",
     options=["Roca Gruesa (80%)", "Estándar (88%)", "Fino / Seco (92%)"],
@@ -541,7 +537,7 @@ t_ciclo_fisico_min = 18.70
 st.sidebar.markdown("---")
 
 # ==============================================================================
-# 10. INICIALIZACIÓN DE FLOTA AMPLIADA CON HORÓMETROS
+# 10. INICIALIZACIÓN DE FLOTA MULTIMODELO (CAPACIDAD REAL 60T, 90T, 140T)
 # ==============================================================================
 if "palas_df" not in st.session_state:
     st.session_state.palas_df = pd.DataFrame([
@@ -561,19 +557,22 @@ if "cf_df" not in st.session_state:
 
 if "caex_df" not in st.session_state:
     st.session_state.caex_df = pd.DataFrame([
-        {"Item": 1, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA319", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 12450.0, "Operador": "Pedro Morales", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 2, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA320", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 11200.5, "Operador": "Luis Tapia", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 3, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA321", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 12241.5, "Operador": "Andrés Castro", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 4, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA322", "Modelo": "CAT 789D", "Horómetro Entrada": 15300.2, "Operador": "Diego Rojas", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 5, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA323", "Modelo": "CAT 789D", "Horómetro Entrada": 8400.0, "Operador": "Gonzalo Vera", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 6, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA324", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 10120.0, "Operador": "Felipe Salinas", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 7, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA325", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 13400.0, "Operador": "Jaime Silva", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 8, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA326", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 9150.0, "Operador": "Marcelo Soto", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 9, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA327", "Modelo": "CAT 777G", "Horómetro Entrada": 11800.0, "Operador": "Javier Fuentes", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 10, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA328", "Modelo": "CAT 777G", "Horómetro Entrada": 7600.0, "Operador": "Cristian Muñoz", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 11, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA329", "Modelo": "Hitachi EH3500", "Horómetro Entrada": 14500.0, "Operador": "Sin Asignar", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 12, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA330", "Modelo": "Hitachi EH3500", "Horómetro Entrada": 16200.0, "Operador": "Sin Asignar", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 1, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA319", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 12450.0, "Operador": "Pedro Morales", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
+        {"Item": 2, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA320", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 11200.5, "Operador": "Luis Tapia", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
+        {"Item": 3, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA321", "Modelo": "Komatsu HD785-7", "Cap_Ton": 90.0, "Horómetro Entrada": 12241.5, "Operador": "Andrés Castro", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 4, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA322", "Modelo": "Komatsu HD785-7", "Cap_Ton": 90.0, "Horómetro Entrada": 15300.2, "Operador": "Diego Rojas", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 5, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA323", "Modelo": "CAT 777F", "Cap_Ton": 90.0, "Horómetro Entrada": 8400.0, "Operador": "Gonzalo Vera", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 6, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA324", "Modelo": "CAT 777F", "Cap_Ton": 90.0, "Horómetro Entrada": 10120.0, "Operador": "Felipe Salinas", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 7, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA325", "Modelo": "CAT 785D", "Cap_Ton": 140.0, "Horómetro Entrada": 13400.0, "Operador": "Jaime Silva", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
+        {"Item": 8, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA326", "Modelo": "CAT 785D", "Cap_Ton": 140.0, "Horómetro Entrada": 9150.0, "Operador": "Marcelo Soto", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
+        {"Item": 9, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA327", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 11800.0, "Operador": "Javier Fuentes", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
+        {"Item": 10, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA328", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 7600.0, "Operador": "Cristian Muñoz", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
+        {"Item": 11, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA329", "Modelo": "Komatsu HD785-7", "Cap_Ton": 90.0, "Horómetro Entrada": 14500.0, "Operador": "Sin Asignar", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 12, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA330", "Modelo": "CAT 785D", "Cap_Ton": 140.0, "Horómetro Entrada": 16200.0, "Operador": "Sin Asignar", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
     ])
+
+if "Cap_Ton" not in st.session_state.caex_df.columns:
+    st.session_state.caex_df["Cap_Ton"] = 90.0
 
 # ==============================================================================
 # 11. TABLAS DE GESTIÓN, ALERTAS PM Y DISPONIBILIDAD FÍSICA (DF%)
@@ -590,7 +589,7 @@ st.markdown(f"""
             </h2>
         </div>
         <p style="color: #475569; font-weight: 600; margin: 2px 0px 0px 0px; font-size: 13px; text-align: center; line-height: 1.2;">
-            Selección de disponibilidad mecánica, horómetros y asignación de equipos para el turno
+            Selección de disponibilidad mecánica, horómetros, capacidad real de tolva (60T, 90T, 140T) y asignación para el turno
         </p>
     </div>
 """, unsafe_allow_html=True)
@@ -701,8 +700,8 @@ with col_t3:
         if st.button("➕ Agregar Equipo", key="add_caex", use_container_width=True):
             nuevo_caex = {
                 "Item": len(st.session_state.caex_df) + 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo",
-                "ID": f"CA{318 + len(st.session_state.caex_df) + 1}", "Modelo": "Komatsu HD1500-8", "Horómetro Entrada": 10000.0,
-                "Operador": "Sin Asignar", "Rend_TonH": 143, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00,
+                "ID": f"CA{318 + len(st.session_state.caex_df) + 1}", "Modelo": "Komatsu HD785-7", "Cap_Ton": 90.0, "Horómetro Entrada": 10000.0,
+                "Operador": "Sin Asignar", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00,
             }
             st.session_state.caex_df = pd.concat([st.session_state.caex_df, pd.DataFrame([nuevo_caex])], ignore_index=True)
             st.rerun()
@@ -711,6 +710,7 @@ with col_t3:
         st.session_state.caex_df,
         column_config={
             "Item": st.column_config.NumberColumn("N° Item", disabled=True),
+            "Cap_Ton": st.column_config.NumberColumn("Capacidad (Ton)", min_value=10.0, max_value=400.0, format="%.0f Ton"),
             "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
             "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f")
         },
@@ -718,12 +718,10 @@ with col_t3:
     )
     st.session_state.caex_df = reindexar_flota(ed_caex)
 
-# --- CÁLCULO DE DISPONIBILIDAD FÍSICA GLOBAL (DF%) ---
 total_caex = len(ed_caex)
 caex_disponibles = len(ed_caex[ed_caex["Estado"] == "🟢 Disponible"])
 disponibilidad_fisica_val = (caex_disponibles / total_caex * 100.0) if total_caex > 0 else 0.0
 
-# --- SECCIÓN DE MANTENIMIENTO PREVENTIVO (PM) Y ALERTAS INDIVIDUALES ---
 MATRIZ_TALLER_MP = {
     "CAEX": {"horas_min": 48.0, "horas_max": 68.0, "perdida_df_min": 2.4, "perdida_df_max": 3.4},
     "Pala": {"horas_min": 72.0, "horas_max": 96.0, "perdida_df_min": 3.6, "perdida_df_max": 4.8},
@@ -811,7 +809,7 @@ n_puestos_carguio = max(1, len(palas_activas) + len(cf_activos))
 n_caex_activos = len(caex_activos)
 
 res_sim = ejecutar_simulacion_analitica(
-    n_camiones=n_caex_activos,
+    caex_activos_df=caex_activos,
     n_palas=n_puestos_carguio,
     cv=0.3,
     duracion_horas=horas_turno,
@@ -920,7 +918,6 @@ with col_eval2:
 # ==============================================================================
 st.markdown("---")
 
-# BÚSQUEDA CONDICIONAL DE IMAGEN TIPO PLANO DE MINA
 img_plano_b64 = obtener_base64_img("Plano_Mina.png") or obtener_base64_img("mapa_mina.png") or obtener_base64_img("plano_mina.png")
 
 if img_plano_b64:
@@ -934,7 +931,6 @@ if img_plano_b64:
     """
     st.markdown(header_monitoreo_html, unsafe_allow_html=True)
 else:
-    # SIN ICONO SI NO HAY PLANO
     st.subheader("Monitoreo Espacial del Circuito y Control de Fallas en Vivo")
 
 st.markdown(
@@ -977,9 +973,10 @@ lista_caex_js = []
 for _, r in caex_agendados.iterrows():
     lista_caex_js.append({
         "id": str(r.get("ID", "CAEX")),
-        "modelo": str(r.get("Modelo", "HD1500-8")),
+        "modelo": str(r.get("Modelo", "CAEX")),
+        "capTon": float(r.get("Cap_Ton", 90.0)),
         "operador": str(r.get("Operador", "Sin Operador")),
-        "rend": float(r.get("Rend_TonH", 143.0)),
+        "rend": float(r.get("Rend_TonH", 210.0)),
     })
 
 palas_activas_js = []
@@ -1035,7 +1032,7 @@ html_gps_canvas = f"""
 <body>
     <div id="mapContainer">
         <div class="kpi-panel">
-            <div class="kpi-title">📊 METRICAS DE VUELTAS Y DINÁMICA DE TURNO</div>
+            <div class="kpi-title">📊 MÉTRICAS DE VUELTAS Y DINÁMICA DE TURNO</div>
             <div class="kpi-grid">
                 <div><span>META VTS</span><div class="kpi-val" id="kpiMeta">{vueltas_totales_meta}</div></div>
                 <div><span>ACTUAL</span><div class="kpi-val" style="color:#10B981;" id="kpiActual">0</div></div>
@@ -1059,6 +1056,7 @@ html_gps_canvas = f"""
         const palasListRaw = {palas_json_str};
         const cfListRaw = {cf_json_str};
         const isTrackingActive = {acarreo_activo_bool};
+        const globalFL = {fl_valor};
 
         const distKm = {distancia_acarreo_km};
         const speedLoadedKmh = {vel_cargado_kmh};
@@ -1087,7 +1085,7 @@ html_gps_canvas = f"""
             let offset = idx * staggerInterval;
             let assignedEq = idx % Math.max(1, (palasList.length + cfList.length));
             return {{
-                id: c.id, modelo: c.modelo, operador: c.operador, rend: c.rend,
+                id: c.id, modelo: c.modelo, capTon: c.capTon || 90.0, operador: c.operador, rend: c.rend,
                 cycleTime: offset, prevCycleTime: offset, vueltas: 0, x: 0, y: 0,
                 isLoaded: false, statusText: "Postura Previa (Listo para Cargar)",
                 speedKmh: 0, isReturning: false, equipmentAssigned: assignedEq, stoppedByFault: false
@@ -1248,7 +1246,7 @@ html_gps_canvas = f"""
                 }} else {{
                     ctx.fillStyle = "#0F172A";
                     let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh + " km/h]" : " [0 km/h]";
-                    ctx.fillText("CAEX " + v.id + " (" + v.vueltas + " vts)" + speedLabel, v.x, v.y + 26);
+                    ctx.fillText("CAEX " + v.id + " (" + v.capTon + "T) - " + v.vueltas + " vts" + speedLabel, v.x, v.y + 26);
                 }}
             }});
 
@@ -1288,12 +1286,14 @@ html_gps_canvas = f"""
                 if (dist < 28) {{
                     hovered = true; tooltip.style.display = 'block';
                     tooltip.style.left = (v.x + 15) + 'px'; tooltip.style.top = (v.y - 35) + 'px';
-                    let tonAprox = (v.vueltas * 44.6).toFixed(0);
+                    let capEfectiva = v.capTon * globalFL;
+                    let tonAprox = (v.vueltas * capEfectiva).toFixed(0);
                     let toggleMsg = v.stoppedByFault ? "<span style='color:#10B981;'><b>(Haz clic para REANUDAR)</b></span>" : "<span style='color:#EF4444;'><b>(Haz clic para DETENER POR FALLA)</b></span>";
                     tooltip.innerHTML = '<b>🚛 CAMIÓN CAEX ' + v.id + '</b><br>' +
                                         '• Operador(a): <b>' + (v.operador || "Sin Asignar") + '</b><br>' +
-                                        '• Modelo: ' + (v.modelo || "HD1500-8") + '<br>' +
-                                        '• Capacidad Tolva: 44.6 Ton<br>' +
+                                        '• Modelo: ' + (v.modelo || "CAEX") + '<br>' +
+                                        '• Cap. Nominal: ' + v.capTon + ' Ton<br>' +
+                                        '• Cap. Efectiva (FL ' + (globalFL*100).toFixed(0) + '%): ' + capEfectiva.toFixed(1) + ' Ton<br>' +
                                         '• Vueltas Completadas: ' + v.vueltas + '<br>' +
                                         '• Tonelaje Movido Aprox.: ' + tonAprox + ' Ton<br>' +
                                         '• Estado: ' + v.statusText + '<br>' + toggleMsg;
@@ -1313,6 +1313,7 @@ html_gps_canvas = f"""
                                             '• Operador(a): <b>' + (pData.operador || "Sin Asignar") + '</b><br>' +
                                             '• Modelo: ' + (pData.modelo || "R9200") + '<br>' +
                                             '• Capacidad Nominal: 1216 Ton/h<br>' +
+                                            '• Factor Llenado (FL): ' + (globalFL*100).toFixed(0) + '%<br>' +
                                             '• Estado: ' + statusText + '<br>' + toggleMsg;
                     }}
                 }});
@@ -1331,6 +1332,7 @@ html_gps_canvas = f"""
                                             '• Operador(a): <b>' + (cfData.operador || "Sin Asignar") + '</b><br>' +
                                             '• Modelo: ' + (cfData.modelo || "WA900") + '<br>' +
                                             '• Rendimiento: ' + cfData.rend + ' Ton/h<br>' +
+                                            '• Factor Llenado (FL): ' + (globalFL*100).toFixed(0) + '%<br>' +
                                             '• Estado: ' + statusText + '<br>' + toggleMsg;
                     }}
                 }});
@@ -1430,7 +1432,6 @@ if not df_lista_ag.empty:
 
         st.progress(min(adherencia_plan / 100.0, 1.0))
         
-        # CÁLCULO Y MUESTRA COMPACTA DE LA TASA DE ADOPCIÓN PRESCRIPTIVA DEBAJO DE LA ADHERENCIA
         if "prescripcion_aceptada" in df_lista_ag.columns:
             tasa_adopcion_val = df_lista_ag["prescripcion_aceptada"].mean() * 100
             col_adop1, col_adop2 = st.columns([1.5, 1])
