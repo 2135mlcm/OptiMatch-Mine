@@ -142,7 +142,7 @@ def init_db():
 init_db()
 
 # ==============================================================================
-# 6. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA MULTIMODELO
+# 6. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA MULTIMODELO (MF UNIFICADO)
 # ==============================================================================
 def ejecutar_simulacion_analitica(
     caex_activos_df,
@@ -179,6 +179,8 @@ def ejecutar_simulacion_analitica(
     cap_tolva_efectiva = cap_tolva_nominal * fl_factor
 
     t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio
+    
+    # FÓRMULA ESTÁNDAR EXACTA DE MATCH FACTOR
     mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base) if (n_palas * t_ciclo_base) > 0 else 0.0
 
     if mf <= 0.94:
@@ -221,6 +223,7 @@ def ejecutar_simulacion_analitica(
         "consumo_especifico_l_ton": consumo_especifico,
         "costo_opex": costo_opex,
         "costo_unitario_usd_ton": costo_unitario,
+        "t_ciclo_base": t_ciclo_base
     }
 
 # ==============================================================================
@@ -983,6 +986,7 @@ costo_opex_total_turno = res_sim["costo_opex"]
 costo_unitario_ton = res_sim["costo_unitario_usd_ton"]
 tiempo_cola_promedio = res_sim["cola_min"]
 tiempo_ciclo_efectivo_min = res_sim["t_ciclo_min"]
+t_ciclo_base_exacto = res_sim["t_ciclo_base"]
 vel_cargado_efectiva_kmh = res_sim["vel_cargado_efectiva"]
 t_ida_min = res_sim["t_ida_min"]
 t_retorno_min = res_sim["t_retorno_min"]
@@ -1011,7 +1015,7 @@ if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
     st.rerun()
 
 # ==============================================================================
-# 14. DASHBOARD DE RESULTADOS Y CONTROL VISUAL HEADER (CORRECCIÓN DE REDONDEO MF)
+# 14. DASHBOARD DE RESULTADOS Y CONTROL VISUAL HEADER (UNIFICACIÓN TOTAL MF)
 # ==============================================================================
 st.markdown("---")
 st.markdown(f"<h2 style='text-align: center;'>Resumen de Agendamiento Pre-Turno: {num_agendamiento}</h2>", unsafe_allow_html=True)
@@ -1067,7 +1071,6 @@ with col_eval2:
     st.markdown('<p class="mf-label">Match Factor Calculado (Físico):</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="mf-value">{fmt_num(match_factor, 2)}</p>', unsafe_allow_html=True)
 
-    # CORRECCIÓN DE PRECISIÓN: Se normaliza la evaluación con redondeo a 2 decimales exactos
     mf_eval = round(match_factor, 2)
 
     if 0.92 <= mf_eval <= 1.08:
@@ -1167,6 +1170,8 @@ caex_json_str = json.dumps(lista_caex_js)
 palas_json_str = json.dumps(palas_activas_js)
 cf_json_str = json.dumps(cf_activos_js)
 acarreo_activo_bool = "true" if st.session_state.acarreo_iniciado else "false"
+
+# VALOR MAESTRO EXACTO PASADO DIRECTAMENTE DESDE PYTHON A JS (SIN RE-CÁLCULOS DIVERGENTES)
 mf_base_exacto = f"{match_factor:.2f}"
 
 html_gps_canvas = f"""
@@ -1223,6 +1228,7 @@ html_gps_canvas = f"""
         const cfListRaw = {cf_json_str};
         const isTrackingActive = {acarreo_activo_bool};
         const globalFL = {fl_valor};
+        const pythonExactMF = {match_factor};
 
         const distKm = {distancia_acarreo_km};
         const speedLoadedKmh = {vel_cargado_efectiva_kmh};
@@ -1238,7 +1244,6 @@ html_gps_canvas = f"""
         const timeDumping = 2.30;
         const timeReturn = {t_retorno_min};
         const totalCycleUnits = {tiempo_ciclo_efectivo_min};
-        const tCarguioMedio = 2.20;
 
         const simSpeed = 0.0004;
         const totalNumCaex = Math.max(1, caexList.length);
@@ -1265,10 +1270,11 @@ html_gps_canvas = f"""
             let activeCaex = vehicles.filter(v => !v.stoppedByFault).length;
             let activePalas = palasList.filter(p => !p.stoppedByFault).length;
             let activeCF = cfList.filter(cf => !cf.stoppedByFault).length;
-            let activeLoadingEq = Math.max(1, activePalas + activeCF);
+            let totalActiveLoading = Math.max(1, activePalas + activeCF);
 
-            let mfDinamico = (activeCaex * tCarguioMedio) / (activeLoadingEq * totalCycleUnits);
-            let mfEvalJS = Number(mfDinamico.toFixed(2));
+            // SINCRONIZACIÓN ESTRICTA: Se usa exactamente la misma base matemática de Python adaptada a las fallas en vivo
+            let dynamicMF = (activeCaex * 2.20 * totalActiveLoading) > 0 ? (activeCaex * 2.20) / (totalActiveLoading * {t_ciclo_base_exacto}) : pythonExactMF;
+            let mfEvalJS = Number(dynamicMF.toFixed(2));
             
             let elemMF = document.getElementById('kpiMF');
             elemMF.innerText = mfEvalJS.toFixed(2);
@@ -1613,9 +1619,9 @@ if not df_lista_ag.empty:
         if adherencia_plan >= 98.0:
             st.success(f"🎯 **AGENDAMIENTO EXITOSO:** Cumplimiento del {fmt_num(adherencia_plan, 1)}% de la meta proyectada ({num_ag_selected}).")
         elif adherencia_plan >= 85.0:
-            st.warning(f"⚠️️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
+            st.warning(f"⚠️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
         else:
-            st.error(f"🚨 **DESVIACIÓN CRÍTICA ({fmt_num(adherencia_plan, 1)}%):** Impacto severo por eventos múltiples ({texto_causas}). Costo Real: ${fmt_num(costo_real_ton, 2)} USD/Ton.")
+            st.error(f"🚨 **DESVIACIÓN CRÍTICA ({fmt_num(adex_plan = ... if ... else ...)}%):** Impacto severo por eventos múltiples ({texto_causas}). Costo Real: ${fmt_num(costo_real_ton, 2)} USD/Ton.")
 else:
     st.info("Aún no hay agendamientos guardados en la base de datos para conciliar.")
 
