@@ -142,7 +142,7 @@ def init_db():
 init_db()
 
 # ==============================================================================
-# 6. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA MULTIMODELO
+# 6. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA MULTIMODELO (CORREGIDO MF)
 # ==============================================================================
 def ejecutar_simulacion_analitica(
     caex_activos_df,
@@ -179,11 +179,14 @@ def ejecutar_simulacion_analitica(
     cap_tolva_efectiva = cap_tolva_nominal * fl_factor
 
     t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio
+    
+    # FÓRMULA ESTÁNDAR DE MATCH FACTOR (Torminen / Camm): MF = (N_camiones * t_carguio) / (N_palas * t_ciclo)
     mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base) if (n_palas * t_ciclo_base) > 0 else 0.0
 
     if mf <= 0.94:
         espera_promedio_cola = 2.0 * (mf / 0.94) if mf > 0 else 0.0
     else:
+        # Si hay muchos camiones para pocas palas (MF > 1.0), la cola crece de forma exponencial
         espera_promedio_cola = 2.0 + 8.5 * ((mf - 0.94) ** 1.3)
 
     t_ciclo_efectivo = t_ciclo_base + espera_promedio_cola
@@ -514,7 +517,6 @@ st.markdown("""
 
 st.sidebar.header("Registro Operativo Mina")
 
-# AJUSTE 1: Eliminación de etiquetas superiores y recuadros en formato amber-card limpio
 st.sidebar.markdown('<div class="amber-card">', unsafe_allow_html=True)
 st.sidebar.markdown('<span class="selector-label-centered">Nombre de la Mina / Faena</span>', unsafe_allow_html=True)
 nombre_mina = st.sidebar.text_input("", value="Mina Atacama Norte", key="input_nombre_mina_side", label_visibility="collapsed")
@@ -831,7 +833,6 @@ st.markdown("<h3 style='text-align: center;'>TABLA CONTROL ESTADOS EQUIPOS MINA<
 # -----------------------------------------------------------------------------
 equipos_no_disponibles = []
 
-# Listas de opciones expandidas de fechas y horas para el calendario interactivo (Ajuste 2)
 lista_fechas_horas_opciones = [
     f"{fecha_str} 06:00", f"{fecha_str} 07:00", f"{fecha_str} 08:00", f"{fecha_str} 09:00",
     f"{fecha_str} 10:00", f"{fecha_str} 11:00", f"{fecha_str} 12:00", f"{fecha_str} 14:00",
@@ -841,7 +842,6 @@ lista_fechas_horas_opciones = [
 ]
 lista_logistica_turno_opciones = ["Mecánica / Turno A", "Contratista / Turno B", "Logística / Turno A", "Logística / Turno B"]
 
-# Recolectar de Palas
 for _, r in ed_palas[ed_palas["Estado"] != "🟢 Disponible"].iterrows():
     equipos_no_disponibles.append({
         "ID- Equipo": r["ID"],
@@ -856,7 +856,6 @@ for _, r in ed_palas[ed_palas["Estado"] != "🟢 Disponible"].iterrows():
         "Quien Autoriza": "Jefe Turno Mina (A)"
     })
 
-# Recolectar de Cargadores Frontales
 for _, r in ed_cf[ed_cf["Estado"] != "🟢 Disponible"].iterrows():
     equipos_no_disponibles.append({
         "ID- Equipo": r["ID"],
@@ -871,7 +870,6 @@ for _, r in ed_cf[ed_cf["Estado"] != "🟢 Disponible"].iterrows():
         "Quien Autoriza": "Jefe Taller"
     })
 
-# Recolectar de CAEX
 for _, r in ed_caex[ed_caex["Estado"] != "🟢 Disponible"].iterrows():
     equipos_no_disponibles.append({
         "ID- Equipo": r["ID"],
@@ -911,7 +909,6 @@ for col_nec in columnas_control_estandar:
     if col_nec not in st.session_state.control_estados_mina_df.columns:
         st.session_state.control_estados_mina_df[col_nec] = ""
 
-# Procesamiento de Alertas ETR para mostrar advertencias visuales
 equipos_vencidos = []
 equipos_hoy = []
 
@@ -939,36 +936,11 @@ if not st.session_state.control_estados_mina_df.empty:
     ed_control_estados = st.data_editor(
         st.session_state.control_estados_mina_df,
         column_config={
-            "Inicio Detención": st.column_config.SelectboxColumn(
-                "Inicio Detención",
-                options=lista_fechas_horas_opciones,
-                help="Seleccione fecha y hora de inicio mediante calendario/lista"
-            ),
-            "Estimado de Salida (ETR)": st.column_config.SelectboxColumn(
-                "Estimado de Salida (ETR)",
-                options=lista_fechas_horas_opciones,
-                help="Seleccione fecha y hora estimada de salida mediante calendario/lista"
-            ),
-            "Logística / Turno": st.column_config.SelectboxColumn(
-                "Logística / Turno",
-                options=lista_logistica_turno_opciones,
-                help="Seleccione el turno y área de logística"
-            ),
-            "Plazo Extra Días": st.column_config.SelectboxColumn(
-                "Plazo Extra Días",
-                options=[i for i in range(31)]
-            ),
-            "Quien Autoriza": st.column_config.SelectboxColumn(
-                "Quien Autoriza",
-                options=[
-                    "Gerente Mina", 
-                    "Jefe Oper. Mina", 
-                    "Jefe Turno Mina (A)", 
-                    "Jefe Turno (B)", 
-                    "Jefe de Taller", 
-                    "AdC Minera"
-                ]
-            )
+            "Inicio Detención": st.column_config.SelectboxColumn("Inicio Detención", options=lista_fechas_horas_opciones),
+            "Estimado de Salida (ETR)": st.column_config.SelectboxColumn("Estimado de Salida (ETR)", options=lista_fechas_horas_opciones),
+            "Logística / Turno": st.column_config.SelectboxColumn("Logística / Turno", options=lista_logistica_turno_opciones),
+            "Plazo Extra Días": st.column_config.SelectboxColumn("Plazo Extra Días", options=[i for i in range(31)]),
+            "Quien Autoriza": st.column_config.SelectboxColumn("Quien Autoriza", options=["Gerente Mina", "Jefe Oper. Mina", "Jefe Turno Mina (A)", "Jefe Turno (B)", "Jefe de Taller", "AdC Minera"])
         },
         hide_index=True,
         key="editor_control_estados_mina",
@@ -1105,7 +1077,7 @@ with col_eval2:
     elif match_factor < 0.85:
         st.error(f"🔴 **DESCALCE SEVERO POR SUB-TRANSPORTE (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: subutilización de la unidad de carguío.*")
     else:
-        st.error(f"🔴 **DESCALCE SEVERO POR SOBREDIMENSIONAMIENTO (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: exceso de camiones generando colas e ineficiencia OPEX.*")
+        st.error(f"🔴 **DESCALCE SEVERO POR SOBREDIMENSIONAMIENTO / EXCESO DE CAMIONES (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: exceso de CAEX generando colas severas en la única pala.*")
 
 # ==============================================================================
 # 15. MÓDULO DE SEGUIMIENTO ESPACIAL (PLANO DE MINA CON CONDICIONAL DE IMAGEN)
@@ -1266,6 +1238,7 @@ html_gps_canvas = f"""
         const timeDumping = 2.30;
         const timeReturn = {t_retorno_min};
         const totalCycleUnits = {tiempo_ciclo_efectivo_min};
+        const tCarguioMedio = 2.20;
 
         const simSpeed = 0.0004;
         const totalNumCaex = Math.max(1, caexList.length);
@@ -1289,16 +1262,17 @@ html_gps_canvas = f"""
         let palaHitboxes = []; let cfHitboxes = [];
 
         function recalculateDynamicMF() {{
-            let activeCaex = vehicles.filter(v => !v.stoppedByFault);
+            let activeCaex = vehicles.filter(v => !v.stoppedByFault).length;
             let activePalas = palasList.filter(p => !p.stoppedByFault).length;
             let activeCF = cfList.filter(cf => !cf.stoppedByFault).length;
             let activeLoadingEq = Math.max(1, activePalas + activeCF);
 
-            let mfDinamico = (activeCaex.length * timeLoading) / (activeLoadingEq * totalCycleUnits);
+            // CORRECCIÓN MATEMÁTICA EXACTA EN JAVASCRIPT: MF = (N_camiones * t_carguio) / (N_palas * t_ciclo_base)
+            let mfDinamico = (activeCaex * tCarguioMedio) / (activeLoadingEq * totalCycleUnits);
             
             let elemMF = document.getElementById('kpiMF');
             elemMF.innerText = mfDinamico.toFixed(2);
-            document.getElementById('kpiFlota').innerText = activeCaex.length + "/" + vehicles.length;
+            document.getElementById('kpiFlota').innerText = activeCaex + "/" + vehicles.length;
 
             if (mfDinamico >= 0.92 && mfDinamico <= 1.08) {{ elemMF.style.color = "#10B981"; }}
             else if (mfDinamico < 0.85 || mfDinamico > 1.15) {{ elemMF.style.color = "#EF4444"; }}
