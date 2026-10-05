@@ -924,9 +924,40 @@ if equipos_vencidos:
 if equipos_hoy:
     st.markdown(f'<div style="background-color: #F59E0B; color: #0F172A; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🟡 ALERTA DE VENCIMIENTO HOY: Los equipos [{", ".join(equipos_hoy)}] vencen su ETR durante la jornada actual ({fecha_str}). Planifique relevo con el Jefe de Turno.</div>', unsafe_allow_html=True)
 
+# ==============================================================================
+# TABLA CONTROL ESTADOS EQUIPOS MINA - ESTILIZADOR CONDICIONAL
+# ==============================================================================
 if not st.session_state.control_estados_mina_df.empty:
+    
+    def estilizar_tabla_estados(row):
+        estilos = ['font-weight: bold'] * len(row)
+        try:
+            etr_str = str(row["Estimado de Salida (ETR)"])
+            # Formato esperado: DD-MM-YYYY HH:MM o similar
+            etr_dt = datetime.strptime(etr_str[:16], "%d-%m-%Y %H:%M")
+            ahora_dt = datetime.now()
+            
+            diff_horas = (etr_dt - ahora_dt).total_seconds() / 3600.0
+            
+            if diff_horas < 0:
+                # Ya pasó la hora de entrega (Rojo claro)
+                color_fondo = "background-color: #FCA5A5; color: #7F1D1D;"
+            elif 0 <= diff_horas <= 4:
+                # Está en la fecha y próximo a la hora (dentro de las 4 horas) -> Amarillo
+                color_fondo = "background-color: #FDE047; color: #713F12;"
+            else:
+                # Falta un día o más para la entrega -> Verde claro
+                color_fondo = "background-color: #86EFAC; color: #14532D;"
+                
+            estilos = [f'font-weight: bold; {color_fondo}'] * len(row)
+        except Exception:
+            pass
+        return estilos
+
+    df_estilizado = st.session_state.control_estados_mina_df.style.apply(estilizar_tabla_estados, axis=1)
+
     ed_control_estados = st.data_editor(
-        st.session_state.control_estados_mina_df,
+        df_estilizado,
         column_config={
             "Inicio Detención": st.column_config.SelectboxColumn("Inicio Detención", options=lista_fechas_horas_opciones),
             "Estimado de Salida (ETR)": st.column_config.SelectboxColumn("Estimado de Salida (ETR)", options=lista_fechas_horas_opciones),
