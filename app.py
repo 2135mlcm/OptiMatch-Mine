@@ -925,10 +925,10 @@ if equipos_hoy:
     st.markdown(f'<div style="background-color: #F59E0B; color: #0F172A; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🟡 ALERTA DE VENCIMIENTO HOY: Los equipos [{", ".join(equipos_hoy)}] vencen su ETR durante la jornada actual ({fecha_str}). Planifique relevo con el Jefe de Turno.</div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# TABLA CONTROL ESTADOS EQUIPOS MINA - FECHAS Y HORAS SEPARADAS
+# TABLA CONTROL ESTADOS EQUIPOS MINA - VERSIÓN DEFINITIVA
 # ==============================================================================
 
-# Estilo CSS para títulos de columnas en negrita y color negro
+# Estilo CSS para asegurar títulos de columnas en negrita y color negro
 st.markdown("""
 <style>
 div[data-testid="stDataFrame"] th {
@@ -938,13 +938,21 @@ div[data-testid="stDataFrame"] th {
 </style>
 """, unsafe_allow_html=True)
 
-# Lista completa de horas desde las 00:00 hasta las 24:00 (en intervalos de 30 minutos + 24:00)
+# Lista completa de horas desde las 00:00 hasta las 24:00
 lista_horas_opciones = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 30)] + ["24:00"]
+
+# Lista actualizada de logística y turnos con especialidades solicitadas
+lista_logistica_turno_opciones = [
+    "Mecánica / Turno A", "Mecánica / Turno B", 
+    "Contratista / Turno A", "Contratista / Turno B",
+    "Eléctrico Turno A", "Eléctrico Turno B", 
+    "Electrónico A", "Electrónico B", "Telecomunicaciones"
+]
 
 if not st.session_state.control_estados_mina_df.empty:
     df_editable = st.session_state.control_estados_mina_df.copy()
     
-    # Aseguramos que existan las columnas de hora separadas en el DataFrame si no venían creadas
+    # Aseguramos columnas de hora separadas si el DataFrame no las trae
     if "Hora Inicio" not in df_editable.columns:
         df_editable.insert(
             df_editable.columns.get_loc("Inicio Detención") + 1 if "Inicio Detención" in df_editable.columns else 0, 
@@ -972,7 +980,7 @@ if not st.session_state.control_estados_mina_df.empty:
             ),
             "Estimado de Salida (ETR)": st.column_config.TextColumn(
                 "Fecha Est. Salida (ETR)", 
-                help="Ingrese manualmente la fecha (Ej: 06-10-2026)"
+                help="Ingrese manualmente la fecha de entrega por Mantención (Ej: 06-10-2026)"
             ),
             "Hora Salida": st.column_config.SelectboxColumn(
                 "Hora Salida", 
@@ -981,15 +989,16 @@ if not st.session_state.control_estados_mina_df.empty:
             ),
             "Logística / Turno": st.column_config.SelectboxColumn(
                 "Logística / Turno", 
-                options=[
-                    "Mecánica / Turno A", "Mecánica / Turno B", 
-                    "Contratista / Turno A", "Contratista / Turno B",
-                    "Eléctrico Turno A", "Eléctrico Turno B", 
-                    "Electrónico A", "Electrónico B", "Telecomunicaciones"
-                ]
+                options=lista_logistica_turno_opciones
             ),
-            "Plazo Extra Días": st.column_config.SelectboxColumn("Plazo Extra Días", options=[i for i in range(31)]),
-            "Quien Autoriza": st.column_config.SelectboxColumn("Quien Autoriza", options=["Gerente Mina", "Jefe Oper. Mina", "Jefe Turno Mina (A)", "Jefe Turno (B)", "Jefe de Taller", "AdC Minera"])
+            "Plazo Extra Días": st.column_config.SelectboxColumn(
+                "Plazo Extra Días", 
+                options=[i for i in range(31)]
+            ),
+            "Quien Autoriza": st.column_config.SelectboxColumn(
+                "Quien Autoriza", 
+                options=["Gerente Mina", "Jefe Oper. Mina", "Jefe Turno Mina (A)", "Jefe Turno (B)", "Jefe de Taller", "AdC Minera"]
+            )
         },
         hide_index=True,
         key="editor_control_estados_mina",
@@ -1025,7 +1034,9 @@ else:
 
 st.markdown(faena_header_html, unsafe_allow_html=True)
 
-# Definición segura del delta para el Match Factor
+# ==============================================================================
+# SECCIÓN KPI / MATCH FACTOR SEGURO
+# ==============================================================================
 delta_texto = "Banda Lean OK" if (0.92 <= match_factor <= 1.08) else "Fuera de Rango"
 delta_color_val = "normal" if (0.92 <= match_factor <= 1.08) else "inverse"
 
@@ -1034,6 +1045,7 @@ k2.metric(
     f"{match_factor:.2f}", 
     delta=delta_texto,
     delta_color=delta_color_val
+)
 )
 k1.metric("Disp. Física (DF)", f"{disponibilidad_fisica_val:.1f}%", delta=f"{caex_disponibles}/{total_caex} CAEX Activos")
 k2.metric("Match Factor (MF)", f"{fmt_num(match_factor, 2)}", delta="Banda Lean OK" if 0.92 <= match_factor <= 1.08 else "Fuera de Rango")
