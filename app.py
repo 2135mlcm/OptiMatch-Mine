@@ -925,18 +925,10 @@ if equipos_hoy:
     st.markdown(f'<div style="background-color: #F59E0B; color: #0F172A; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🟡 ALERTA DE VENCIMIENTO HOY: Los equipos [{", ".join(equipos_hoy)}] vencen su ETR durante la jornada actual ({fecha_str}). Planifique relevo con el Jefe de Turno.</div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# TABLA CONTROL ESTADOS EQUIPOS MINA - ACTUALIZADA CON ALERTAS Y ESPECIALIDADES
+# TABLA CONTROL ESTADOS EQUIPOS MINA - FECHAS Y HORAS SEPARADAS
 # ==============================================================================
 
-# 1. Actualizamos la lista de opciones de logística/turno con los nuevos requerimientos
-lista_logistica_turno_opciones = [
-    "Mecánica / Turno A", "Mecánica / Turno B", 
-    "Contratista / Turno A", "Contratista / Turno B",
-    "Eléctrico Turno A", "Eléctrico Turno B", 
-    "Electrónico A", "Electrónico B", "Telecomunicaciones"
-]
-
-# Estilo CSS para asegurar títulos de columnas en negrita y color negro
+# Estilo CSS para títulos de columnas en negrita y color negro
 st.markdown("""
 <style>
 div[data-testid="stDataFrame"] th {
@@ -946,65 +938,63 @@ div[data-testid="stDataFrame"] th {
 </style>
 """, unsafe_allow_html=True)
 
+# Lista completa de horas desde las 00:00 hasta las 24:00 (en intervalos de 30 minutos + 24:00)
+lista_horas_opciones = [f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 30)] + ["24:00"]
+
 if not st.session_state.control_estados_mina_df.empty:
     df_editable = st.session_state.control_estados_mina_df.copy()
     
-    # 2. Creamos/Actualizamos una columna visual de semáforo ETR para destacar el estado
-    def evaluar_semaforo_etr(row):
-        try:
-            etr_str = str(row.get("Estimado de Salida (ETR)", ""))
-            etr_dt = datetime.strptime(etr_str[:16], "%d-%m-%Y %H:%M")
-            ahora_dt = datetime.now()
-            diff_horas = (etr_dt - ahora_dt).total_seconds() / 3600.0
-            
-            if diff_horas < 0:
-                return "🔴 VENCIDO"
-            elif 0 <= diff_horas <= 4:
-                return "🟡 PRÓXIMO"
-            else:
-                return "🟢 A TIEMPO"
-        except Exception:
-            return "⚪ N/D"
-
-    # Insertamos la columna de estado al inicio para máxima visibilidad
-    df_editable.insert(0, "Estado ETR", df_editable.apply(evaluar_semaforo_etr, axis=1))
+    # Aseguramos que existan las columnas de hora separadas en el DataFrame si no venían creadas
+    if "Hora Inicio" not in df_editable.columns:
+        df_editable.insert(
+            df_editable.columns.get_loc("Inicio Detención") + 1 if "Inicio Detención" in df_editable.columns else 0, 
+            "Hora Inicio", 
+            "08:00"
+        )
+    if "Hora Salida" not in df_editable.columns:
+        df_editable.insert(
+            df_editable.columns.get_loc("Estimado de Salida (ETR)") + 1 if "Estimado de Salida (ETR)" in df_editable.columns else len(df_editable.columns), 
+            "Hora Salida", 
+            "18:00"
+        )
 
     ed_control_estados = st.data_editor(
         df_editable,
         column_config={
-            "Estado ETR": st.column_config.TextColumn(
-                "Estado ETR",
-                help="🔴 Vencido | 🟡 Próximo a vencer (<= 4 hrs) | 🟢 A tiempo"
+            "Inicio Detención": st.column_config.TextColumn(
+                "Fecha Inicio Detención", 
+                help="Ingrese manualmente la fecha (Ej: 05-10-2026)"
             ),
-            "Estimado de Salida (ETR)": st.column_config.SelectboxColumn(
-                "Estimado de Salida (ETR)", 
-                options=lista_fechas_horas_opciones,
+            "Hora Inicio": st.column_config.SelectboxColumn(
+                "Hora Inicio", 
+                options=lista_horas_opciones,
+                help="Seleccione la hora de inicio"
             ),
-            "Inicio Detención": st.column_config.SelectboxColumn(
-                "Inicio Detención", 
-                options=lista_fechas_horas_opciones
+            "Estimado de Salida (ETR)": st.column_config.TextColumn(
+                "Fecha Est. Salida (ETR)", 
+                help="Ingrese manualmente la fecha (Ej: 06-10-2026)"
+            ),
+            "Hora Salida": st.column_config.SelectboxColumn(
+                "Hora Salida", 
+                options=lista_horas_opciones,
+                help="Seleccione la hora estimada de entrega"
             ),
             "Logística / Turno": st.column_config.SelectboxColumn(
                 "Logística / Turno", 
-                options=lista_logistica_turno_opciones
+                options=[
+                    "Mecánica / Turno A", "Mecánica / Turno B", 
+                    "Contratista / Turno A", "Contratista / Turno B",
+                    "Eléctrico Turno A", "Eléctrico Turno B", 
+                    "Electrónico A", "Electrónico B", "Telecomunicaciones"
+                ]
             ),
-            "Plazo Extra Días": st.column_config.SelectboxColumn(
-                "Plazo Extra Días", 
-                options=[i for i in range(31)]
-            ),
-            "Quien Autoriza": st.column_config.SelectboxColumn(
-                "Quien Autoriza", 
-                options=["Gerente Mina", "Jefe Oper. Mina", "Jefe Turno Mina (A)", "Jefe Turno (B)", "Jefe de Taller", "AdC Minera"]
-            )
+            "Plazo Extra Días": st.column_config.SelectboxColumn("Plazo Extra Días", options=[i for i in range(31)]),
+            "Quien Autoriza": st.column_config.SelectboxColumn("Quien Autoriza", options=["Gerente Mina", "Jefe Oper. Mina", "Jefe Turno Mina (A)", "Jefe Turno (B)", "Jefe de Taller", "AdC Minera"])
         },
         hide_index=True,
         key="editor_control_estados_mina",
         use_container_width=True
     )
-    
-    # Sincronizamos de vuelta omitiendo la columna visual de apoyo si es necesario
-    if "Estado ETR" in ed_control_estados.columns:
-        ed_control_estados = ed_control_estados.drop(columns=["Estado ETR"])
     st.session_state.control_estados_mina_df = ed_control_estados
 else:
     st.info("🟢 Todos los equipos de la flota se encuentran Disponibles. No hay equipos en mantenimiento o taller actualmente.")
