@@ -517,17 +517,13 @@ st.markdown("""
 
 st.sidebar.header("Registro Operativo Mina")
 
-st.sidebar.markdown('<div class="amber-card">', unsafe_allow_html=True)
 st.sidebar.markdown('<span class="selector-label-centered">Nombre de la Mina / Faena</span>', unsafe_allow_html=True)
 nombre_mina = st.sidebar.text_input("", value="Mina Atacama Norte", key="input_nombre_mina_side", label_visibility="collapsed")
-st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
 num_agendamiento_auto = obtener_siguiente_agendamiento()
 
-st.sidebar.markdown('<div class="amber-card">', unsafe_allow_html=True)
 st.sidebar.markdown('<span class="selector-label-centered">N° de Agendamiento Correlativo</span>', unsafe_allow_html=True)
 num_agendamiento = st.sidebar.text_input("", value=num_agendamiento_auto, key="input_num_ag_side", label_visibility="collapsed")
-st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
 
@@ -565,21 +561,17 @@ st.sidebar.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
 
-st.sidebar.markdown('<div class="amber-card">', unsafe_allow_html=True)
 st.sidebar.markdown('<span class="selector-label-centered">RÉGIMEN Y GUARDIA DE TRABAJO</span>', unsafe_allow_html=True)
 tipo_turno_sel = st.sidebar.selectbox("", ["Turno 7x7", "Turno 4x3", "Turno 8x6", "Turno 5x2", "Otro"], key="select_regimen_box")
 regimen_guardia = f"{tipo_turno_sel} ({nombre_dia_actual})"
-st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
-st.sidebar.markdown('<div class="amber-card">', unsafe_allow_html=True)
 st.sidebar.markdown('<span class="selector-label-centered">SELECCIONAR TURNO OPERATIVO</span>', unsafe_allow_html=True)
 turno_seleccionado = st.sidebar.selectbox("", ["Turno 1 (Día / 08:00 - 18:00)", "Turno 2 (Noche / 20:00 - 06:00)"], key="select_turno_box")
-st.sidebar.markdown("</div>", unsafe_allow_html=True)
 
 horas_turno = st.sidebar.number_input("Horas Efectivas Turno", value=10.0, step=0.5)
 
 st.sidebar.markdown("---")
-st.sidebar.header("⚙ Presets de Terreno y Granulometría")
+st.sidebar.header("⚙️️ Presets de Terreno y Granulometría")
 preset_fl = st.sidebar.select_slider(
     "Tipo de Material & Llenado Balde/Tolva",
     options=["Roca Gruesa (80%)", "Estándar (88%)", "Fino / Seco (92%)"],
