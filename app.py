@@ -516,6 +516,12 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
  
+b64_logo_sidebar = obtener_base64_img(LOGO_PATH)
+if b64_logo_sidebar:
+    st.sidebar.markdown(
+        f'<div style="background:#FFFFFF; border-radius:10px; padding:6px; margin-bottom:6px; text-align:center;">'
+        f'<img src="{b64_logo_sidebar}" style="width:100%; height:auto; display:block;"></div>',
+        unsafe_allow_html=True)
 st.sidebar.header("Registro Operativo Mina")
  
 st.sidebar.markdown('<span class="selector-label-centered">Nombre de la Mina / Faena</span>', unsafe_allow_html=True)
@@ -1754,7 +1760,69 @@ if not df_hist.empty:
         if sup_filtro != "Todos":
             df_gerencia = df_gerencia[df_gerencia["jefe_turno"] == sup_filtro]
  
-        st.dataframe(df_gerencia, use_container_width=True)
+        # Tabla gerencial con el mismo formato de la Tabla Control Estados Equipos Mina
+        ETIQUETAS_GERENCIA = {
+            "id": "N°", "num_agendamiento": "N° Agendamiento", "fecha_registro": "Fecha", "hora_registro": "Hora",
+            "faena": "Faena", "turno": "Turno", "regimen_guardia": "Régimen Guardia", "jefe_turno": "Jefe de Turno",
+            "ton_movidas": "Ton Cargadas", "ton_efectivas": "Ton Efectivas", "merma_ton": "Merma (Ton)",
+            "consumo_diesel_lts": "Diésel (Lts)", "costo_diesel_usd": "Costo Diésel (USD)", "opex_total_usd": "OPEX Total (USD)",
+            "costo_ton_usd": "Costo (USD/Ton)", "beneficio_neto_usd": "Beneficio Neto (USD)", "match_factor": "Match Factor",
+            "disponibilidad_fisica": "Disp. Física (%)", "factor_llenado": "Factor Llenado", "prescripcion_aceptada": "Prescripción Aceptada",
+        }
+        DECIMALES_GERENCIA = {"ton_movidas": 0, "ton_efectivas": 0, "merma_ton": 0, "consumo_diesel_lts": 0,
+                              "costo_diesel_usd": 2, "opex_total_usd": 2, "costo_ton_usd": 2, "beneficio_neto_usd": 2,
+                              "match_factor": 2, "disponibilidad_fisica": 1, "factor_llenado": 2}
+ 
+        def _celda_gerencia(col, valor):
+            if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+                return "—"
+            if col == "prescripcion_aceptada":
+                return "🟢 Sí" if int(valor) == 1 else "🔴 No"
+            if col in DECIMALES_GERENCIA:
+                try:
+                    return fmt_num(float(valor), DECIMALES_GERENCIA[col])
+                except (TypeError, ValueError):
+                    return str(valor)
+            return str(valor)
+ 
+        def _fondo_mf(valor):
+            try:
+                mf = round(float(valor), 2)
+            except (TypeError, ValueError):
+                return ""
+            if 0.92 <= mf <= 1.08:
+                return "#BBF7D0"
+            if 0.85 <= mf <= 1.15:
+                return "#FDE68A"
+            return "#FECACA"
+ 
+        cols_ger = list(df_gerencia.columns)
+        encabezado_ger = "".join(f"<th>{html.escape(ETIQUETAS_GERENCIA.get(c, c))}</th>" for c in cols_ger)
+        cuerpo_ger = ""
+        for _, fila_g in df_gerencia.iterrows():
+            celdas_g = ""
+            for c in cols_ger:
+                estilo_g = f' style="background:{_fondo_mf(fila_g[c])};"' if c == "match_factor" else ""
+                celdas_g += f"<td{estilo_g}>{html.escape(_celda_gerencia(c, fila_g[c]))}</td>"
+            cuerpo_ger += f"<tr>{celdas_g}</tr>"
+ 
+        st.markdown(f"""
+            <style>
+            .tabla-gerencia-wrap {{ overflow: auto; max-height: 460px; border-radius: 10px; border: 2px solid #0F172A; margin-bottom: 10px; }}
+            .tabla-gerencia {{ width: 100%; border-collapse: collapse; font-weight: 800 !important; font-size: 12.5px; color: #0F172A; background: #FFFFFF; }}
+            .tabla-gerencia th {{ background: #0F172A; color: #FFFFFF; font-weight: 900; text-transform: uppercase; font-size: 11.5px;
+                                  letter-spacing: 0.3px; padding: 8px 6px; border-bottom: 3px solid #F59E0B; border-right: 1px solid #334155;
+                                  white-space: normal; min-width: 78px; line-height: 1.25; text-align: center; vertical-align: middle;
+                                  position: sticky; top: 0; z-index: 2; }}
+            .tabla-gerencia td {{ padding: 7px 8px; border-bottom: 1px solid #CBD5E1; border-right: 1px solid #E2E8F0;
+                                  white-space: nowrap; text-align: center; font-weight: 800; }}
+            .tabla-gerencia tr:nth-child(even) td {{ background-color: #F1F5F9; }}
+            .tabla-gerencia tr:hover td {{ background-color: #FEF3C7; }}
+            </style>
+            <div class="tabla-gerencia-wrap"><table class="tabla-gerencia">
+                <thead><tr>{encabezado_ger}</tr></thead><tbody>{cuerpo_ger}</tbody>
+            </table></div>
+        """, unsafe_allow_html=True)
  
         with st.expander(f"📈 Evaluación de Rendimiento Gerencial ({periodo_filtro}) — Supervisor: {sup_filtro}", expanded=True):
             if periodo_filtro == "Semanal (Ciclo 7x7)":
@@ -1828,3 +1896,4 @@ if not df_hist.empty:
         if not df_turno_hoy.empty:
             st.dataframe(df_turno_hoy, use_container_width=True)
             st.success("📌 Mostrando únicamente el agendamiento activo de la jornada actual.")
+ 
