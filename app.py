@@ -925,11 +925,20 @@ if equipos_hoy:
     st.markdown(f'<div style="background-color: #F59E0B; color: #0F172A; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🟡 ALERTA DE VENCIMIENTO HOY: Los equipos [{", ".join(equipos_hoy)}] vencen su ETR durante la jornada actual ({fecha_str}). Planifique relevo con el Jefe de Turno.</div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# TABLA CONTROL ESTADOS EQUIPOS MINA - CORREGIDO (SIN ERROR DE ATRIBUTO)
+# TABLA CONTROL ESTADOS EQUIPOS MINA - ACTUALIZADA CON ALERTAS Y ESPECIALIDADES
 # ==============================================================================
+
+# 1. Actualizamos la lista de opciones de logística/turno con los nuevos requerimientos
+lista_logistica_turno_opciones = [
+    "Mecánica / Turno A", "Mecánica / Turno B", 
+    "Contratista / Turno A", "Contratista / Turno B",
+    "Eléctrico Turno A", "Eléctrico Turno B", 
+    "Electrónico A", "Electrónico B", "Telecomunicaciones"
+]
+
+# Estilo CSS para asegurar títulos de columnas en negrita y color negro
 st.markdown("""
 <style>
-/* Títulos de las columnas de la tabla en negrita y color negro */
 div[data-testid="stDataFrame"] th {
     font-weight: 900 !important;
     color: #0F172A !important;
@@ -938,93 +947,67 @@ div[data-testid="stDataFrame"] th {
 """, unsafe_allow_html=True)
 
 if not st.session_state.control_estados_mina_df.empty:
-    
-    # Trabajamos directamente con el DataFrame limpio para evitar conflictos en el editor
     df_editable = st.session_state.control_estados_mina_df.copy()
+    
+    # 2. Creamos/Actualizamos una columna visual de semáforo ETR para destacar el estado
+    def evaluar_semaforo_etr(row):
+        try:
+            etr_str = str(row.get("Estimado de Salida (ETR)", ""))
+            etr_dt = datetime.strptime(etr_str[:16], "%d-%m-%Y %H:%M")
+            ahora_dt = datetime.now()
+            diff_horas = (etr_dt - ahora_dt).total_seconds() / 3600.0
+            
+            if diff_horas < 0:
+                return "🔴 VENCIDO"
+            elif 0 <= diff_horas <= 4:
+                return "🟡 PRÓXIMO"
+            else:
+                return "🟢 A TIEMPO"
+        except Exception:
+            return "⚪ N/D"
+
+    # Insertamos la columna de estado al inicio para máxima visibilidad
+    df_editable.insert(0, "Estado ETR", df_editable.apply(evaluar_semaforo_etr, axis=1))
 
     ed_control_estados = st.data_editor(
         df_editable,
         column_config={
+            "Estado ETR": st.column_config.TextColumn(
+                "Estado ETR",
+                help="🔴 Vencido | 🟡 Próximo a vencer (<= 4 hrs) | 🟢 A tiempo"
+            ),
             "Estimado de Salida (ETR)": st.column_config.SelectboxColumn(
                 "Estimado de Salida (ETR)", 
                 options=lista_fechas_horas_opciones,
-                help="Rojo: ETR Vencido | Amarillo: Vence hoy / Próximo | Verde: A tiempo"
             ),
-            "Inicio Detención": st.column_config.SelectboxColumn("Inicio Detención", options=lista_fechas_horas_opciones),
-            "Logística / Turno": st.column_config.SelectboxColumn("Logística / Turno", options=lista_logistica_turno_opciones),
-            "Plazo Extra Días": st.column_config.SelectboxColumn("Plazo Extra Días", options=[i for i in range(31)]),
-            "Quien Autoriza": st.column_config.SelectboxColumn("Quien Autoriza", options=["Gerente Mina", "Jefe Oper. Mina", "Jefe Turno Mina (A)", "Jefe Turno (B)", "Jefe de Taller", "AdC Minera"])
+            "Inicio Detención": st.column_config.SelectboxColumn(
+                "Inicio Detención", 
+                options=lista_fechas_horas_opciones
+            ),
+            "Logística / Turno": st.column_config.SelectboxColumn(
+                "Logística / Turno", 
+                options=lista_logistica_turno_opciones
+            ),
+            "Plazo Extra Días": st.column_config.SelectboxColumn(
+                "Plazo Extra Días", 
+                options=[i for i in range(31)]
+            ),
+            "Quien Autoriza": st.column_config.SelectboxColumn(
+                "Quien Autoriza", 
+                options=["Gerente Mina", "Jefe Oper. Mina", "Jefe Turno Mina (A)", "Jefe Turno (B)", "Jefe de Taller", "AdC Minera"]
+            )
         },
         hide_index=True,
         key="editor_control_estados_mina",
         use_container_width=True
     )
+    
+    # Sincronizamos de vuelta omitiendo la columna visual de apoyo si es necesario
+    if "Estado ETR" in ed_control_estados.columns:
+        ed_control_estados = ed_control_estados.drop(columns=["Estado ETR"])
     st.session_state.control_estados_mina_df = ed_control_estados
 else:
     st.info("🟢 Todos los equipos de la flota se encuentran Disponibles. No hay equipos en mantenimiento o taller actualmente.")
-# ==============================================================================
-# 13. EJECUCIÓN DEL MOTOR DE SIMULACIÓN Y CÁLCULOS UNIFICADOS
-# ==============================================================================
-palas_activas = ed_palas[(ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")]
-cf_activos = ed_cf[(ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponible")]
-caex_activos = ed_caex[(ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")]
-
-n_puestos_carguio = max(1, len(palas_activas) + len(cf_activos))
-n_caex_activos = len(caex_activos)
-
-res_sim = ejecutar_simulacion_analitica(
-    caex_activos_df=caex_activos,
-    n_palas=n_puestos_carguio,
-    cv=0.3,
-    duracion_horas=horas_turno,
-    costo_pala_h=441.0,
-    costo_camion_h=290.0,
-    fl_factor=fl_valor,
-    merma_base_pct=merma_base_valor,
-    perfil_rampa_key=perfil_rampa_sel,
-    distancia_km=distancia_acarreo_km,
-    vel_cargado_base=vel_cargado_kmh,
-    vel_vacio_base=vel_vacio_kmh,
-)
-
-match_factor = res_sim["MF"]
-tonelaje_cargado = res_sim["ton_cargadas"]
-tonelaje_merma = res_sim["ton_merma"]
-merma_pct_real = res_sim["merma_pct"]
-tonelaje_efectivo = res_sim["ton_totales"]
-litros_diesel_turno = res_sim["litros_totales"]
-consumo_especifico_lts_ton = res_sim["consumo_especifico_l_ton"]
-costo_opex_total_turno = res_sim["costo_opex"]
-costo_unitario_ton = res_sim["costo_unitario_usd_ton"]
-tiempo_cola_promedio = res_sim["cola_min"]
-tiempo_ciclo_efectivo_min = res_sim["t_ciclo_min"]
-t_ciclo_base_exacto = res_sim["t_ciclo_base"]
-vel_cargado_efectiva_kmh = res_sim["vel_cargado_efectiva"]
-t_ida_min = res_sim["t_ida_min"]
-t_retorno_min = res_sim["t_retorno_min"]
-
-costo_diesel_turno = litros_diesel_turno * precio_diesel
-ingreso_bruto_usd = tonelaje_efectivo * valor_ton_usd
-beneficio_neto_usd = ingreso_bruto_usd - costo_opex_total_turno
-costo_diesel_por_ton = (costo_diesel_turno / tonelaje_efectivo) if tonelaje_efectivo > 0 else 0
-
-emisiones_co2_kg = litros_diesel_turno * 2.68
-co2_por_ton = (emisiones_co2_kg / tonelaje_efectivo) if tonelaje_efectivo > 0 else 0.0
-vueltas_totales_meta = int((horas_turno * 60.0 / tiempo_ciclo_efectivo_min) * max(1, n_caex_activos))
-
-prescripcion_aceptada_val = 1 if (0.92 <= match_factor <= 1.08) else 0
-
-if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
-    guardar_agendamiento_db(
-        num_agendamiento, fecha_str, hora_str, nombre_mina, turno_seleccionado, regimen_guardia,
-        st.session_state.get("usuario_activo", "Mauricio L. Cepeda Mondaca"), tonelaje_cargado,
-        tonelaje_efectivo, tonelaje_merma, litros_diesel_turno, costo_diesel_turno,
-        costo_opex_total_turno, costo_unitario_ton, beneficio_neto_usd, match_factor,
-        disponibilidad_fisica_val, fl_valor, prescripcion_aceptada_val
-    )
-    st.sidebar.success(f"✅ Agendamiento {num_agendamiento} guardado exitosamente.")
-    st.session_state.autenticado = False
-    st.rerun()
 
 # ==============================================================================
 # 14. DASHBOARD DE RESULTADOS Y CONTROL VISUAL HEADER (UNIFICACIÓN TOTAL MF)
