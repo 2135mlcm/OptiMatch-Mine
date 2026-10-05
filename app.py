@@ -1,7 +1,3 @@
-"""
-OptiMatch-Mine v3.1 — Sistema de soporte a la decisión pre-turno (mediana minería).
-Interfaz Streamlit. Todo el cálculo vive en motor.py (ecuaciones (1)-(4) del artículo).
-"""
 # ==============================================================================
 # 1. IMPORTS
 # ==============================================================================
