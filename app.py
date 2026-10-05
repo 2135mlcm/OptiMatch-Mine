@@ -1046,7 +1046,7 @@ k2.metric(
     delta=delta_texto,
     delta_color=delta_color_val
 )
-)
+
 k1.metric("Disp. Física (DF)", f"{disponibilidad_fisica_val:.1f}%", delta=f"{caex_disponibles}/{total_caex} CAEX Activos")
 k2.metric("Match Factor (MF)", f"{fmt_num(match_factor, 2)}", delta="Banda Lean OK" if 0.92 <= match_factor <= 1.08 else "Fuera de Rango")
 k3.metric("Ton Entregadas Netas", f"{fmt_num(tonelaje_efectivo, 0)} Ton", delta=f"Merma: {merma_pct_real:.1f}% ({fmt_num(tonelaje_merma, 0)}T)")
