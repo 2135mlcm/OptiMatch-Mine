@@ -925,13 +925,44 @@ if equipos_hoy:
     st.markdown(f'<div style="background-color: #F59E0B; color: #0F172A; padding: 10px; border-radius: 8px; font-weight: 800; margin-bottom: 8px;">🟡 ALERTA DE VENCIMIENTO HOY: Los equipos [{", ".join(equipos_hoy)}] vencen su ETR durante la jornada actual ({fecha_str}). Planifique relevo con el Jefe de Turno.</div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# TABLA CONTROL ESTADOS EQUIPOS MINA - COLORACIÓN CONDICIONAL NATIVA STREAMLIT
+# TABLA CONTROL ESTADOS EQUIPOS MINA - ESTILOS Y COLORACIÓN CONDICIONAL
 # ==============================================================================
+st.markdown("""
+<style>
+/* Títulos de las columnas en negrita y color negro */
+div[data-testid="stDataFrame"] th {
+    font-weight: 900 !important;
+    color: #0F172A !important;
+}
+
+/* Coloración condicional para celdas de fechas y horas en el grid */
+/* Nota: Streamlit por defecto usa inputs dentro de data_editor, aplicamos color a las celdas contenedoras */
+</style>
+""", unsafe_allow_html=True)
+
 if not st.session_state.control_estados_mina_df.empty:
     
-    # Creamos una copia para evaluar colores sin alterar los datos originales
-    df_visual = st.session_state.control_estados_mina_df.copy()
-    
+    # Función para aplicar estilos visuales basados en tiempo (ETR)
+    def color_etiquetas_etr(val):
+        try:
+            etr_dt = datetime.strptime(str(val)[:16], "%d-%m-%Y %H:%M")
+            ahora_dt = datetime.now()
+            diff_horas = (etr_dt - ahora_dt).total_seconds() / 3600.0
+            
+            if diff_horas < 0:
+                return 'background-color: #FCA5A5; color: #7F1D1D; font-weight: bold;' # Rojo claro (vencido)
+            elif 0 <= diff_horas <= 4:
+                return 'background-color: #FDE047; color: #713F12; font-weight: bold;' # Amarillo (próximo)
+            else:
+                return 'background-color: #86EFAC; color: #14532D; font-weight: bold;' # Verde claro (a tiempo)
+        except Exception:
+            return 'font-weight: bold;'
+
+    # Aplicamos el estilizador de pandas a las columnas de fechas
+    df_visual = st.session_state.control_estados_mina_df.style.applymap(
+        color_etiquetas_etr, subset=["Inicio Detención", "Estimado de Salida (ETR)"]
+    )
+
     ed_control_estados = st.data_editor(
         df_visual,
         column_config={
@@ -952,7 +983,6 @@ if not st.session_state.control_estados_mina_df.empty:
     st.session_state.control_estados_mina_df = ed_control_estados
 else:
     st.info("🟢 Todos los equipos de la flota se encuentran Disponibles. No hay equipos en mantenimiento o taller actualmente.")
-
 # ==============================================================================
 # 13. EJECUCIÓN DEL MOTOR DE SIMULACIÓN Y CÁLCULOS UNIFICADOS
 # ==============================================================================
