@@ -142,7 +142,7 @@ def init_db():
 init_db()
 
 # ==============================================================================
-# 6. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA MULTIMODELO (CORREGIDO MF)
+# 6. MOTOR DE SIMULACIÓN ANALÍTICA ESTOCÁSTICA MULTIMODELO
 # ==============================================================================
 def ejecutar_simulacion_analitica(
     caex_activos_df,
@@ -179,14 +179,11 @@ def ejecutar_simulacion_analitica(
     cap_tolva_efectiva = cap_tolva_nominal * fl_factor
 
     t_ciclo_base = t_carguio_medio + t_transito_medio + t_maniobras_medio
-    
-    # FÓRMULA ESTÁNDAR DE MATCH FACTOR (Torminen / Camm): MF = (N_camiones * t_carguio) / (N_palas * t_ciclo)
     mf = (n_camiones * t_carguio_medio) / (n_palas * t_ciclo_base) if (n_palas * t_ciclo_base) > 0 else 0.0
 
     if mf <= 0.94:
         espera_promedio_cola = 2.0 * (mf / 0.94) if mf > 0 else 0.0
     else:
-        # Si hay muchos camiones para pocas palas (MF > 1.0), la cola crece de forma exponencial
         espera_promedio_cola = 2.0 + 8.5 * ((mf - 0.94) ** 1.3)
 
     t_ciclo_efectivo = t_ciclo_base + espera_promedio_cola
@@ -1014,7 +1011,7 @@ if st.sidebar.button("🔒 CIERRE Y GUARDADO EN BD", use_container_width=True):
     st.rerun()
 
 # ==============================================================================
-# 14. DASHBOARD DE RESULTADOS Y CONTROL VISUAL HEADER
+# 14. DASHBOARD DE RESULTADOS Y CONTROL VISUAL HEADER (CORRECCIÓN DE REDONDEO MF)
 # ==============================================================================
 st.markdown("---")
 st.markdown(f"<h2 style='text-align: center;'>Resumen de Agendamiento Pre-Turno: {num_agendamiento}</h2>", unsafe_allow_html=True)
@@ -1070,14 +1067,17 @@ with col_eval2:
     st.markdown('<p class="mf-label">Match Factor Calculado (Físico):</p>', unsafe_allow_html=True)
     st.markdown(f'<p class="mf-value">{fmt_num(match_factor, 2)}</p>', unsafe_allow_html=True)
 
-    if 0.92 <= match_factor <= 1.08:
-        st.success(f"🟢 **AGENDAMIENTO ÓPTIMO Y RENTABLE EN BANDA VERDE (Match Factor: {fmt_num(match_factor, 2)})** — *Flota acoplada, desperdicio de diésel por ralentí minimizado y costo unitario optimizado.*")
-    elif 0.85 <= match_factor < 0.92 or 1.08 < match_factor <= 1.15:
-        st.warning(f"🟡 **DESCALCE LEVE EN BANDA AMARILLA (Match Factor: {fmt_num(match_factor, 2)})** — *Alerta preventiva: evalúe ajustar 1 CAEX según prioridad de tonelaje vs costo.*")
-    elif match_factor < 0.85:
-        st.error(f"🔴 **DESCALCE SEVERO POR SUB-TRANSPORTE (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: subutilización de la unidad de carguío.*")
+    # CORRECCIÓN DE PRECISIÓN: Se normaliza la evaluación con redondeo a 2 decimales exactos
+    mf_eval = round(match_factor, 2)
+
+    if 0.92 <= mf_eval <= 1.08:
+        st.success(f"🟢 **AGENDAMIENTO ÓPTIMO Y RENTABLE EN BANDA VERDE (Match Factor: {fmt_num(mf_eval, 2)})** — *Flota acoplada, desperdicio de diésel por ralentí minimizado y costo unitario optimizado.*")
+    elif 0.85 <= mf_eval < 0.92 or 1.08 < mf_eval <= 1.15:
+        st.warning(f"🟡 **DESCALCE LEVE EN BANDA AMARILLA (Match Factor: {fmt_num(mf_eval, 2)})** — *Alerta preventiva: evalúe ajustar 1 CAEX según prioridad de tonelaje vs costo.*")
+    elif mf_eval < 0.85:
+        st.error(f"🔴 **DESCALCE SEVERO POR SUB-TRANSPORTE (Match Factor: {fmt_num(mf_eval, 2)})** — *Prescripción: subutilización de la unidad de carguío.*")
     else:
-        st.error(f"🔴 **DESCALCE SEVERO POR SOBREDIMENSIONAMIENTO / EXCESO DE CAMIONES (Match Factor: {fmt_num(match_factor, 2)})** — *Prescripción: exceso de CAEX generando colas severas en la única pala.*")
+        st.error(f"🔴 **DESCALCE SEVERO POR SOBREDIMENSIONAMIENTO / EXCESO DE CAMIONES (Match Factor: {fmt_num(mf_eval, 2)})** — *Prescripción: exceso de CAEX generando colas severas en la única pala.*")
 
 # ==============================================================================
 # 15. MÓDULO DE SEGUIMIENTO ESPACIAL (PLANO DE MINA CON CONDICIONAL DE IMAGEN)
@@ -1267,15 +1267,15 @@ html_gps_canvas = f"""
             let activeCF = cfList.filter(cf => !cf.stoppedByFault).length;
             let activeLoadingEq = Math.max(1, activePalas + activeCF);
 
-            // CORRECCIÓN MATEMÁTICA EXACTA EN JAVASCRIPT: MF = (N_camiones * t_carguio) / (N_palas * t_ciclo_base)
             let mfDinamico = (activeCaex * tCarguioMedio) / (activeLoadingEq * totalCycleUnits);
+            let mfEvalJS = Number(mfDinamico.toFixed(2));
             
             let elemMF = document.getElementById('kpiMF');
-            elemMF.innerText = mfDinamico.toFixed(2);
+            elemMF.innerText = mfEvalJS.toFixed(2);
             document.getElementById('kpiFlota').innerText = activeCaex + "/" + vehicles.length;
 
-            if (mfDinamico >= 0.92 && mfDinamico <= 1.08) {{ elemMF.style.color = "#10B981"; }}
-            else if (mfDinamico < 0.85 || mfDinamico > 1.15) {{ elemMF.style.color = "#EF4444"; }}
+            if (mfEvalJS >= 0.92 && mfEvalJS <= 1.08) {{ elemMF.style.color = "#10B981"; }}
+            else if (mfEvalJS < 0.85 || mfEvalJS > 1.15) {{ elemMF.style.color = "#EF4444"; }}
             else {{ elemMF.style.color = "#F59E0B"; }}
         }}
 
@@ -1613,7 +1613,7 @@ if not df_lista_ag.empty:
         if adherencia_plan >= 98.0:
             st.success(f"🎯 **AGENDAMIENTO EXITOSO:** Cumplimiento del {fmt_num(adherencia_plan, 1)}% de la meta proyectada ({num_ag_selected}).")
         elif adherencia_plan >= 85.0:
-            st.warning(f"⚠️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
+            st.warning(f"⚠️️ **CUMPLIMIENTO PARCIAL ({fmt_num(adherencia_plan, 1)}%):** Desviación menor atribuida a: {texto_causas}.")
         else:
             st.error(f"🚨 **DESVIACIÓN CRÍTICA ({fmt_num(adherencia_plan, 1)}%):** Impacto severo por eventos múltiples ({texto_causas}). Costo Real: ${fmt_num(costo_real_ton, 2)} USD/Ton.")
 else:
