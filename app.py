@@ -557,6 +557,29 @@ st.markdown("""
 LOGO_PATH = "Logo_OptiMatch.png"
 LOGO_ATACAMA_PATH = "Logo_Atacama_Norte.png"
  
+# Ícono propio de cargador frontal (dibujo vectorial incluido en el código; no requiere archivo de imagen)
+ICONO_CARGADOR_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 134 84" width="130" height="84">
+  <rect x="17" y="18" width="4" height="12" rx="1" fill="#334155"/>
+  <rect x="6" y="30" width="50" height="24" rx="4" fill="#F59E0B" stroke="#0F172A" stroke-width="1.8"/>
+  <rect x="2" y="36" width="8" height="16" rx="2" fill="#D97706" stroke="#0F172A" stroke-width="1.5"/>
+  <line x1="14" y1="36" x2="14" y2="48" stroke="#0F172A" stroke-width="1.2"/>
+  <line x1="20" y1="36" x2="20" y2="48" stroke="#0F172A" stroke-width="1.2"/>
+  <line x1="26" y1="36" x2="26" y2="48" stroke="#0F172A" stroke-width="1.2"/>
+  <path d="M40 30 L42 8 L66 8 L68 30 Z" fill="#F59E0B" stroke="#0F172A" stroke-width="1.8"/>
+  <path d="M45 12 L63 12 L64.5 27 L44 27 Z" fill="#BAE6FD" stroke="#0F172A" stroke-width="1.2"/>
+  <rect x="39" y="5" width="30" height="4" rx="1.5" fill="#0F172A"/>
+  <path d="M56 34 L98 40 L98 54 L56 54 Z" fill="#F59E0B" stroke="#0F172A" stroke-width="1.8"/>
+  <path d="M66 34 L72 30 L110 46 L106 53 Z" fill="#FBBF24" stroke="#0F172A" stroke-width="1.8"/>
+  <line x1="74" y1="47" x2="104" y2="43" stroke="#64748B" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M106 32 C96 42 96 60 106 70 L128 70 L127 63 L113 62 C107 56 107 44 113 36 Z" fill="#475569" stroke="#0F172A" stroke-width="1.8"/>
+  <path d="M128 70 L131 68 L128 66" fill="none" stroke="#0F172A" stroke-width="1.5"/>
+  <circle cx="31" cy="64" r="16" fill="#1E293B"/>
+  <circle cx="31" cy="64" r="7" fill="#94A3B8" stroke="#0F172A" stroke-width="1.5"/>
+  <circle cx="84" cy="64" r="16" fill="#1E293B"/>
+  <circle cx="84" cy="64" r="7" fill="#94A3B8" stroke="#0F172A" stroke-width="1.5"/>
+</svg>"""
+ICONO_CARGADOR_URI = "data:image/svg+xml;base64," + base64.b64encode(ICONO_CARGADOR_SVG.encode("utf-8")).decode()
+ 
 # ==============================================================================
 # 9. SISTEMA DE AUTENTICACIÓN PRIVADO CON DISEÑO TAILWIND
 # ==============================================================================
@@ -867,8 +890,7 @@ with col_t1:
 with col_t2:
     c_img, c_txt = st.columns([1, 2])
     with c_img:
-        if os.path.exists("Gif Cargador Frontal.jpg"):
-            st.image("Gif Cargador Frontal.jpg", width=70)
+        st.markdown(f'<img src="{ICONO_CARGADOR_URI}" style="width: 70px; height: auto;">', unsafe_allow_html=True)
     with c_txt:
         st.markdown("### Cargador Frontal")
  
@@ -1272,15 +1294,14 @@ st.markdown(f"<h2 style='text-align: center;'>Resumen de Agendamiento Pre-Turno:
 b64_logo_atacama = obtener_base64_img(LOGO_ATACAMA_PATH)
 logo_faena_html = (f'<img src="{b64_logo_atacama}" style="height: 38px; width: auto; vertical-align: middle; object-fit: contain;">'
                    if b64_logo_atacama else "")
-st.markdown(f"""
-    <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; text-align: center;">
-        {logo_faena_html}
-        <h3 style="margin: 0; padding: 0; color: #0F172A; font-size: 16px; font-weight: 800; display: inline-block;">
-            Faena: {nombre_mina} | {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})<br>
-            Circuito: {material_turno} → {destino_turno} ({fmt_num(distancia_acarreo_km, 1)} km)
-        </h3>
-    </div>
-""", unsafe_allow_html=True)
+st.markdown(
+    f'<div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px; text-align: center;">'
+    f'{logo_faena_html}'
+    f'<p style="margin: 0; color: #0F172A; font-size: 16px; font-weight: 800;">'
+    f'Faena: {html.escape(nombre_mina)} | {nombre_dia_actual}, {fecha_str} {hora_str} hrs — {turno_seleccionado} ({regimen_guardia})<br>'
+    f'Circuito: {material_turno} → {destino_turno} ({fmt_num(distancia_acarreo_km, 1)} km)</p></div>',
+    unsafe_allow_html=True,
+)
  
 if n_carguio_real == 0:
     st.error("⚠️ No hay palas ni cargadores agendados y disponibles. Agende al menos una unidad de carguío; mientras tanto se usa 1.216 t/h como referencia.")
@@ -1419,7 +1440,7 @@ with col_trig3:
 img_caex_cargado_b64 = obtener_base64_img("Camion_CAEX_Cargado.png") or obtener_base64_img("Camión CAEX Cargado.png") or obtener_base64_img("camion_caex_cargado.png")
 img_caex_vacio_b64 = obtener_base64_img("Camion_CAEX_Vacio.png") or obtener_base64_img("Camión CAEX Vacío.png") or obtener_base64_img("camion_caex_vacio.png")
 img_pala_b64 = obtener_base64_img("Gif Pala.jpg") or obtener_base64_img("image_859ef9.png")
-img_cf_b64 = obtener_base64_img("Gif Cargador Frontal.jpg") or obtener_base64_img("image_859f19.png")
+img_cf_b64 = ICONO_CARGADOR_URI
  
 caex_agendados = ed_caex[(ed_caex["Agendar"] == True) & (ed_caex["Estado"] == "🟢 Disponible")]
 lista_caex_js = []
@@ -1636,7 +1657,7 @@ html_gps_canvas = f"""
                 let totalPalas = palasList.length;
                 let py = yIda - 20 - ((totalPalas + idx) * 46); let px = xInicio - 65; let size = 38;
                 if (imgCF.complete && imgCF.naturalWidth > 0 && !cf.stoppedByFault) {{
-                    ctx.drawImage(imgCF, px, py - (size / 2), size, size);
+                    ctx.drawImage(imgCF, px - 8, py - 16, 50, 31);
                 }} else {{
                     ctx.fillStyle = cf.stoppedByFault ? "#EF4444" : "#F59E0B";
                     ctx.fillRect(px, py - 15, 30, 30);
