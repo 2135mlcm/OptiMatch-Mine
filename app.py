@@ -1543,16 +1543,58 @@ html_gps_canvas = f"""
         let palasList = palasListRaw.map(p => ({{ ...p, stoppedByFault: false }}));
         let cfList = cfListRaw.map(cf => ({{ ...cf, stoppedByFault: false }}));
  
+        // Cada CAEX recorre: cola -> carga (con viraje) -> ida -> descarga -> retorno -> cola ...
+        // Cada pala/cargador atiende un camión a la vez; los demás esperan al final de la línea roja.
+        const nCarguio = Math.max(1, palasList.length + cfList.length);
+        const colas = Array.from({{ length: nCarguio }}, () => []);
+        const cargando = Array.from({{ length: nCarguio }}, () => null);
         let vehicles = caexList.map((c, idx) => {{
-            let offset = idx * staggerInterval;
-            let assignedEq = idx % Math.max(1, (palasList.length + cfList.length));
-            return {{
+            const v = {{
                 id: c.id, modelo: c.modelo, capTon: c.capTon || 90.0, operador: c.operador, rend: c.rend,
-                cycleTime: offset, prevCycleTime: offset, vueltas: 0, x: 0, y: 0,
-                isLoaded: false, statusText: "Postura Previa (Listo para Cargar)",
-                speedKmh: 0, isReturning: false, equipmentAssigned: assignedEq, stoppedByFault: false
+                vueltas: 0, x: 0, y: 0, x0: 0, y0: 0, ubicado: false, isLoaded: false, isReturning: true,
+                statusText: "Postura previa (en cola)", speedKmh: 0,
+                equipmentAssigned: idx % nCarguio, stoppedByFault: false, estado: "cola", t: 0
             }};
+            colas[v.equipmentAssigned].push(v);
+            return v;
         }});
+        function cargadorDe(i) {{ return i < palasList.length ? palasList[i] : cfList[i - palasList.length]; }}
+        function tiempoCargaDe(i) {{
+            const eq = cargadorDe(i);
+            return (eq && eq.rend > 0) ? 60.0 * capEfMedia / eq.rend : timeLoading;
+        }}
+        function avanzarSimulacion(dt) {{
+            // 1) Cada unidad de carguío libre (y sin falla) toma al primer camión de su cola
+            for (let i = 0; i < nCarguio; i++) {{
+                const eq = cargadorDe(i);
+                if (cargando[i] === null && !(eq && eq.stoppedByFault)) {{
+                    const k = colas[i].findIndex(v => !v.stoppedByFault);
+                    if (k >= 0) {{
+                        const v = colas[i].splice(k, 1)[0];
+                        v.estado = "carga"; v.t = 0; v.x0 = v.x; v.y0 = v.y;
+                        cargando[i] = v;
+                    }}
+                }}
+            }}
+            // 2) Avance de cada camión según su estado
+            vehicles.forEach(v => {{
+                if (v.stoppedByFault) return;
+                const i = v.equipmentAssigned;
+                const eq = cargadorDe(i);
+                if (v.estado === "carga") {{
+                    if (eq && eq.stoppedByFault) return;   // pala o cargador en falla: la carga se detiene
+                    v.t += dt;
+                    if (v.t >= tiempoCargaDe(i)) {{ v.estado = "ida"; v.t = 0; cargando[i] = null; }}
+                }} else if (v.estado === "ida") {{
+                    v.t += dt; if (v.t >= timeHaul) {{ v.estado = "descarga"; v.t = 0; }}
+                }} else if (v.estado === "descarga") {{
+                    v.t += dt;
+                    if (v.t >= timeDumping) {{ v.estado = "retorno"; v.t = 0; v.vueltas++; totalVueltasCompletadas++; }}
+                }} else if (v.estado === "retorno") {{
+                    v.t += dt;
+                }}
+            }});
+        }}
  
         let palaHitboxes = []; let cfHitboxes = [];
  
@@ -1659,48 +1701,71 @@ html_gps_canvas = f"""
             ctx.fillText("• " + destinoTurno.toUpperCase(), xFin + 45, yCentro - 6);
             ctx.fillText("(" + materialTurno + ")", xFin + 45, yCentro + 11);
  
-            let totalEquiposCarguio = Math.max(1, palasList.length + cfList.length);
+            const ESPACIO_COLA = 46;
+            function posCarga(i) {{ return {{ x: xInicio, y: yIda - 20 - i * 46 }}; }}
+            function posCola(i, k) {{ return {{ x: xInicio + 22 + k * ESPACIO_COLA, y: yRetorno + i * 30 }}; }}
  
-            vehicles.forEach((v, idx) => {{
-                if (isTrackingActive && !v.stoppedByFault) {{
-                    v.prevCycleTime = v.cycleTime;
-                    v.cycleTime = (v.cycleTime + simSpeed) % totalCycleUnits;
-                    if (v.cycleTime < v.prevCycleTime) {{ v.vueltas++; totalVueltasCompletadas++; }}
+            // Ubicación inicial: todos los CAEX en la fila de espera (postura previa)
+            vehicles.forEach(v => {{
+                if (!v.ubicado) {{
+                    const p = posCola(v.equipmentAssigned, Math.max(0, colas[v.equipmentAssigned].indexOf(v)));
+                    v.x = p.x; v.y = p.y; v.ubicado = true;
                 }}
+            }});
+            if (isTrackingActive) {{ avanzarSimulacion(simSpeed); }}
  
-                let t = v.cycleTime;
-                let eqIndex = (totalEquiposCarguio > 0) ? (v.equipmentAssigned % totalEquiposCarguio) : 0;
-                let targetY = yIda - 20 - (eqIndex * 46);
-                let eqNombre = "Pala/CF";
+            // Un camión que vuelve vacío se detiene al llegar al último puesto de la fila de espera
+            vehicles.forEach(v => {{
+                if (v.estado !== "retorno" || v.stoppedByFault) return;
+                const i = v.equipmentAssigned;
+                const xRet = xFin - Math.min(1, v.t / timeReturn) * trackWidth;
+                if (xRet <= posCola(i, colas[i].length).x || v.t >= timeReturn) {{
+                    v.estado = "cola"; v.t = 0; colas[i].push(v);
+                }}
+            }});
  
-                if (eqIndex < palasList.length) {{ eqNombre = palasList[eqIndex] ? palasList[eqIndex].id : "Pala"; }}
-                else {{ let cfIdx = eqIndex - palasList.length; eqNombre = cfList[cfIdx] ? cfList[cfIdx].id : "CF"; }}
+            vehicles.forEach(v => {{
+                const i = v.equipmentAssigned;
+                const eq = cargadorDe(i);
+                const eqNombre = eq ? eq.id : "Pala/CF";
+                const pc = posCarga(i);
  
-                if (!v.stoppedByFault) {{
-                    if (!isTrackingActive) {{
-                        v.x = xInicio; v.y = targetY; v.isLoaded = false; v.isReturning = false;
-                        v.statusText = "Postura Previa (Acolado en " + eqNombre + ")"; v.speedKmh = 0;
-                    }} else if (t < timeLoading) {{
-                        v.x = xInicio; v.y = targetY; v.isLoaded = false; v.isReturning = false;
-                        v.statusText = "En Carga (" + eqNombre + ")"; v.speedKmh = 0;
-                    }} else if (t < timeLoading + timeHaul) {{
-                        let progressRatio = (t - timeLoading) / timeHaul;
-                        v.x = xInicio + (progressRatio * trackWidth); v.y = targetY + progressRatio * (yIda - targetY);
-                        v.isLoaded = true; v.isReturning = false; v.statusText = "Acarreo " + materialTurno + " -> " + destinoTurno; v.speedKmh = speedLoadedKmh;
-                    }} else if (t < timeLoading + timeHaul + timeDumping) {{
-                        v.x = xFin; v.y = (yIda + yRetorno) / 2; 
-                        v.isLoaded = false; v.isReturning = true; v.statusText = "En Volteo / Descarga"; v.speedKmh = 0;
-                    }} else {{
-                        let progressRatio = (t - (timeLoading + timeHaul + timeDumping)) / timeReturn;
-                        v.x = xFin - (progressRatio * trackWidth); v.y = yRetorno; 
-                        v.isLoaded = false; v.isReturning = true; v.statusText = "Retorno Vacío -> " + eqNombre; v.speedKmh = speedEmptyKmh;
-                    }}
-                }} else {{ v.statusText = "🔴 DETENIDO POR FALLA / MANTENCIÓN"; v.speedKmh = 0; }}
+                if (v.estado === "cola") {{
+                    const k = Math.max(0, colas[i].indexOf(v));
+                    const p = posCola(i, k);
+                    if (!v.ubicado) {{ v.x = p.x; v.y = p.y; v.ubicado = true; }}
+                    v.x += (p.x - v.x) * 0.15; v.y += (p.y - v.y) * 0.15;   // avanza suavemente al puesto libre
+                    v.isLoaded = false; v.isReturning = true; v.speedKmh = 0;
+                    v.statusText = isTrackingActive ? ("En cola para " + eqNombre + " (puesto " + (k + 1) + ")")
+                                                    : ("Postura previa en cola de " + eqNombre);
+                }} else if (v.estado === "carga") {{
+                    const tc = tiempoCargaDe(i);
+                    const r = Math.min(1, v.t / (0.25 * tc));                  // viraje en el primer 25 % del carguío
+                    const cx = xInicio - 45, cy = (v.y0 + pc.y) / 2, a = 1 - r;  // curva desde la fila hasta la pala
+                    v.x = a * a * v.x0 + 2 * a * r * cx + r * r * pc.x;
+                    v.y = a * a * v.y0 + 2 * a * r * cy + r * r * pc.y;
+                    v.isLoaded = false; v.isReturning = r < 1; v.speedKmh = 0;
+                    v.statusText = r < 1 ? ("Viraje hacia " + eqNombre) : ("En carga (" + eqNombre + ")");
+                }} else if (v.estado === "ida") {{
+                    const r = Math.min(1, v.t / timeHaul);
+                    v.x = pc.x + r * trackWidth; v.y = pc.y + r * (yIda - pc.y);
+                    v.isLoaded = true; v.isReturning = false; v.speedKmh = speedLoadedKmh;
+                    v.statusText = "Acarreo " + materialTurno + " -> " + destinoTurno;
+                }} else if (v.estado === "descarga") {{
+                    v.x = xFin; v.y = (yIda + yRetorno) / 2;
+                    v.isLoaded = false; v.isReturning = true; v.speedKmh = 0;
+                    v.statusText = "En descarga (" + destinoTurno + ")";
+                }} else {{
+                    const r = Math.min(1, v.t / timeReturn);
+                    v.x = xFin - r * trackWidth; v.y = yRetorno;
+                    v.isLoaded = false; v.isReturning = true; v.speedKmh = speedEmptyKmh;
+                    v.statusText = "Retorno vacío -> fila de " + eqNombre;
+                }}
+                if (v.stoppedByFault) {{ v.statusText = "🔴 DETENIDO POR FALLA / MANTENCIÓN"; v.speedKmh = 0; }}
  
                 let imgToDraw = v.isLoaded ? imgCaexCargado : imgCaexVacio;
                 ctx.save(); ctx.translate(v.x, v.y);
                 if (v.isReturning) {{ ctx.scale(-1, 1); }}
- 
                 if (!v.stoppedByFault && imgToDraw.complete && imgToDraw.naturalWidth > 0 && imgToDraw.src.length > 50) {{
                     ctx.drawImage(imgToDraw, -20, -20, 40, 40);
                 }} else {{ drawCaexTruck(0, 0, v.isLoaded, false, v.stoppedByFault); }}
@@ -1708,13 +1773,25 @@ html_gps_canvas = f"""
  
                 ctx.font = "bold 10px Arial"; ctx.textAlign = "center";
                 if (v.stoppedByFault) {{
-                    ctx.fillStyle = "#DC2626"; ctx.fillText("🔴 CAEX " + v.id + " (FALLA)", v.x, v.y + 26);
+                    ctx.fillStyle = "#DC2626"; ctx.fillText("🔴 " + v.id + " (FALLA)", v.x, v.y + 26);
+                }} else if (v.estado === "cola") {{
+                    ctx.fillStyle = "#B45309"; ctx.fillText(v.id, v.x, v.y + 26);   // etiqueta corta en la fila
                 }} else {{
                     ctx.fillStyle = "#0F172A";
                     let speedLabel = v.speedKmh > 0 ? " [" + v.speedKmh.toFixed(0) + " km/h]" : " [0 km/h]";
                     ctx.fillText("CAEX " + v.id + " (" + v.capTon + "T) - " + v.vueltas + " vts" + speedLabel, v.x, v.y + 26);
                 }}
             }});
+ 
+            // Texto de la fila de espera
+            for (let i = 0; i < nCarguio; i++) {{
+                const enCola = colas[i].length;
+                if (enCola > 0) {{
+                    const p = posCola(i, 0);
+                    ctx.font = "bold 10px Arial"; ctx.textAlign = "left"; ctx.fillStyle = "#B45309";
+                    ctx.fillText("FILA DE ESPERA " + (cargadorDe(i) ? cargadorDe(i).id : "") + ": " + enCola + " CAEX", p.x - 20, p.y + 40);
+                }}
+            }}
  
             if (isTrackingActive) {{ document.getElementById('kpiActual').innerText = totalVueltasCompletadas; }}
             recalculateDynamicMF(); requestAnimationFrame(animate);
