@@ -691,9 +691,16 @@ st.sidebar.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
  
-with st.sidebar.expander("📘 Procedimiento de uso", expanded=True):
-    st.markdown(f'<div style="text-align:center;"><img src="{QR_PROCEDIMIENTO_URI}" style="width:110px; height:110px; border-radius:6px;"></div>', unsafe_allow_html=True)
-    st.markdown(f"[Abrir el procedimiento (PDF)]({URL_PROCEDIMIENTO})")
+# Procedimiento de uso: título visible + QR (el QR también es un enlace al PDF)
+st.sidebar.markdown(
+    '<span class="selector-label-centered">📘 PROCEDIMIENTO DE USO</span>'
+    f'<div style="text-align:center; margin: 4px 0 10px 0;">'
+    f'<a href="{URL_PROCEDIMIENTO}" target="_blank" title="Abrir el procedimiento (PDF)">'
+    f'<img src="{QR_PROCEDIMIENTO_URI}" style="width:110px; height:110px; border-radius:6px; border:2px solid #F59E0B; background:#FFFFFF;"></a>'
+    '<span style="display:block; color:#F8FAFC; font-size:10px; font-weight:700; margin-top:4px;">Escanee o haga clic en el código</span>'
+    '</div>',
+    unsafe_allow_html=True,
+)
  
 st.sidebar.markdown('<span class="selector-label-centered">RÉGIMEN Y GUARDIA DE TRABAJO</span>', unsafe_allow_html=True)
 tipo_turno_sel = st.sidebar.selectbox("", ["Turno 7x7", "Turno 4x3", "Turno 8x6", "Turno 5x2", "Otro"], key="select_regimen_box")
