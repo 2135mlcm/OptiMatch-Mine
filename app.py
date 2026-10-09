@@ -691,7 +691,7 @@ st.sidebar.markdown(f"""
     </div>
 """, unsafe_allow_html=True)
  
-with st.sidebar.expander("📘 Procedimiento de uso"):
+with st.sidebar.expander("📘 Procedimiento de uso", expanded=True):
     st.markdown(f'<div style="text-align:center;"><img src="{QR_PROCEDIMIENTO_URI}" style="width:110px; height:110px; border-radius:6px;"></div>', unsafe_allow_html=True)
     st.markdown(f"[Abrir el procedimiento (PDF)]({URL_PROCEDIMIENTO})")
  
