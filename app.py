@@ -2150,13 +2150,18 @@ for _, r in caex_agendados.iterrows():
         "rend": float(r.get("Rend_TonH", 210.0)),
     })
  
+def rend_por_pases_unidad(fila):
+    """Rendimiento (t/h) de una pala o cargador con los camiones agendados, calculado por pases (igual que el motor)."""
+    r_eq, _, _ = rendimiento_equivalente_carguio(pd.DataFrame([fila]), caps_agendadas, fl_valor)
+    return round(float(r_eq), 1)
+ 
 palas_activas_js = []
 for _, r in ed_palas[(ed_palas["Agendar"] == True) & (ed_palas["Estado"] == "🟢 Disponible")].iterrows():
     palas_activas_js.append({
         "id": str(r.get("ID", "PALA")),
         "modelo": str(r.get("Modelo", "R9200")),
         "operador": str(r.get("Operador", "Sin Operador")),
-        "rend": float(r.get("Rend_TonH", 1216.0)),
+        "rend": rend_por_pases_unidad(r),
     })
  
 cf_activos_js = []
@@ -2165,7 +2170,7 @@ for _, r in ed_cf[(ed_cf["Agendar"] == True) & (ed_cf["Estado"] == "🟢 Disponi
         "id": str(r.get("ID", "CF")),
         "modelo": str(r.get("Modelo", "WA900")),
         "operador": str(r.get("Operador", "Sin Operador")),
-        "rend": float(r.get("Rend_TonH", 700.0)),
+        "rend": rend_por_pases_unidad(r),
     })
  
 caex_json_str = json.dumps(lista_caex_js)
