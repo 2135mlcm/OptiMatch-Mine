@@ -172,13 +172,59 @@ CONSUMO_ESP_REF = 28.0   # L/h de referencia del mismo CAEX en espera (ralentí)
 FACTOR_CO2 = 2.68        # kg de CO2 por litro de diésel
  
  
+MF_POCOS_CAMIONES = 0.70  # bajo este MF la cola es casi nula
+ 
+ 
 def funcion_espera(mf):
     """Espera media en cola (min/ciclo) según el MF. Coeficientes: supuesto del prototipo."""
     if mf <= 0:
         return 0.0
+    if mf < MF_POCOS_CAMIONES:
+        # Con pocos camiones casi no hay cola: la espera baja más rápido (tramo cuadrático,
+        # continuo en MF = 0,70). No afecta los casos con MF >= 0,70.
+        return 2.0 * (MF_POCOS_CAMIONES / 0.94) * (mf / MF_POCOS_CAMIONES) ** 2
     if mf <= 0.94:
         return 2.0 * (mf / 0.94)
     return 2.0 + 8.5 * ((mf - 0.94) ** 1.3)
+ 
+ 
+def tiempo_carga_por_pases(carga_viaje_t, carga_pase_t, ciclo_pase_s, eficiencia_pct):
+    """Pases necesarios y minutos para llenar un camión: n = ⌈carga/B⌉ ; t = n · t_pase / η."""
+    import math
+    carga_pase_t = max(float(carga_pase_t or 0), 0.1)
+    eficiencia = max(float(eficiencia_pct or 0), 1.0) / 100.0
+    n_pases = max(1, math.ceil(float(carga_viaje_t) / carga_pase_t - 1e-9))
+    return n_pases, n_pases * float(ciclo_pase_s or 30.0) / 60.0 / eficiencia
+ 
+ 
+def rendimiento_equivalente_carguio(carguio_df, caps_camiones, fl_factor):
+    """Rendimiento total (t/h) que el motor usa para palas/cargadores agendados, calculado por pases
+    con la capacidad real de cada camión agendado. Devuelve (R_total, minutos medios, pases por tamaño)."""
+    caps = [float(c) for c in caps_camiones if float(c) > 0] or [91.0]
+    carga_media = sum(caps) / len(caps) * fl_factor
+    r_total, tiempos, pases = 0.0, [], {}
+    for _, eq in carguio_df.iterrows():
+        resultados = [tiempo_carga_por_pases(c * fl_factor, eq.get("Carga_Pase_Ton", 22.5),
+                                             eq.get("Ciclo_Pase_s", 30.0), eq.get("Eficiencia_Pct", 75.0)) for c in caps]
+        t_medio = sum(t for _, t in resultados) / len(resultados)
+        r_total += 60.0 * carga_media / t_medio
+        tiempos.append(t_medio)
+        for c, (n, _) in zip(caps, resultados):
+            pases[c] = n
+    t_prom = sum(tiempos) / len(tiempos) if tiempos else 0.0
+    return r_total, t_prom, pases
+ 
+ 
+def completar_rendimientos(df):
+    """Rendimiento nominal = 3.600 · B / t_pase ; efectivo = nominal · η (columnas calculadas)."""
+    df = df.copy()
+    for col, defecto in (("Carga_Pase_Ton", 22.5), ("Ciclo_Pase_s", 30.0), ("Eficiencia_Pct", 75.0)):
+        if col not in df.columns:
+            df[col] = defecto
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(defecto)
+    df["Rend_Nominal_TonH"] = (3600.0 * df["Carga_Pase_Ton"] / df["Ciclo_Pase_s"].clip(lower=1)).round(0)
+    df["Rend_TonH"] = (df["Rend_Nominal_TonH"] * df["Eficiencia_Pct"] / 100.0).round(0)
+    return df
  
  
 def clasificar_semaforo(mf):
@@ -1405,35 +1451,36 @@ st.sidebar.markdown("---")
 # 11. INICIALIZACIÓN DE FLOTA MULTIMODELO (60T, 90T, 140T)
 # ==============================================================================
 if "palas_df" not in st.session_state:
-    st.session_state.palas_df = pd.DataFrame([
-        {"Item": 1, "Agendar": True, "Estado": "🟢 Disponible", "ID": "PA622", "Modelo": "Liebherr R9200", "Horómetro Entrada": 14250.0, "Operador": "Carlos Araya", "Rend_TonH": 1216, "Consumo_LtsH": 120.0, "Costo_USDH": 441.00},
-        {"Item": 2, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "PA623", "Modelo": "CAT 6020B", "Horómetro Entrada": 11800.5, "Operador": "Sin Asignar", "Rend_TonH": 1216, "Consumo_LtsH": 115.0, "Costo_USDH": 420.00},
-        {"Item": 3, "Agendar": False, "Estado": "🟢 Disponible", "ID": "PA624", "Modelo": "Komatsu PC2000", "Horómetro Entrada": 9500.0, "Operador": "Hernán Gómez", "Rend_TonH": 1216, "Consumo_LtsH": 118.0, "Costo_USDH": 430.00},
-        {"Item": 4, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "PA625", "Modelo": "Hitachi EX2600", "Horómetro Entrada": 16120.0, "Operador": "Sin Asignar", "Rend_TonH": 1300, "Consumo_LtsH": 128.0, "Costo_USDH": 460.00},
-    ])
+    # Datos de fábrica: carga por pase (t) a 1,8 t/m³ según ficha técnica; ciclo por pase y eficiencia: supuestos ajustables
+    st.session_state.palas_df = completar_rendimientos(pd.DataFrame([
+        {"Item": 1, "Agendar": True, "Estado": "🟢 Disponible", "ID": "PA622", "Modelo": "Liebherr R9200", "Horómetro Entrada": 14250.0, "Operador": "Carlos Araya", "Carga_Pase_Ton": 22.5, "Ciclo_Pase_s": 30.0, "Eficiencia_Pct": 75.0, "Consumo_LtsH": 120.0, "Costo_USDH": 441.0},
+        {"Item": 2, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "PA623", "Modelo": "CAT 6020B", "Horómetro Entrada": 11800.5, "Operador": "Sin Asignar", "Carga_Pase_Ton": 21.6, "Ciclo_Pase_s": 30.0, "Eficiencia_Pct": 75.0, "Consumo_LtsH": 115.0, "Costo_USDH": 420.0},
+        {"Item": 3, "Agendar": False, "Estado": "🟢 Disponible", "ID": "PA624", "Modelo": "Komatsu PC2000-11", "Horómetro Entrada": 9500.0, "Operador": "Hernán Gómez", "Carga_Pase_Ton": 21.4, "Ciclo_Pase_s": 30.0, "Eficiencia_Pct": 75.0, "Consumo_LtsH": 118.0, "Costo_USDH": 430.0},
+        {"Item": 4, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "PA625", "Modelo": "Hitachi EX2600-7", "Horómetro Entrada": 16120.0, "Operador": "Sin Asignar", "Carga_Pase_Ton": 27.0, "Ciclo_Pase_s": 32.0, "Eficiencia_Pct": 75.0, "Consumo_LtsH": 128.0, "Costo_USDH": 460.0},
+        {"Item": 5, "Agendar": False, "Estado": "🟢 Disponible", "ID": "PA626", "Modelo": "Liebherr R9200", "Horómetro Entrada": 13100.0, "Operador": "Roberto Marín", "Carga_Pase_Ton": 22.5, "Ciclo_Pase_s": 30.0, "Eficiencia_Pct": 75.0, "Consumo_LtsH": 120.0, "Costo_USDH": 441.0},
+    ]))
  
 if "cf_df" not in st.session_state:
-    st.session_state.cf_df = pd.DataFrame([
-        {"Item": 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "CF437", "Modelo": "Komatsu WA900", "Horómetro Entrada": 8400.0, "Operador": "Sin Asignar", "Rend_TonH": 685, "Consumo_LtsH": 75.0, "Costo_USDH": 342.50},
-        {"Item": 2, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CF438", "Modelo": "CAT 993K", "Horómetro Entrada": 10250.0, "Operador": "Manuel Torres", "Rend_TonH": 720, "Consumo_LtsH": 82.0, "Costo_USDH": 360.00},
-        {"Item": 3, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CF439", "Modelo": "LeTourneau L-1850", "Horómetro Entrada": 13100.0, "Operador": "Roberto Marín", "Rend_TonH": 900, "Consumo_LtsH": 90.0, "Costo_USDH": 395.00},
-        {"Item": 4, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CF440", "Modelo": "CAT 992K", "Horómetro Entrada": 7900.0, "Operador": "Sin Asignar", "Rend_TonH": 650, "Consumo_LtsH": 70.0, "Costo_USDH": 325.00},
-    ])
+    st.session_state.cf_df = completar_rendimientos(pd.DataFrame([
+        {"Item": 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "CF437", "Modelo": "Komatsu WA900-8", "Horómetro Entrada": 8400.0, "Operador": "Sin Asignar", "Carga_Pase_Ton": 23.2, "Ciclo_Pase_s": 40.0, "Eficiencia_Pct": 75.0, "Consumo_LtsH": 75.0, "Costo_USDH": 342.5},
+        {"Item": 2, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CF438", "Modelo": "CAT 993K", "Horómetro Entrada": 10250.0, "Operador": "Manuel Torres", "Carga_Pase_Ton": 27.2, "Ciclo_Pase_s": 40.0, "Eficiencia_Pct": 75.0, "Consumo_LtsH": 82.0, "Costo_USDH": 360.0},
+        {"Item": 3, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CF440", "Modelo": "CAT 992K", "Horómetro Entrada": 7900.0, "Operador": "Sin Asignar", "Carga_Pase_Ton": 21.7, "Ciclo_Pase_s": 40.0, "Eficiencia_Pct": 75.0, "Consumo_LtsH": 70.0, "Costo_USDH": 325.0},
+    ]))
  
 if "caex_df" not in st.session_state:
     st.session_state.caex_df = pd.DataFrame([
-        {"Item": 1, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA319", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 12450.0, "Operador": "Pedro Morales", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
-        {"Item": 2, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA320", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 11200.5, "Operador": "Luis Tapia", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
-        {"Item": 3, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA321", "Modelo": "Komatsu HD785-7", "Cap_Ton": 90.0, "Horómetro Entrada": 12241.5, "Operador": "Andrés Castro", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 4, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA322", "Modelo": "Komatsu HD785-7", "Cap_Ton": 90.0, "Horómetro Entrada": 15300.2, "Operador": "Diego Rojas", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 5, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA323", "Modelo": "CAT 777F", "Cap_Ton": 90.0, "Horómetro Entrada": 8400.0, "Operador": "Gonzalo Vera", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 6, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA324", "Modelo": "CAT 777F", "Cap_Ton": 90.0, "Horómetro Entrada": 10120.0, "Operador": "Felipe Salinas", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 7, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA325", "Modelo": "CAT 785D", "Cap_Ton": 140.0, "Horómetro Entrada": 13400.0, "Operador": "Jaime Silva", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
-        {"Item": 8, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA326", "Modelo": "CAT 785D", "Cap_Ton": 140.0, "Horómetro Entrada": 9150.0, "Operador": "Marcelo Soto", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
-        {"Item": 9, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "CA327", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 11800.0, "Operador": "Javier Fuentes", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
-        {"Item": 10, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA328", "Modelo": "Komatsu HD465-7", "Cap_Ton": 60.0, "Horómetro Entrada": 7600.0, "Operador": "Cristian Muñoz", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
-        {"Item": 11, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA329", "Modelo": "Komatsu HD785-7", "Cap_Ton": 90.0, "Horómetro Entrada": 14500.0, "Operador": "Sin Asignar", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
-        {"Item": 12, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA330", "Modelo": "CAT 785D", "Cap_Ton": 140.0, "Horómetro Entrada": 16200.0, "Operador": "Sin Asignar", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
+        {"Item": 1, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA319", "Modelo": "Komatsu HD465-7", "Cap_Ton": 55.0, "Horómetro Entrada": 12450.0, "Operador": "Pedro Morales", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
+        {"Item": 2, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA320", "Modelo": "Komatsu HD465-7", "Cap_Ton": 55.0, "Horómetro Entrada": 11200.5, "Operador": "Luis Tapia", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
+        {"Item": 3, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA321", "Modelo": "Komatsu HD785-7", "Cap_Ton": 91.0, "Horómetro Entrada": 12241.5, "Operador": "Andrés Castro", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 4, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA322", "Modelo": "Komatsu HD785-7", "Cap_Ton": 91.0, "Horómetro Entrada": 15300.2, "Operador": "Diego Rojas", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 5, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA323", "Modelo": "CAT 777F", "Cap_Ton": 90.9, "Horómetro Entrada": 8400.0, "Operador": "Gonzalo Vera", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 6, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA324", "Modelo": "CAT 777F", "Cap_Ton": 90.9, "Horómetro Entrada": 10120.0, "Operador": "Felipe Salinas", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 7, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA325", "Modelo": "CAT 785D", "Cap_Ton": 141.0, "Horómetro Entrada": 13400.0, "Operador": "Jaime Silva", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
+        {"Item": 8, "Agendar": True, "Estado": "🟢 Disponible", "ID": "CA326", "Modelo": "CAT 785D", "Cap_Ton": 141.0, "Horómetro Entrada": 9150.0, "Operador": "Marcelo Soto", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
+        {"Item": 9, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo", "ID": "CA327", "Modelo": "Komatsu HD465-7", "Cap_Ton": 55.0, "Horómetro Entrada": 11800.0, "Operador": "Javier Fuentes", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
+        {"Item": 10, "Agendar": False, "Estado": "🟢 Disponible", "ID": "CA328", "Modelo": "Komatsu HD465-7", "Cap_Ton": 55.0, "Horómetro Entrada": 7600.0, "Operador": "Cristian Muñoz", "Rend_TonH": 143, "Consumo_LtsH": 35.0, "Costo_USDH": 250.00},
+        {"Item": 11, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA329", "Modelo": "Komatsu HD785-7", "Cap_Ton": 91.0, "Horómetro Entrada": 14500.0, "Operador": "Sin Asignar", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00},
+        {"Item": 12, "Agendar": False, "Estado": "🔴 Falla Mecánica", "ID": "CA330", "Modelo": "CAT 785D", "Cap_Ton": 141.0, "Horómetro Entrada": 16200.0, "Operador": "Sin Asignar", "Rend_TonH": 320, "Consumo_LtsH": 65.0, "Costo_USDH": 380.00},
     ])
  
 if "Cap_Ton" not in st.session_state.caex_df.columns:
@@ -1489,9 +1536,10 @@ with col_t1:
             nueva_pala = {
                 "Item": len(st.session_state.palas_df) + 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo",
                 "ID": f"PA{620 + len(st.session_state.palas_df) + 1}", "Modelo": "Liebherr R9200", "Horómetro Entrada": 10000.0,
-                "Operador": "Sin Asignar", "Rend_TonH": 1216, "Consumo_LtsH": 120.0, "Costo_USDH": 441.00,
+                "Operador": "Sin Asignar", "Carga_Pase_Ton": 22.5, "Ciclo_Pase_s": 30.0, "Eficiencia_Pct": 75.0,
+                "Consumo_LtsH": 120.0, "Costo_USDH": 441.00,
             }
-            st.session_state.palas_df = pd.concat([st.session_state.palas_df, pd.DataFrame([nueva_pala])], ignore_index=True)
+            st.session_state.palas_df = completar_rendimientos(pd.concat([st.session_state.palas_df, pd.DataFrame([nueva_pala])], ignore_index=True))
             st.rerun()
  
     ed_palas = st.data_editor(
@@ -1499,10 +1547,19 @@ with col_t1:
         column_config={
             "Item": st.column_config.NumberColumn("N° Item", disabled=True),
             "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
-            "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f")
+            "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f"),
+            "Carga_Pase_Ton": st.column_config.NumberColumn("Carga por pase (t)", min_value=1.0, max_value=80.0, format="%.1f",
+                help="Carga útil del balde por pase según ficha del fabricante (a 1,8 t/m³)."),
+            "Ciclo_Pase_s": st.column_config.NumberColumn("Ciclo por pase (s)", min_value=10.0, max_value=90.0, format="%.0f",
+                help="Segundos por pase (excavar, girar, descargar y volver). Confirmar en terreno."),
+            "Eficiencia_Pct": st.column_config.NumberColumn("Eficiencia (%)", min_value=10.0, max_value=100.0, format="%.0f",
+                help="Minutos productivos por hora de la unidad (sin contar la espera de camiones)."),
+            "Rend_Nominal_TonH": st.column_config.NumberColumn("Rend. nominal (t/h)", disabled=True, format="%.0f"),
+            "Rend_TonH": st.column_config.NumberColumn("Rend. efectivo (t/h)", disabled=True, format="%.0f"),
         },
         hide_index=True, key="editor_palas", num_rows="fixed",
     )
+    ed_palas = completar_rendimientos(ed_palas)
     st.session_state.palas_df = reindexar_flota(ed_palas)
  
 with col_t2:
@@ -1524,9 +1581,10 @@ with col_t2:
             nuevo_cf = {
                 "Item": len(st.session_state.cf_df) + 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo",
                 "ID": f"CF{435 + len(st.session_state.cf_df) + 1}", "Modelo": "CAT 993K", "Horómetro Entrada": 8000.0,
-                "Operador": "Sin Asignar", "Rend_TonH": 700, "Consumo_LtsH": 80.0, "Costo_USDH": 350.00,
+                "Operador": "Sin Asignar", "Carga_Pase_Ton": 27.2, "Ciclo_Pase_s": 40.0, "Eficiencia_Pct": 75.0,
+                "Consumo_LtsH": 82.0, "Costo_USDH": 360.00,
             }
-            st.session_state.cf_df = pd.concat([st.session_state.cf_df, pd.DataFrame([nuevo_cf])], ignore_index=True)
+            st.session_state.cf_df = completar_rendimientos(pd.concat([st.session_state.cf_df, pd.DataFrame([nuevo_cf])], ignore_index=True))
             st.rerun()
  
     ed_cf = st.data_editor(
@@ -1534,10 +1592,19 @@ with col_t2:
         column_config={
             "Item": st.column_config.NumberColumn("N° Item", disabled=True),
             "Estado": st.column_config.SelectboxColumn("Estado Mecánico", options=opciones_estado),
-            "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f")
+            "Horómetro Entrada": st.column_config.NumberColumn("Horómetro Entrada", min_value=0.0, format="%.1f"),
+            "Carga_Pase_Ton": st.column_config.NumberColumn("Carga por pase (t)", min_value=1.0, max_value=80.0, format="%.1f",
+                help="Carga útil del balde por pase según ficha del fabricante (a 1,8 t/m³)."),
+            "Ciclo_Pase_s": st.column_config.NumberColumn("Ciclo por pase (s)", min_value=10.0, max_value=90.0, format="%.0f",
+                help="Segundos por pase (excavar, girar, descargar y volver). Confirmar en terreno."),
+            "Eficiencia_Pct": st.column_config.NumberColumn("Eficiencia (%)", min_value=10.0, max_value=100.0, format="%.0f",
+                help="Minutos productivos por hora de la unidad (sin contar la espera de camiones)."),
+            "Rend_Nominal_TonH": st.column_config.NumberColumn("Rend. nominal (t/h)", disabled=True, format="%.0f"),
+            "Rend_TonH": st.column_config.NumberColumn("Rend. efectivo (t/h)", disabled=True, format="%.0f"),
         },
         hide_index=True, key="editor_cf", num_rows="fixed",
     )
+    ed_cf = completar_rendimientos(ed_cf)
     st.session_state.cf_df = reindexar_flota(ed_cf)
  
 with col_t3:
@@ -1561,7 +1628,7 @@ with col_t3:
         if st.button("➕ Agregar", key="add_caex", use_container_width=True):
             nuevo_caex = {
                 "Item": len(st.session_state.caex_df) + 1, "Agendar": False, "Estado": "🟡 Mantenimiento / Resguardo",
-                "ID": f"CA{318 + len(st.session_state.caex_df) + 1}", "Modelo": "Komatsu HD785-7", "Cap_Ton": 90.0, "Horómetro Entrada": 10000.0,
+                "ID": f"CA{318 + len(st.session_state.caex_df) + 1}", "Modelo": "Komatsu HD785-7", "Cap_Ton": 91.0, "Horómetro Entrada": 10000.0,
                 "Operador": "Sin Asignar", "Rend_TonH": 210, "Consumo_LtsH": 45.0, "Costo_USDH": 290.00,
             }
             st.session_state.caex_df = pd.concat([st.session_state.caex_df, pd.DataFrame([nuevo_caex])], ignore_index=True)
@@ -1818,7 +1885,12 @@ n_puestos_carguio = max(1, n_carguio_real)
 n_caex_activos = len(caex_activos)
  
 # Rendimiento y costo horario reales de las palas / cargadores agendados
-rend_carguio_total = float(pd.to_numeric(pd.concat([palas_activas["Rend_TonH"], cf_activos["Rend_TonH"]]), errors="coerce").fillna(0).sum())
+carguio_activo = pd.concat([palas_activas, cf_activos], ignore_index=True)
+caps_agendadas = pd.to_numeric(caex_activos.get("Cap_Ton", pd.Series(dtype=float)), errors="coerce").dropna().tolist()
+if len(carguio_activo) > 0:
+    rend_carguio_total, t_carga_pases_min, pases_por_camion = rendimiento_equivalente_carguio(carguio_activo, caps_agendadas, fl_valor)
+else:
+    rend_carguio_total, t_carga_pases_min, pases_por_camion = 0.0, 0.0, {}
 costo_carguio_total_h = float(pd.to_numeric(pd.concat([palas_activas["Costo_USDH"], cf_activos["Costo_USDH"]]), errors="coerce").fillna(0).sum())
 if rend_carguio_total <= 0:
     rend_carguio_total = 1216.0  # referencia mientras no se agende una unidad de carguío
@@ -1946,7 +2018,8 @@ col_eval1, col_eval2 = st.columns(2)
 with col_eval1:
     st.markdown("### ⛽ Evaluación Económica, Merma y Ruta")
     lineas_eval = [
-        f"Tiempo de Carguío: {fmt_num(t_carguio_min, 2)} min por camión ({fmt_num(rend_carguio_total, 0)} t/h en {n_puestos_carguio} unidad(es))",
+        f"Tiempo de Carguío: {fmt_num(t_carguio_min, 2)} min por camión en promedio, por pases ("
+        + ", ".join(f"{fmt_num(c, 0)} t: {n} pases" for c, n in sorted(pases_por_camion.items())) + ")",
         f"Ciclo: {fmt_num(t_ciclo_base_exacto, 2)} min + espera {fmt_num(tiempo_cola_promedio, 2)} min = {fmt_num(tiempo_ciclo_efectivo_min, 2)} min",
         f"Velocidad Efectiva Subida: {fmt_num(vel_cargado_efectiva_kmh, 1)} km/h ({perfil_rampa_sel})",
         f"Pérdida en Ruta (Merma): {fmt_num(tonelaje_merma, 0)} Ton ({merma_pct_real:.1f}% del total cargado)",
@@ -1960,6 +2033,12 @@ with col_eval1:
     if res_sim["limitado_por_carguio"]:
         st.warning("⚠️ Los camiones podrían transportar más de lo que la unidad de carguío alcanza a cargar: "
                    "la producción quedó limitada por el carguío.")
+    # Aviso: la meta supera lo máximo que pueden cargar las palas/cargadores agendados
+    maximo_entregable = res_sim["capacidad_carguio_turno"] * (1 - res_sim["merma_pct"] / 100.0)
+    if res_sim["capacidad_carguio_turno"] > 0 and meta_activa > maximo_entregable:
+        st.warning(f"⚠️ La meta de {fmt_num(meta_activa, 0)} Ton supera lo máximo que pueden cargar las unidades de carguío "
+                   f"agendadas en este turno (unas {fmt_num(maximo_entregable, 0)} Ton entregadas). Aunque agende más camiones, "
+                   f"no se alcanzará: agende otra pala o cargador frontal, o aumente las horas efectivas del turno.")
  
     cumplimiento = (tonelaje_efectivo / meta_activa * 100) if meta_activa > 0 else 0
     st.markdown(f'<p class="highlight-red-large">• Cumplimiento Meta de {material_turno}: {fmt_num(cumplimiento, 1)}% de {fmt_num(meta_activa, 0)} Ton</p>', unsafe_allow_html=True)
